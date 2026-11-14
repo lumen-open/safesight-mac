@@ -24,6 +24,14 @@ var targets: [Target] = [
     .testTarget(name: "PreprocessTests", dependencies: ["Preprocess"], swiftSettings: [.swiftLanguageMode(.v5)]),
     .testTarget(name: "DetectorCoreTests", dependencies: ["DetectorCore", "RegionFinder"] + (lab ? ["LabStandIn"] : []),
                 swiftSettings: detectorSettings),
+
+    // The watcher. FernwickWatcher is the pure cover layer (no AppKit, no capture); FernwickCapture holds
+    // the ScreenCaptureKit streams. Neither has any networking code.
+    .target(name: "FernwickWatcher", dependencies: ["DetectorCore", "Preprocess", "RegionFinder"],
+            swiftSettings: detectorSettings),
+    .target(name: "FernwickCapture", dependencies: ["FernwickWatcher", "Preprocess"], swiftSettings: detectorSettings),
+    .testTarget(name: "FernwickWatcherTests", dependencies: ["FernwickWatcher", "DetectorCore", "Preprocess", "RegionFinder"],
+                swiftSettings: detectorSettings),
 ]
 if lab {
     targets.append(.target(name: "LabStandIn", dependencies: ["DetectorCore", "Preprocess"], swiftSettings: detectorSettings))
