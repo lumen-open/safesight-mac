@@ -4,7 +4,7 @@
 
 Fernwick Open is a free-forever, open-source Mac app. You install it on your own Mac and choose how long switching it off will take: 7 days at least, up to a year. Explicit pictures are covered on your screens; everything else keeps working. Asking to leave starts a countdown, and pressing **Stay** throws the request away. An optional friend can shorten the wait to a day, but can never block it.
 
-**Status: step 0.** Nothing works yet. This repository holds the project's foundations: licence, rules, build checks and a "hello" build. The cover-only app comes next; the lock after that.
+**Status: step 1, not yet tried on a real screen.** The cover-only app is built and tested through a lab harness: it covers explicit pictures on screen and has no lock, so it can be paused or quit at any time. The lock comes next. See [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md) for what works, what is tested and the known limits.
 
 ## The honest promise
 

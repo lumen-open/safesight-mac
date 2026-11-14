@@ -56,7 +56,7 @@ public enum AppText {
         "It shows every window first and checks it just after. A picture can be seen for a moment before its cover. How long is not measured; the target is under half a second.",
         "Small pictures it is unsure about are blurred instead of covered. When it cannot check a display at all, it covers the whole display and tells you why.",
         "It misses some pictures and wrongly covers others. How many it misses has not been measured, so no accuracy figure is given.",
-        "It has no network access and saves nothing it sees: no screenshots, no lists of what was covered, no reports. Nobody is told anything.",
+        "This build contains no networking code. It never writes what it sees to a file, a log or a crash report, keeps no list of what was covered, and tells nobody anything.",
         "This cover-only build has no lock. You can pause or quit it at any time. The lock, with a wait you choose in advance, comes in a later version.",
     ]
 

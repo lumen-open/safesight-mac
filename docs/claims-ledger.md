@@ -10,3 +10,7 @@ Every public sentence about Fernwick Open, and the evidence it rests on. A sente
 | "Nothing leaves your Mac except update checks and the public time signal" | Design only | Release scans pass; network behaviour verified on the test Mac |
 | Any accuracy number for the detector | Never until measured | The sealed cloud run's measured results, at the shipped settings, with version and date |
 | "Can't be bypassed", "100%", "blocks all", "treats addiction" | Never | — |
+| "The cover-only build contains no networking code" | True now, for step 1 | `tools/check-no-network.sh` on every commit; network behaviour still to be watched on the test Mac |
+| "It never writes what it sees to a file, a log or a crash report" | True now, for the app (the lab harness writes synthetic frames only when asked) | Code: frames stay in memory. Whether macOS swaps the watcher's memory is recorded per macOS (ST-076) |
+| "A picture can be seen for a moment before its cover" | True now (a known limit) | Its length is not measured; the target is under half a second (ST-031) |
+| "The cover-only build has no lock and can be paused or quit" | True now | Practice state, SD-223 |
