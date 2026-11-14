@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: Apache-2.0
+# Runs on every push and pull request. Holds no secrets and needs only read access.
+name: check
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions: {}
+jobs:
+  check:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          cargo --version
+      - name: Sign-off (DCO)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            tools/check-signoff.sh "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          else
+            tools/check-signoff.sh HEAD
+          fi
+      - name: SPDX lines
+        run: tools/check-spdx.sh
+      - name: No secrets in workflows
+        run: tools/check-no-secrets.sh
+      - name: Dependency licences
+        run: tools/check-licences.sh
+      - name: Swift build and test
+        run: |
+          swift build -c release
+          swift test
+      - name: Keeper build and test
+        working-directory: keeper
+        run: |
+          cargo build --release
+          cargo test

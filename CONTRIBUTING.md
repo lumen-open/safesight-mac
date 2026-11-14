@@ -1,0 +1,17 @@
+# Contributing
+
+Thank you for helping.
+
+## Rules for every change
+
+1. **Sign off every commit** (`git commit -s`). The sign-off says you agree to the [DCO](DCO).
+2. **Every source file starts with an SPDX licence line**, for example `// SPDX-License-Identifier: Apache-2.0`.
+3. **New dependencies must use an allowed licence** (Apache-2.0, MIT, BSD, ISC or similar). Nothing under GPL, AGPL or a non-commercial licence.
+4. **Protections must hold with the code public.** No change may rely on secret code, thresholds or heuristics.
+5. **Faults never punish.** Any failure in a check leads to more covering, never to a locked screen, a logout or a report to anyone.
+6. **Lock-core changes need a second reader.** Any change to the keeper, the time lock or the update gate is read and approved by a second reviewer before it merges.
+7. **No explicit material, ever,** in issues, tests, fixtures or examples. Use synthetic test patterns.
+
+## Weaknesses
+
+Never in public. See [SECURITY.md](SECURITY.md).

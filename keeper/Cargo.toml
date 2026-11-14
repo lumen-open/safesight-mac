@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "fernwick-keeper"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+# Step 0: no dependencies. The cryptographic crates are added later from a fixed,
+# reviewed list, and every new keeper dependency needs a second reader.
+[dependencies]
+
+[profile.release]
+panic = "abort"
+lto = true
