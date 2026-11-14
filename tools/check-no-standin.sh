@@ -4,7 +4,7 @@
 # is present in them (register SD-139, test ST-043).
 set -eu
 cd "$(dirname "$0")/.."
-unset FERNWICK_LAB KESTREL_LAB
+unset SAFESIGHTMAC_LAB KESTREL_LAB
 swift build -c release >/dev/null
 bin=$(swift build -c release --show-bin-path)
 fail=0

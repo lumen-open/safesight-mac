@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 [package]
-name = "fernwick-keeper"
+name = "safesightmac-keeper"
 version = "0.0.1"
 edition = "2021"
 license = "Apache-2.0"

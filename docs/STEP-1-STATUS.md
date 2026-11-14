@@ -14,17 +14,17 @@ These parts are built, and each is exercised by tests or the harness:
   - It uses the lab build's current Balanced rule (agreement plus a tie-breaker) and its committed cut-off table (`models/thresholds.json`, `agreement+referee/1`).
   - Added for step 1: the Either rule, the caller's budget, the pass of each entry and a separate `find`. Under Balanced it behaves exactly as the lab build.
   - No weights are in git. `tools/models/fetch_upstream.py` and `tools/models/pins.json` hold the pinned upstream hashes. At run time the models load from a local folder, and every file is checked against the hash list sealed in the build (`models/watcher-models.sha256`).
-- **The capture layer** (`Sources/FernwickCapture`).
+- **The capture layer** (`Sources/SafeSightMacCapture`).
   - One ScreenCaptureKit display stream for every active display, at the source's full pixel size. It captures 8-bit BGRA in sRGB, with no cursor and no audio. The app's own windows are left out of capture.
   - The map from capture pixels to screen points is rebuilt from each frame's own metadata, and the scale is read, never assumed.
   - Only changed areas are judged, grown to the 8-pixel grid. A full pass runs every 30 s.
   - When judging is busy, frames are coalesced without losing any changed area.
-- **The cover layer** (`Sources/FernwickWatcher`, `Sources/FernwickCover`).
+- **The cover layer** (`Sources/SafeSightMacWatcher`, `Sources/SafeSightMacCover`).
   - **Show-first.** Changed areas are split by window, and each window gets one judge call with its own context and its share of the judging budget.
   - **Classes.** `cover` draws a plain, wordless cover over the whole picture region. `contain` draws a strong blur of at most 6 colour cells; if the blur cannot be made, a plain cover is drawn instead. `clear` draws nothing.
   - **Placement.** Covers are clipped to the window's visible part, move with their window, and cover the old place for one update after a move.
   - **Lifting.** A cover lifts only after 4 clean judgements in a row of that region (SD-230).
-  - **Every display.** Each display has its own canvas: one click-through panel per display, with every change applied in one transaction. Per-window overlays are the written fallback (`FERNWICK_COVER_FORM=overlays`).
+  - **Every display.** Each display has its own canvas: one click-through panel per display, with every change applied in one transaction. Per-window overlays are the written fallback (`SAFESIGHTMAC_COVER_FORM=overlays`).
   - **Faults lead to more covering.** A display is covered whole when:
     - it has not been judged yet;
     - a frame is blank, suspended or stopped;
@@ -38,10 +38,10 @@ These parts are built, and each is exercised by tests or the harness:
     A repair card above the covers says why, in plain words, and offers Try again, Pause (in the practice state only) and Quit. Nothing ever locks the screen, logs anyone out or reports anywhere.
   - **Slowness covers more.** Unjudged entries stay blurred or covered and are judged again. A window still unjudged after 0.5 s is covered whole.
 - **The practice state** (SD-223).
-  - The watcher is in the practice state only while no root-owned `<rd>.fernwick.keeper.plist` (or the lab form) exists in `/Library/LaunchDaemons`. It is read with `lstat`, so a symbolic link is judged by its own owner.
+  - The watcher is in the practice state only while no root-owned `<rd>.safesightmac.keeper.plist` (or the lab form) exists in `/Library/LaunchDaemons`. It is read with `lstat`, so a symbolic link is judged by its own owner.
   - If the check cannot be completed, the app does not claim the practice state: covering carries on and pause is turned off.
   - The menu shows "Practice: no lock" with a plain explanation.
-- **The menu-bar app** (`fernwick-open`). It has no Dock icon. The menu shows:
+- **The menu-bar app** (`safesight-mac`). It has no Dock icon. The menu shows:
   - the status: "Covering: on", "Needs Screen Recording" with a button that opens the setting, or why a display is covered;
   - the practice state;
   - the detector mode picker, Balanced (default) or Either, with the register's one sentence: "Balanced covers fewer harmless things and misses more. How much more has not been measured.";
@@ -49,8 +49,8 @@ These parts are built, and each is exercised by tests or the harness:
   - Pause for 15 minutes or 1 hour, enabled only in the practice state;
   - "How it works", with plain words and the honest promise word for word;
   - Quit.
-- **The lab harness** (`fernwick-harness`). It feeds image files or built-in synthetic scenes through the real pipeline without capturing the screen. It prints each cover's global rectangle, overlay window frame and canvas layer frame, and can write each frame with its covers drawn on it.
-- **The lab stand-in.** A synthetic magenta-and-green checker that can only force a cover. It exists only in lab builds (`FERNWICK_LAB=1`). `tools/check-no-standin.sh`, now in CI, finds no stand-in symbol or string in any release binary.
+- **The lab harness** (`safesightmac-harness`). It feeds image files or built-in synthetic scenes through the real pipeline without capturing the screen. It prints each cover's global rectangle, overlay window frame and canvas layer frame, and can write each frame with its covers drawn on it.
+- **The lab stand-in.** A synthetic magenta-and-green checker that can only force a cover. It exists only in lab builds (`SAFESIGHTMAC_LAB=1`). `tools/check-no-standin.sh`, now in CI, finds no stand-in symbol or string in any release binary.
 - **No networking code anywhere.** `tools/check-no-network.sh`, now in CI, fails if any source names a networking API.
 
 ## What is tested, and how
@@ -60,10 +60,10 @@ Commands, all run before the final commit:
 ```
 swift build -c release                                     # passes, no warnings in new code
 swift test                                                 # 82 test functions: 18 XCTest + 64 Swift Testing, all pass
-FERNWICK_LAB=1 swift test --scratch-path .build-lab        # 84: adds the 2 stand-in tests, all pass
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 84: adds the 2 stand-in tests, all pass
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
-FERNWICK_LAB=1 swift run -c release --scratch-path .build-lab fernwick-harness demo --origin 1440,0 --primary-height 900 --out OUT
-swift run -c release fernwick-harness demo --models ../v3-detector/models/converted
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
+swift run -c release safesightmac-harness demo --models ../v3-detector/models/converted
 ```
 
 | Area | Tests (target) | How |
@@ -77,7 +77,7 @@ swift run -c release fernwick-harness demo --models ../v3-detector/models/conver
 | Fault to cover | `FaultToCoverTests` | Blank, suspended or stopped frames; missing metadata; a map that does not match the pixels; a stopped stream; a failed detector; judging behind; too many displays. Each covers the whole display, and the next judged frame lowers it |
 | Practice-state signal | `PracticeSignalTests`, `PracticeMenuTests` | A fake folder: no keeper file means practice; a root-owned keeper file (release, lab, any case) ends it; a non-root file is not a keeper; similar names do not count; an unreadable folder or owner means not practice. The real `lstat` probe on a temporary folder, including a symbolic link. Pause is allowed only in practice. The menu says "no lock" |
 | Model check | `ModelCheckTests` | Changed, missing and unlisted files and a malformed list are refused. The sealed list and table match the committed files. Locally only: the lab build's converted models match the sealed list |
-| Wording | `AppTextTests` (FernwickCoreTests) | The promise matches the README word for word; no forbidden claim; the mode sentence carries no figure; strict cover mode says "not in this version" |
+| Wording | `AppTextTests` (SafeSightMacCoreTests) | The promise matches the README word for word; no forbidden claim; the mode sentence carries no figure; strict cover mode says "not in this version" |
 | Status line | `StatusTests` | "Needs Screen Recording", "Covering: on", a whole-display cover, pause and detector failure |
 | Stand-in (lab builds) | `StandInTests` | The stand-in through the real detector with null models is covered and placed on a 2x display at a negative origin; null models alone cover nothing |
 

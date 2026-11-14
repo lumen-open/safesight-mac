@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The keeper: the one root part of Fernwick Open.
+//! The keeper: the one root part of SafeSight Mac.
 //!
 //! Step 0 holds only the version record. Later steps add the sealed admin secret,
 //! the time lock, the request journal and the fault ladder, each behind tests that
@@ -10,7 +10,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// One line for logs.
 pub fn summary() -> String {
-    format!("fernwick-keeper {VERSION}")
+    format!("safesightmac-keeper {VERSION}")
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Tests for the contract additions made in Fernwick Open: the Either rule, the caller's budget,
+// Tests for the contract additions made in SafeSight Mac: the Either rule, the caller's budget,
 // the pass of each entry and the separate `find` call (register SD-125, SD-133).
 import Foundation
 import XCTest

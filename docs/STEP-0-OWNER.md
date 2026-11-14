@@ -14,9 +14,8 @@ You type every password and payment detail yourself.
 
 ## 2. The public GitHub repository
 
-1. Choose which GitHub account hosts it.
-2. Create a **public** repository named `fernwick-open`, then push this folder's `main` branch to it. Claude can do the creating and pushing once you say which account.
-3. In the repository's settings:
+1. Create a free GitHub organization named `lumen-open` from your own account, and set your membership in it to private. Then create a **public** repository `lumen-open/safesight-mac` and push this folder's `main` branch to it. Claude can do the pushing.
+2. In the repository's settings:
    - **Code security:** turn on **Private vulnerability reporting**.
    - **Rules:** protect `main` (no force pushes; require the `check` workflow to pass), and protect tags matching `v*` so only you can push them.
    - **Actions:** allow GitHub Actions.

@@ -9,7 +9,7 @@ deps=$(cargo metadata --format-version 1 --locked 2>/dev/null | python3 -c '
 import json,sys
 d=json.load(sys.stdin)
 for p in d["packages"]:
-    if p["name"]!="fernwick-keeper": print(p["name"], p.get("license") or "UNKNOWN")
+    if p["name"]!="safesightmac-keeper": print(p["name"], p.get("license") or "UNKNOWN")
 ' || true)
 bad=$(printf '%s\n' "$deps" | grep -E -i 'GPL|AGPL|LGPL|UNKNOWN|NonCommercial|SSPL' || true)
 if [ -n "$bad" ]; then echo "denied or unknown licence:"; echo "$bad"; exit 1; fi

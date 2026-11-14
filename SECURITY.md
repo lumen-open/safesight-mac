@@ -1,6 +1,6 @@
 # Reporting a weakness
 
-Fernwick Open is designed so that its protections hold with every line of code public. If you find a way to end a lock earlier than its owner's chosen wait, by any route other than the known, published gaps, please report it **privately**:
+SafeSight Mac is designed so that its protections hold with every line of code public. If you find a way to end a lock earlier than its owner's chosen wait, by any route other than the known, published gaps, please report it **privately**:
 
 - use GitHub's "Report a vulnerability" button on this repository (private vulnerability reporting).
 

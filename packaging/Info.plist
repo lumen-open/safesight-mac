@@ -3,10 +3,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleExecutable</key><string>fernwick-open</string>
+    <key>CFBundleExecutable</key><string>safesight-mac</string>
     <key>CFBundleIdentifier</key><string>BUNDLE_ID</string>
-    <key>CFBundleName</key><string>Fernwick Open</string>
-    <key>CFBundleDisplayName</key><string>Fernwick Open</string>
+    <key>CFBundleName</key><string>SafeSight Mac</string>
+    <key>CFBundleDisplayName</key><string>SafeSight Mac</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>VERSION</string>
     <key>CFBundleVersion</key><string>VERSION</string>

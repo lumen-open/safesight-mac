@@ -1,6 +1,6 @@
 # Claims ledger
 
-Every public sentence about Fernwick Open, and the evidence it rests on. A sentence may be used only while its status allows it.
+Every public sentence about SafeSight Mac, and the evidence it rests on. A sentence may be used only while its status allows it.
 
 | Claim | Status | Evidence needed before it may be said |
 |---|---|---|
