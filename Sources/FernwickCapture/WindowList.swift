@@ -12,9 +12,9 @@ public enum WindowList {
             return WindowSnapshot(windows: [], time: now)
         }
         let windows: [WindowInfo] = list.compactMap { d in
-            guard let n = d[kCGWindowNumber as String] as? UInt32 ?? (d[kCGWindowNumber as String] as? Int).map(UInt32.init),
-                  let pid = d[kCGWindowOwnerPID as String] as? Int32 ?? (d[kCGWindowOwnerPID as String] as? Int).map(Int32.init),
-                  let b = d[kCGWindowBounds as String], let bounds = CGRect(dictionaryRepresentation: b as! CFDictionary)
+            guard let n = d[kCGWindowNumber as String] as? UInt32 ?? (d[kCGWindowNumber as String] as? Int).flatMap { UInt32(exactly: $0) },
+                  let pid = d[kCGWindowOwnerPID as String] as? Int32 ?? (d[kCGWindowOwnerPID as String] as? Int).flatMap { Int32(exactly: $0) },
+                  let b = d[kCGWindowBounds as String] as? NSDictionary, let bounds = CGRect(dictionaryRepresentation: b as CFDictionary)
             else { return nil }
             let layer = d[kCGWindowLayer as String] as? Int ?? 0
             return WindowInfo(number: n, ownerPID: pid, layer: layer, bounds: bounds)

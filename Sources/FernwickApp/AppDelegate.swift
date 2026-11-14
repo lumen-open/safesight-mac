@@ -33,11 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         statusItem.menu = menu
 
-        practice = PracticeState.read()
-        watcher.repairActions = RepairCard.Actions(
-            tryAgain: { [weak self] in self?.tryAgain() },
-            pause: { [weak self] in self?.pauseFromCard() },
-            quit: { NSApp.terminate(nil) })
+        refreshPractice()
         watcher.onChange = { [weak self] in self?.updateIcon() }
 
         let ws = NSWorkspace.shared.notificationCenter
@@ -61,6 +57,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var permission: Bool { ScreenRecordingPermission.granted }
 
+    /// Reads the practice signal and offers Pause on the repair card only in the practice state.
+    private func refreshPractice() {
+        practice = PracticeState.read()
+        let allowed = PracticePresentation(practice).pauseAllowed
+        watcher.repairActions = RepairCard.Actions(
+            tryAgain: { [weak self] in self?.tryAgain() },
+            pause: allowed ? { [weak self] in self?.pauseFromCard() } : nil,
+            quit: { NSApp.terminate(nil) })
+    }
+
     private func startIfAllowed() {
         guard pausedUntil == nil, !pausedIndefinitely else { return }
         if permission {
@@ -77,14 +83,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func tryAgain() {
         watcher.stop()
-        practice = PracticeState.read()
+        refreshPractice()
         startIfAllowed()
     }
 
     // MARK: Pause (practice state only: step 1 has no lock)
 
     private func pause(minutes: Int?) {
-        practice = PracticeState.read()
+        refreshPractice()
         guard PracticePresentation(practice).pauseAllowed else { return }
         watcher.stop()
         resumeTimer?.invalidate()
@@ -124,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        practice = PracticeState.read()
+        refreshPractice()
         let pp = PracticePresentation(practice)
         menu.removeAllItems()
 

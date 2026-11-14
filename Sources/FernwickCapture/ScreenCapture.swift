@@ -199,11 +199,12 @@ struct FrameMetadata {
         } else {
             status = .blank  // unreadable status: treat the display as not judged
         }
-        if let d = info[.contentRect] { contentRect = CGRect(dictionaryRepresentation: d as! CFDictionary) }
+        // No forced casts: a crash here would leave the screen uncovered (step 1 has no shield).
+        if let d = info[.contentRect] as? NSDictionary { contentRect = CGRect(dictionaryRepresentation: d as CFDictionary) }
         contentScale = (info[.contentScale] as? NSNumber).map { CGFloat($0.doubleValue) }
         scaleFactor = (info[.scaleFactor] as? NSNumber).map { CGFloat($0.doubleValue) }
         if let arr = info[.dirtyRects] as? [Any] {
-            dirtyRects = arr.compactMap { CGRect(dictionaryRepresentation: $0 as! CFDictionary) }
+            dirtyRects = arr.compactMap { ($0 as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) } }
         }
     }
 
