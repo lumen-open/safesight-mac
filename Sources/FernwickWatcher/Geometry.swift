@@ -73,6 +73,12 @@ public struct CaptureMap: Equatable, Sendable {
         return PixelRect(x: x0, y: y0, w: x1 - x0, h: y1 - y0)
     }
 
+    /// True when the frame's pixels reach every point of the display (to within one point). A frame that
+    /// would leave part of the display unjudged gives no trustworthy map.
+    public var coversDisplay: Bool {
+        toGlobal(fullFrame).insetBy(dx: -1, dy: -1).contains(displayBounds)
+    }
+
     /// The whole frame, in pixels.
     public var fullFrame: PixelRect { PixelRect(x: 0, y: 0, w: pixelWidth, h: pixelHeight) }
 }

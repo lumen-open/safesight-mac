@@ -30,6 +30,7 @@ var targets: [Target] = [
     .target(name: "FernwickWatcher", dependencies: ["DetectorCore", "Preprocess", "RegionFinder"],
             swiftSettings: detectorSettings),
     .target(name: "FernwickCapture", dependencies: ["FernwickWatcher", "Preprocess"], swiftSettings: detectorSettings),
+    .target(name: "FernwickCover", dependencies: ["FernwickWatcher"], swiftSettings: detectorSettings),
     .testTarget(name: "FernwickWatcherTests", dependencies: ["FernwickWatcher", "DetectorCore", "Preprocess", "RegionFinder"],
                 swiftSettings: detectorSettings),
 ]
