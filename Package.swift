@@ -31,6 +31,9 @@ var targets: [Target] = [
             swiftSettings: detectorSettings),
     .target(name: "FernwickCapture", dependencies: ["FernwickWatcher", "Preprocess"], swiftSettings: detectorSettings),
     .target(name: "FernwickCover", dependencies: ["FernwickWatcher"], swiftSettings: detectorSettings),
+    // The cover-only menu-bar app.
+    .executableTarget(name: "FernwickApp", dependencies: ["FernwickCore", "FernwickWatcher", "FernwickCapture", "FernwickCover", "DetectorCore"],
+                      swiftSettings: detectorSettings),
     .testTarget(name: "FernwickWatcherTests", dependencies: ["FernwickWatcher", "DetectorCore", "Preprocess", "RegionFinder"],
                 swiftSettings: detectorSettings),
 ]
@@ -45,6 +48,7 @@ let package = Package(
         .library(name: "FernwickCore", targets: ["FernwickCore"]),
         .library(name: "DetectorCore", targets: ["DetectorCore"]),
         .executable(name: "fernwick-hello", targets: ["FernwickHello"]),
+        .executable(name: "fernwick-open", targets: ["FernwickApp"]),
     ],
     targets: targets
 )
