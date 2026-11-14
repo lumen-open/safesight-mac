@@ -57,6 +57,12 @@ public final class Detector {
         self.init(models: models, table: t, config: config, finder: finder)
     }
 
+    /// Builds a detector from a cut-off table given as JSON bytes (for a table sealed inside the app).
+    public convenience init(models: ModelSet, thresholdsJSON: Data, config: DetectorConfig = DetectorConfig(), finder: RegionFinder = RegionFinder()) throws {
+        let t = try JSONDecoder().decode(ThresholdTable.self, from: thresholdsJSON)
+        self.init(models: models, table: t, config: config, finder: finder)
+    }
+
     init(models: ModelSet, table: ThresholdTable, config: DetectorConfig, finder: RegionFinder) {
         self.models = models; self.table = table; self.config = config; self.finder = finder
     }

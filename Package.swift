@@ -27,7 +27,7 @@ var targets: [Target] = [
 
     // The watcher. FernwickWatcher is the pure cover layer (no AppKit, no capture); FernwickCapture holds
     // the ScreenCaptureKit streams. Neither has any networking code.
-    .target(name: "FernwickWatcher", dependencies: ["DetectorCore", "Preprocess", "RegionFinder"],
+    .target(name: "FernwickWatcher", dependencies: ["FernwickCore", "DetectorCore", "Preprocess", "RegionFinder"],
             swiftSettings: detectorSettings),
     .target(name: "FernwickCapture", dependencies: ["FernwickWatcher", "Preprocess"], swiftSettings: detectorSettings),
     .target(name: "FernwickCover", dependencies: ["FernwickWatcher"], swiftSettings: detectorSettings),
