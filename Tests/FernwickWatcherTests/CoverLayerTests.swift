@@ -38,6 +38,28 @@ import Testing
         #expect(area < 400 * 300 / 2)
     }
 
+    @Test func aPictureAppearingInAChangedAreaDoesNotCoverTheWholeWindow() {
+        let p = pipeline()
+        let base = Fixtures.blank(800, 600)
+        _ = p.process(Fixtures.frame(base, display: display, scale: 2, t: 0), snapshot: window, now: 0)
+        var img = base
+        let picture = PixelRect(x: 200, y: 100, w: 160, h: 160)
+        Fixtures.paintFlagged(&img, picture)
+        let plan = p.process(Fixtures.frame(img, display: display, scale: 2, dirty: [picture], t: 0.1), snapshot: window, now: 0.1)
+        #expect(plan.covers(CGRect(x: 1540, y: 50, width: 80, height: 80), kind: .plain))
+        #expect(!plan.covers(CGRect(x: 1440, y: 200, width: 400, height: 100)), "the rest of the window stays visible")
+    }
+
+    @Test func aWindowFilledByAFlaggedPictureIsCoveredWhole() {
+        // The whole pass over the whole window flags: the window is covered whole.
+        let d = DisplayDescriptor(id: 4, bounds: CGRect(x: 0, y: 0, width: 300, height: 200))
+        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        var img = Fixtures.blank(300, 200)
+        Fixtures.paintFlagged(&img, PixelRect(x: 0, y: 0, w: 300, h: 200))
+        let w = Fixtures.oneWindow(CGRect(x: 0, y: 0, width: 300, height: 200))
+        #expect(p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: w, now: 0).covers(d.bounds, kind: .plain))
+    }
+
     @Test func aCleanScreenDrawsNothing() {
         var img = Fixtures.blank(800, 600)
         Fixtures.paint(&img, PixelRect(x: 200, y: 100, w: 160, h: 160), channel: nil, seed: 4)

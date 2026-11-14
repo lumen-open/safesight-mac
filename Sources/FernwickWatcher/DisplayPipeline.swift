@@ -131,7 +131,8 @@ public final class DisplayPipeline {
 
             let o = origin(of: p.target, snapshot)
             countCleanJudgements(p.target, judgedArea: map.toGlobal(area).intersection(visBox), verdict: v, map: map, snapshot, visible)
-            fresh += covers(from: v, target: p.target, origin: o, img: img, map: map)
+            fresh += covers(from: v, target: p.target, origin: o, img: img, map: map,
+                            callArea: map.toGlobal(area), visibleBox: visBox)
 
             // Slowness covers more: a window left with unjudged entries for longer than `TIME_TO_COVER`
             // is covered whole until it is judged (step 2).
@@ -195,10 +196,22 @@ public final class DisplayPipeline {
     /// `cover` covers every picture region the slice touches, or the whole window if it touches none; a
     /// whole-pass `cover` or the cover-window flag covers the whole window. `contain` is blurred. An
     /// entry left unjudged (`overload`) keeps the detector's class and is judged again.
-    func covers(from v: FrameVerdict, target: JudgeTarget, origin o: CGPoint, img: RGBAImage, map: CaptureMap) -> [Held] {
+    ///
+    /// The whole pass is over the call's area. When the call spanned the window's visible area, a flagged
+    /// whole pass covers the whole window. When the call covered only changed parts of the window, the
+    /// flag is explained by any region cover in the same call; with none, the judged area is covered.
+    func covers(from v: FrameVerdict, target: JudgeTarget, origin o: CGPoint, img: RGBAImage, map: CaptureMap,
+                callArea: CGRect, visibleBox: CGRect) -> [Held] {
         func rel(_ r: PixelRect) -> CGRect { map.toGlobal(r).offsetBy(dx: -o.x, dy: -o.y) }
+        let spansWindow = callArea.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel).contains(visibleBox)
+        let regionCover = v.regions.contains { $0.pass == .region && $0.display == .cover && $0.reason != .overload }
+        func wholeOrArea() -> [Held] {
+            if spansWindow { return [Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0)] }
+            if regionCover { return [] }
+            return [Held(target: target, rel: callArea.offsetBy(dx: -o.x, dy: -o.y), whole: false, kind: .plain, clean: 0)]
+        }
         var out: [Held] = []
-        if v.coverWindow { out.append(Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0)) }
+        if v.coverWindow { out += wholeOrArea() }
         let regionEntries = v.regions.filter { $0.pass == .region }
         for e in v.regions {
             switch e.display {
@@ -212,7 +225,7 @@ public final class DisplayPipeline {
                     if touched.isEmpty { out.append(Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0)) }
                     for r in touched { out.append(Held(target: target, rel: rel(r.rect), whole: false, kind: .plain, clean: 0)) }
                 } else {
-                    out.append(Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0))
+                    out += wholeOrArea()
                 }
             case .contain:
                 // A blurred copy of the region; if it cannot be made, a plain cover instead.

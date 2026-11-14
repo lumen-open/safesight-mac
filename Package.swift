@@ -34,7 +34,10 @@ var targets: [Target] = [
     // The cover-only menu-bar app.
     .executableTarget(name: "FernwickApp", dependencies: ["FernwickCore", "FernwickWatcher", "FernwickCapture", "FernwickCover", "DetectorCore"],
                       swiftSettings: detectorSettings),
-    .testTarget(name: "FernwickWatcherTests", dependencies: ["FernwickWatcher", "DetectorCore", "Preprocess", "RegionFinder"],
+    // The lab harness: frames from files or synthetic scenes through the pipeline, never the screen.
+    .executableTarget(name: "FernwickHarness", dependencies: ["FernwickWatcher", "DetectorCore", "Preprocess"] + (lab ? ["LabStandIn"] : []),
+                      swiftSettings: detectorSettings),
+    .testTarget(name: "FernwickWatcherTests", dependencies: ["FernwickWatcher", "DetectorCore", "Preprocess", "RegionFinder"] + (lab ? ["LabStandIn"] : []),
                 swiftSettings: detectorSettings),
 ]
 if lab {
@@ -49,6 +52,7 @@ let package = Package(
         .library(name: "DetectorCore", targets: ["DetectorCore"]),
         .executable(name: "fernwick-hello", targets: ["FernwickHello"]),
         .executable(name: "fernwick-open", targets: ["FernwickApp"]),
+        .executable(name: "fernwick-harness", targets: ["FernwickHarness"]),
     ],
     targets: targets
 )
