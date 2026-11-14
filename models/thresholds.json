@@ -1,0 +1,97 @@
+{
+ "schema": "kestrel-thresholds/1",
+ "policy": "agreement+referee/1",
+ "source": "screen-level tuning on pipeline tiles (q_pair=0.002, q_ref=0.005); provisional until the cloud run",
+ "models": {
+  "marqo-vit-tiny-384": {
+   "16-31": {
+    "cover": 0.8937,
+    "clean": 0.2777,
+    "strike": 0.9,
+    "gridMember": 0.8937,
+    "gridLow": 0.8937
+   },
+   "32-63": {
+    "cover": 0.858,
+    "clean": 0.4612,
+    "strike": 0.9,
+    "gridMember": 0.858,
+    "gridLow": 0.858
+   },
+   "64-127": {
+    "cover": 0.8235,
+    "clean": 0.4524,
+    "strike": 0.9,
+    "gridMember": 0.8235,
+    "gridLow": 0.8235
+   },
+   "128+": {
+    "cover": 0.7583,
+    "clean": 0.3444,
+    "strike": 0.9,
+    "gridMember": 0.7583,
+    "gridLow": 0.7583
+   }
+  },
+  "nsfwjs-mobilenet-v2": {
+   "16-31": {
+    "cover": 0.9768,
+    "clean": 0.8313,
+    "strike": 0.9768,
+    "gridMember": 0.9768,
+    "gridLow": 0.9768
+   },
+   "32-63": {
+    "cover": 0.9948,
+    "clean": 0.9265,
+    "strike": 0.9948,
+    "gridMember": 0.9948,
+    "gridLow": 0.9948
+   },
+   "64-127": {
+    "cover": 0.9963,
+    "clean": 0.8571,
+    "strike": 0.9963,
+    "gridMember": 0.9963,
+    "gridLow": 0.9963
+   },
+   "128+": {
+    "cover": 0.934,
+    "clean": 0.7867,
+    "strike": 0.9652,
+    "gridMember": 0.934,
+    "gridLow": 0.934
+   }
+  },
+  "bumble-private-detector": {
+   "16-31": {
+    "cover": 0.8647,
+    "clean": 0.6106,
+    "strike": 0.9,
+    "gridMember": 0.8647,
+    "gridLow": 0.8647
+   },
+   "32-63": {
+    "cover": 0.9031,
+    "clean": 0.6454,
+    "strike": 0.9031,
+    "gridMember": 0.9031,
+    "gridLow": 0.9031
+   },
+   "64-127": {
+    "cover": 0.891,
+    "clean": 0.5508,
+    "strike": 0.9,
+    "gridMember": 0.891,
+    "gridLow": 0.891
+   },
+   "128+": {
+    "cover": 0.9075,
+    "clean": 0.5089,
+    "strike": 0.9075,
+    "gridMember": 0.9075,
+    "gridLow": 0.9075
+   }
+  }
+ }
+}

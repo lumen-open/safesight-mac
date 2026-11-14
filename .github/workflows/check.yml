@@ -39,6 +39,8 @@ jobs:
         run: |
           swift build -c release
           swift test
+      - name: No lab stand-in in release builds
+        run: tools/check-no-standin.sh
       - name: Keeper build and test
         working-directory: keeper
         run: |

@@ -4,3 +4,8 @@ DerivedData/
 keeper/target/
 *.xcuserstate
 .DS_Store
+.build-lab/
+# Model weights never go in git; their hashes do (models/cards, tools/models/pins.json).
+models/upstream/
+models/converted/
+models/local/

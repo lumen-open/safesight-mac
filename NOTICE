@@ -4,3 +4,15 @@ Copyright 2026 The Fernwick Open authors
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 Third-party components and model files are listed with their own licences in
 models/ and in each component's notice as they are added.
+
+The detector (Sources/Preprocess, Sources/RegionFinder, Sources/DetectorCore,
+Sources/LabStandIn, spec/) comes from the project's own "kestrel" lab build
+(v3-detector, commit 49ecdd9), contributed under the Apache License 2.0.
+
+No model weights are in this repository. The detector loads these models at run
+time from a local folder; each has a card in models/cards/ and its upstream files
+are pinned by hash in tools/models/pins.json:
+- nsfw-image-detection-384 by Marqo, Apache License 2.0.
+- NSFWJS MobileNetV2 by Infinite Red, MIT (LICENSES/upstream-nsfwjs-MIT.txt).
+- Private Detector by Bumble, Apache License 2.0
+  (LICENSES/upstream-bumble-private-detector-Apache-2.0.txt).

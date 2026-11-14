@@ -1,0 +1,102 @@
+{
+  "id": "nsfwjs-mobilenet-v2",
+  "family": "B-cnn",
+  "architecture": "Keras MobileNetV2 (224), five classes",
+  "inputSide": 224,
+  "classes": [
+    "Drawing",
+    "Hentai",
+    "Neutral",
+    "Porn",
+    "Sexy"
+  ],
+  "flagClasses": [
+    "Hentai",
+    "Porn"
+  ],
+  "licence": "MIT",
+  "licenceFile": "LICENSES/upstream-nsfwjs-MIT.txt",
+  "licenceEvidence": {
+    "where": "https://github.com/infinitered/nsfwjs LICENSE at commit 2286f17b7efee1558356dc8736391e63c6959a6e; README: 'It's MIT licensed'",
+    "text": "MIT License, Copyright (c) 2019 Infinite Red, Inc.",
+    "checked": "2026-11-13"
+  },
+  "source": {
+    "host": "github",
+    "repo": "infinitered/nsfwjs",
+    "revision": "2286f17b7efee1558356dc8736391e63c6959a6e",
+    "path": "models/mobilenet_v2"
+  },
+  "upstreamPreprocessing": "tf.image.resizeBilinear to 224 (alignCorners true), pixel/255",
+  "trainingDataAsStated": "Trained by the NSFWJS authors (nsfw_model project); data not redistributed.",
+  "attribution": "NSFWJS by Infinite Red, Inc., MIT License.",
+  "replaces": "The v2 copy taken from an AGPL browser-extension fork; this one comes straight from the MIT upstream.",
+  "roles": [
+    "watcher",
+    "browser",
+    "scanner"
+  ],
+  "files": [
+    {
+      "path": "models/upstream/nsfwjs-mobilenet-v2/raw/models/mobilenet_v2/model.json",
+      "sha256": "11846416217e68bf1eb7b0e651bcfd305973566453c63275bbd16766ab089979",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/nsfwjs-mobilenet-v2/raw/models/mobilenet_v2/group1-shard1of1",
+      "sha256": "8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/nsfwjs-mobilenet-v2/raw/LICENSE",
+      "sha256": "2f7fe40b4f0d97020f0a0dc2214d637471f6204e565eb83e9fd414f0e5287d94",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.safetensors",
+      "sha256": "e064c50912dd7f3ceda185894b51529f66444fdf45884c451bb4e72e76b39fbc",
+      "kind": "safetensors-from-upstream"
+    },
+    {
+      "path": "models/upstream/nsfwjs-mobilenet-v2/topology.json",
+      "sha256": "3691b51e9c255e1a0adc33fccccd077e826ad51491eeb22874cdc30de3263921",
+      "kind": "safetensors-from-upstream"
+    },
+    {
+      "path": "models/converted/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage",
+      "sha256": "fdce5c74f93321cc3169d466952fce13cb9f26f65b7b551111beaaa215671d4e",
+      "kind": "converted-coreml-fp16",
+      "derivedFrom": "models/upstream/nsfwjs-mobilenet-v2"
+    },
+    {
+      "path": "models/converted/broken/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.BROKEN-bgr.mlpackage",
+      "sha256": "84d1e01650e1e8a1d61b1a6a8420cbacd69491465f2e771b62c0521daf767bb3",
+      "kind": "control-broken-coreml-fp16",
+      "derivedFrom": "models/upstream/nsfwjs-mobilenet-v2"
+    },
+    {
+      "path": "models/converted/broken/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.BROKEN-scale.mlpackage",
+      "sha256": "885002c948990cdccaa7d98bea64a97b84bb4b5932d950b293df4d6daf3bd2ff",
+      "kind": "control-broken-coreml-fp16",
+      "derivedFrom": "models/upstream/nsfwjs-mobilenet-v2"
+    },
+    {
+      "path": "models/converted/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.onnx",
+      "sha256": "956d0da9ab47ee46d95b23ec9269f148ece4a52b364465032ae260cb6a2f9d5a",
+      "kind": "converted-onnx-fp32",
+      "derivedFrom": "models/upstream/nsfwjs-mobilenet-v2"
+    },
+    {
+      "path": "models/converted/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.int8.onnx",
+      "sha256": "def5b6d1b4327b8f3a33eade8c9003a59558137b6697fdb67072cf7bf8b58e0d",
+      "kind": "converted-onnx-int8",
+      "derivedFrom": "models/converted/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.onnx"
+    },
+    {
+      "path": "models/converted/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.wfp16.onnx",
+      "sha256": "418fb2fe3d79453194b9cc0e37ac876fee6393c43198a774859f1f92e43dba55",
+      "kind": "converted-onnx-weight-fp16",
+      "derivedFrom": "models/converted/nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.onnx"
+    }
+  ]
+}

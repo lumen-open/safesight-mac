@@ -1,0 +1,102 @@
+{
+  "comment": "Upstream pins. Each file has an independent checksum published by its host (Hugging Face LFS sha256, git blob sha1, or Google Cloud Storage md5) and our own sha256. fetch_upstream.py refuses any file whose bytes do not match every recorded value. Only the listed files are ever downloaded.",
+  "models": {
+    "marqo-vit-tiny-384": {
+      "host": "huggingface",
+      "repo": "Marqo/nsfw-image-detection-384",
+      "revision": "0c26ec22111b83f106d72a55f611ec35962bcb65",
+      "files": {
+        "model.safetensors": {
+          "bytes": 22404720,
+          "sha256": "6bf2e0f64a1d20169736c2836e3a787b12379fdc08ba87f7d94a7a3d58eeefce",
+          "gitBlobSha1": null
+        },
+        "config.json": {
+          "bytes": 629,
+          "sha256": "ae848d1dca0aeccd38f2ebb4b1bb47219cdc7f34e3ddc50c8d6430abe74d79b4",
+          "gitBlobSha1": "bf3d02b8b05545ed2c86049b083c2600c672ee2f"
+        },
+        "README.md": {
+          "bytes": 4108,
+          "sha256": "619f379b00af55e69da0ebaf1ba3f9dda1980e20433a391815e85aa24e475c90",
+          "gitBlobSha1": "adc6d99ac22545b0252999bf78c3cf83922b9361"
+        }
+      }
+    },
+    "nsfwjs-mobilenet-v2": {
+      "host": "github",
+      "repo": "infinitered/nsfwjs",
+      "revision": "2286f17b7efee1558356dc8736391e63c6959a6e",
+      "files": {
+        "models/mobilenet_v2/model.json": {
+          "bytes": 128945,
+          "sha256": "11846416217e68bf1eb7b0e651bcfd305973566453c63275bbd16766ab089979",
+          "gitBlobSha1": "d68082e4e7cb1d6bdfc1a89f6ca1e098f44078f0"
+        },
+        "models/mobilenet_v2/group1-shard1of1": {
+          "bytes": 2619461,
+          "sha256": "8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13",
+          "gitBlobSha1": "4727ef7ce1f7fe61e00c6fc1c67548419c35a826"
+        },
+        "LICENSE": {
+          "bytes": 1075,
+          "sha256": "2f7fe40b4f0d97020f0a0dc2214d637471f6204e565eb83e9fd414f0e5287d94",
+          "gitBlobSha1": "d74ae6ca858f916db781551b52707b6fc6da00e6"
+        }
+      }
+    },
+    "bumble-private-detector": {
+      "host": "gcs-zip",
+      "repo": "bumble-tech/private-detector",
+      "revision": "3a5c81e514003dd3ff46583a18f8ad285c0869b6",
+      "url": "https://storage.googleapis.com/private_detector/private_detector.zip",
+      "archive": {
+        "bytes": 395624935,
+        "md5Base64": "BADplg47aP6jGPm2gk1A7Q==",
+        "sha256": "0a0e2cd0ddf74177796aecb3a045c098da310f49a3c4a6fc68d44ef99f43c86c"
+      },
+      "extractOnly": [
+        "private_detector/LICENSE",
+        "private_detector/saved_model/saved_model.pb",
+        "private_detector/saved_model/variables/variables.index",
+        "private_detector/saved_model/variables/variables.data-00000-of-00001"
+      ],
+      "files": {
+        "private_detector/LICENSE": {
+          "bytes": 11335,
+          "sha256": "9ac9e381d7c6343b993e6a43e5ab7210793cca89a843f6fe8bec0bff70ecfdd2"
+        },
+        "private_detector/saved_model/saved_model.pb": {
+          "bytes": 14512205,
+          "sha256": "a0eb481482bbe08dcbc0ab880e30033e128f518ef849dea342b1fa67347dafd0"
+        },
+        "private_detector/saved_model/variables/variables.index": {
+          "bytes": 55681,
+          "sha256": "9aa441976da10ec7ac113c1f1a8fdc0b897a309267b3a6fb8204d5bc78f69351"
+        },
+        "private_detector/saved_model/variables/variables.data-00000-of-00001": {
+          "bytes": 212961812,
+          "sha256": "4be77eda373dd296feed4ebc3db44ba99c30d3aef6a131ce5990db1a5ec11941"
+        }
+      }
+    }
+  },
+  "cloudOnly": {
+    "freepik-eva-teacher": {
+      "host": "huggingface",
+      "repo": "Freepik/nsfw_image_detector",
+      "revision": "15b85477e4fd2000db76ae9aae0f89a72f95e2e3",
+      "files": {
+        "model.safetensors": {
+          "bytes": 172725672,
+          "sha256": "024a9d4818fae2656403bf626c9f8c9e7789c2da274749fbebb1060d8fdaa7ab"
+        },
+        "config.json": {
+          "bytes": 989,
+          "gitBlobSha1": "96d2aacd82a92e4843bf5914f09a45419fec0938"
+        }
+      },
+      "note": "Never downloaded to the Mac. The cloud job fetches it by these pins."
+    }
+  }
+}

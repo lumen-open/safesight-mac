@@ -1,0 +1,96 @@
+{
+  "id": "bumble-private-detector",
+  "family": "B-cnn",
+  "architecture": "EfficientNetV2-M (Google automl layout), two classes",
+  "inputSide": 480,
+  "classes": [
+    "Yes",
+    "No"
+  ],
+  "flagClasses": [
+    "Yes"
+  ],
+  "licence": "Apache-2.0",
+  "licenceFile": "LICENSES/upstream-bumble-private-detector-Apache-2.0.txt",
+  "licenceEvidence": {
+    "where": "https://github.com/bumble-tech/private-detector LICENSE at commit 3a5c81e514003dd3ff46583a18f8ad285c0869b6 (GitHub reports Apache-2.0); the weights archive linked from that README contains the same Apache-2.0 LICENSE file",
+    "text": "Apache License, Version 2.0",
+    "checked": "2026-11-13"
+  },
+  "source": {
+    "host": "gcs-zip",
+    "repo": "bumble-tech/private-detector",
+    "revision": "3a5c81e514003dd3ff46583a18f8ad285c0869b6",
+    "url": "https://storage.googleapis.com/private_detector/private_detector.zip"
+  },
+  "upstreamPreprocessing": "pad_resize_image to 480x480 (aspect kept, zero padding), (x-128)/128, float16",
+  "trainingDataAsStated": "Bumble's internal dataset; not redistributed. The archive holds no sample images (checked from its central directory before download).",
+  "attribution": "Private Detector by Bumble Inc., Apache License 2.0.",
+  "roles": [
+    "scanner",
+    "watcher-candidate"
+  ],
+  "files": [
+    {
+      "path": "models/upstream/bumble-private-detector/raw/private_detector/LICENSE",
+      "sha256": "9ac9e381d7c6343b993e6a43e5ab7210793cca89a843f6fe8bec0bff70ecfdd2",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/bumble-private-detector/raw/private_detector/saved_model/saved_model.pb",
+      "sha256": "a0eb481482bbe08dcbc0ab880e30033e128f518ef849dea342b1fa67347dafd0",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/bumble-private-detector/raw/private_detector/saved_model/variables/variables.index",
+      "sha256": "9aa441976da10ec7ac113c1f1a8fdc0b897a309267b3a6fb8204d5bc78f69351",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/bumble-private-detector/raw/private_detector/saved_model/variables/variables.data-00000-of-00001",
+      "sha256": "4be77eda373dd296feed4ebc3db44ba99c30d3aef6a131ce5990db1a5ec11941",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/bumble-private-detector/bumble-private-detector.safetensors",
+      "sha256": "58873569f368842604e7054097241c40d865c95b6a0d3eb8618382c015490cb8",
+      "kind": "safetensors-from-upstream"
+    },
+    {
+      "path": "models/converted/bumble-private-detector/bumble-private-detector.mlpackage",
+      "sha256": "13bd4e6ad107a1d0db2ba8bcebc0d42e1d436aa8ed1ecb66ed5341b97dfead51",
+      "kind": "converted-coreml-fp16",
+      "derivedFrom": "models/upstream/bumble-private-detector"
+    },
+    {
+      "path": "models/converted/bumble-private-detector/bumble-private-detector.onnx",
+      "sha256": "5cdbb6e788bbb8aaaa91bbbb0a2decd57f9395d364ff00428e2c3e1700357ea4",
+      "kind": "converted-onnx-fp32",
+      "derivedFrom": "models/upstream/bumble-private-detector"
+    },
+    {
+      "path": "models/converted/broken/bumble-private-detector/bumble-private-detector.BROKEN-bgr.mlpackage",
+      "sha256": "6ae7c45ef98ce2e2dd25a3630c565ad86c8b6775d1d8a33027b5c73d64b2b381",
+      "kind": "control-broken-coreml-fp16",
+      "derivedFrom": "models/upstream/bumble-private-detector"
+    },
+    {
+      "path": "models/converted/broken/bumble-private-detector/bumble-private-detector.BROKEN-scale.mlpackage",
+      "sha256": "2fcfc21cd484493d7478a68c914b3881f87c89403e090f3db7c293ed0f9cf570",
+      "kind": "control-broken-coreml-fp16",
+      "derivedFrom": "models/upstream/bumble-private-detector"
+    },
+    {
+      "path": "models/converted/bumble-private-detector/bumble-private-detector.fp32.mlpackage",
+      "sha256": "98ec70d485d7c72a140efed953ba337c35f60018c02e813909816dbb91d55d2c",
+      "kind": "converted-coreml-fp32",
+      "derivedFrom": "models/upstream/bumble-private-detector"
+    },
+    {
+      "path": "models/converted/bumble-private-detector/bumble-private-detector.mixed.mlpackage",
+      "sha256": "a545b1652a14e328ffd5e52709fea60a34e193828ebd9d2538de3abc5edcdce9",
+      "kind": "converted-coreml-mixed",
+      "derivedFrom": "models/upstream/bumble-private-detector"
+    }
+  ]
+}

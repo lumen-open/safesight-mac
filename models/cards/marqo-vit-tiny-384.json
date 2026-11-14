@@ -1,0 +1,85 @@
+{
+  "id": "marqo-vit-tiny-384",
+  "family": "A-vit",
+  "architecture": "timm vit_tiny_patch16_384",
+  "inputSide": 384,
+  "classes": [
+    "NSFW",
+    "SFW"
+  ],
+  "flagClasses": [
+    "NSFW"
+  ],
+  "licence": "Apache-2.0",
+  "licenceFile": "LICENSES/Apache-2.0.txt",
+  "licenceEvidence": {
+    "where": "https://huggingface.co/Marqo/nsfw-image-detection-384 model card front matter at revision 0c26ec22111b83f106d72a55f611ec35962bcb65",
+    "text": "license: apache-2.0",
+    "checked": "2026-11-13"
+  },
+  "source": {
+    "host": "huggingface",
+    "repo": "Marqo/nsfw-image-detection-384",
+    "revision": "0c26ec22111b83f106d72a55f611ec35962bcb65"
+  },
+  "upstreamPreprocessing": "PIL bicubic resize to 384x384 (crop_pct 1.0), mean 0.5 std 0.5",
+  "trainingDataAsStated": "Proprietary set of 220,000 images held by Marqo; fine-tune of timm/vit_tiny_patch16_384.augreg_in21k_ft_in1k (Apache-2.0).",
+  "attribution": "nsfw-image-detection-384 by Marqo, Apache License 2.0.",
+  "roles": [
+    "watcher",
+    "browser",
+    "scanner"
+  ],
+  "files": [
+    {
+      "path": "models/upstream/marqo-vit-tiny-384/raw/model.safetensors",
+      "sha256": "6bf2e0f64a1d20169736c2836e3a787b12379fdc08ba87f7d94a7a3d58eeefce",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/marqo-vit-tiny-384/raw/config.json",
+      "sha256": "ae848d1dca0aeccd38f2ebb4b1bb47219cdc7f34e3ddc50c8d6430abe74d79b4",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/marqo-vit-tiny-384/raw/README.md",
+      "sha256": "619f379b00af55e69da0ebaf1ba3f9dda1980e20433a391815e85aa24e475c90",
+      "kind": "upstream"
+    },
+    {
+      "path": "models/upstream/marqo-vit-tiny-384/marqo-vit-tiny-384.safetensors",
+      "sha256": "6bf2e0f64a1d20169736c2836e3a787b12379fdc08ba87f7d94a7a3d58eeefce",
+      "kind": "safetensors-from-upstream"
+    },
+    {
+      "path": "models/converted/marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage",
+      "sha256": "617de4afbb86436cf9f8ef0bc97850f2b41187b28d061e9cac6bb195cfbe7e40",
+      "kind": "converted-coreml-fp16",
+      "derivedFrom": "models/upstream/marqo-vit-tiny-384"
+    },
+    {
+      "path": "models/converted/broken/marqo-vit-tiny-384/marqo-vit-tiny-384.BROKEN-bgr.mlpackage",
+      "sha256": "d67153993c6954a89ecd18dbd97255965dd780ddb69e49bb3c528301faca8389",
+      "kind": "control-broken-coreml-fp16",
+      "derivedFrom": "models/upstream/marqo-vit-tiny-384"
+    },
+    {
+      "path": "models/converted/broken/marqo-vit-tiny-384/marqo-vit-tiny-384.BROKEN-scale.mlpackage",
+      "sha256": "40c21f110a98cd25eb1019be54e70553dfd96be0f49a6985600d84fa939c9de0",
+      "kind": "control-broken-coreml-fp16",
+      "derivedFrom": "models/upstream/marqo-vit-tiny-384"
+    },
+    {
+      "path": "models/converted/marqo-vit-tiny-384/marqo-vit-tiny-384.onnx",
+      "sha256": "cfb32d38d0f3ecef5f22a583e6f8afef4763c28412ede64adb1e587220bf8889",
+      "kind": "converted-onnx-fp32",
+      "derivedFrom": "models/upstream/marqo-vit-tiny-384"
+    },
+    {
+      "path": "models/converted/marqo-vit-tiny-384/marqo-vit-tiny-384.int8.onnx",
+      "sha256": "8d1b1d5e6789996b803e3c029874af168abf88c0a57ccdb7bf9c0b5b5868fb4d",
+      "kind": "converted-onnx-int8",
+      "derivedFrom": "models/converted/marqo-vit-tiny-384/marqo-vit-tiny-384.onnx"
+    }
+  ]
+}
