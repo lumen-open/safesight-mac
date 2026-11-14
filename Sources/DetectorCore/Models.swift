@@ -99,3 +99,20 @@ public struct ModelSet {
         ], bundleVersion: bundleVersion)
     }
 }
+
+#if KESTREL_LAB
+/// LAB ONLY (absent from release builds): a model that scores every picture 0, so that only the lab
+/// stand-in can produce a cover. Lets the watcher pipeline run end to end with no model file at all.
+final class LabNullModel: ScoringModel {
+    let id: String, family: Family, side = 32
+    init(id: String, family: Family) { self.id = id; self.family = family }
+    func flagScores(_ tensors: [[UInt8]]) throws -> [Float] { tensors.map { _ in 0 } }
+}
+
+extension ModelSet {
+    /// LAB ONLY: two null families and no tie-breaker.
+    public static func labNull() -> ModelSet {
+        ModelSet(models: [LabNullModel(id: "lab-null-a", family: .a), LabNullModel(id: "lab-null-b", family: .b)], bundleVersion: "lab-null")
+    }
+}
+#endif

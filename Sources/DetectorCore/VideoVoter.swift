@@ -14,12 +14,12 @@ final class VideoVoter {
     static func key(_ windowID: UInt64, _ r: PixelRect) -> String { "\(windowID):\(r.x / 8):\(r.y / 8):\(r.w / 8):\(r.h / 8)" }
 
     /// Returns (holdCover, strike) for this tile after adding this frame's outcome.
-    func vote(_ key: String, _ o: TileOutcome) -> (hold: Bool, strike: Bool) {
+    func vote(_ key: String, _ o: TileOutcome, confirmed: Bool? = nil) -> (hold: Bool, strike: Bool) {
         var t = tracks[key] ?? Track()
         t.frame += 1
         t.history.append(o)
         if t.history.count > window { t.history.removeFirst() }
-        if o.confirmed { t.lastFlag = t.frame }
+        if confirmed ?? o.confirmed { t.lastFlag = t.frame }
         tracks[key] = t
         let hold = t.lastFlag.map { t.frame - $0 <= holdFrames } ?? false
         let strike = t.history.filter(\.strikeBoth).count >= strikeVotes

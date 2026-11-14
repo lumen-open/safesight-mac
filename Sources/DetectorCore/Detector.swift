@@ -25,6 +25,8 @@ public struct DetectorConfig: Sendable {
     public var blurAllAbove = 200
     /// Tiles at the grid's low level needed to make a grid hot.
     public var gridHotCount = 3
+    /// The detector rule. Balanced is the default (founder decision S-01).
+    public var rule: DetectorRule = .balanced
     public init() {}
 }
 
@@ -38,7 +40,7 @@ public protocol StandInDetector: AnyObject {
 public final class Detector {
     let models: ModelSet
     let table: ThresholdTable
-    public let config: DetectorConfig
+    public private(set) var config: DetectorConfig
     let finder: RegionFinder
     let cache = VerdictCache()
     let voter = VideoVoter()
@@ -59,7 +61,28 @@ public final class Detector {
         self.models = models; self.table = table; self.config = config; self.finder = finder
     }
 
-    enum Pass: String { case whole, slice, region }
+    typealias Pass = JudgePass
+
+    /// Changes the detector rule. The verdict cache is emptied, because a cached outcome was made under
+    /// the other rule (the tie-breaker is asked only under Balanced).
+    public func setRule(_ rule: DetectorRule) {
+        guard rule != config.rule else { return }
+        config.rule = rule
+        cache.removeAll()
+    }
+
+    /// The picture finder alone (the contract's `find`). Cheap; no model.
+    public func find(_ frame: RGBAImage, within area: PixelRect? = nil) -> RegionFinder.Output {
+        finder.find(frame, within: area)
+    }
+
+    /// Whether an outcome covers under the current rule.
+    func confirmed(_ o: TileOutcome) -> Bool {
+        switch config.rule {
+        case .balanced: return o.confirmed
+        case .either: return o.forced || o.flagA || o.flagB
+        }
+    }
 
     struct Task {
         var rect: PixelRect      // what the verdict applies to
@@ -99,7 +122,9 @@ public final class Detector {
     }
 
     /// Judges one captured frame (or a still image) and returns classes only.
-    public func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect? = nil) -> FrameVerdict {
+    /// `budget` is the caller's share of model judgements for this call; `DetectorConfig.maxJudgementsPerCall`
+    /// (`DETECTOR_CALL_CAP`) stays as the backstop. A budget of 0 returns every uncached entry as `overload`.
+    public func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect? = nil, budget callerBudget: Int? = nil) -> FrameVerdict {
         let A = area?.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
         let found = finder.find(frame, within: A)
         let gridMembers = Set(found.grids.flatMap(\.members))
@@ -120,7 +145,7 @@ public final class Detector {
         }
 
         // Cache, then judge within the budget.
-        var budget = config.maxJudgementsPerCall
+        var budget = min(config.maxJudgementsPerCall, max(0, callerBudget ?? config.maxJudgementsPerCall))
         var judgements = 0
         for i in tasks.indices {
             if let o = cache.get(tasks[i].key) { tasks[i].outcome = o; tasks[i].judged = true; continue }
@@ -151,7 +176,7 @@ public final class Detector {
                 // Never show a picture unjudged: cover in covered-start contexts and for the whole/slice
                 // passes; blur regions in show-first windows (the judged copy takes over there).
                 let d: DisplayClass = (ctx.startsCovered || t.pass != .region) ? .cover : .contain
-                out.append(RegionVerdict(rect: t.rect, display: d, reason: .overload))
+                out.append(RegionVerdict(rect: t.rect, display: d, reason: .overload, pass: t.pass))
                 continue
             }
             let band = Band(shortSide: t.rect.shortSide)
@@ -162,20 +187,21 @@ public final class Detector {
             #if KESTREL_LAB
             if o.forced { display = .cover; reason = .labForced }
             #endif
-            if display == .clear && o.confirmed && t.rect.shortSide < config.coverMinSide && !o.forced {
+            let covers = confirmed(o)
+            if display == .clear && covers && t.rect.shortSide < config.coverMinSide && !o.forced {
                 display = .contain
                 reason = .containedSmall
-            } else if display == .clear && o.confirmed {
+            } else if display == .clear && covers {
                 display = .cover
                 reason = o.flagA && o.flagB ? .bothFamilies : .referee
                 becameHot = true
                 if t.pass == .whole { coverWindow = true }
-            } else if display == .clear && o.disputed && !o.refereeRan {
+            } else if display == .clear && config.rule == .balanced && o.disputed && !o.refereeRan {
                 display = .contain
                 reason = .disputed
             }
             if ctx.isVideo {
-                let (hold, vstrike) = voter.vote(VideoVoter.key(ctx.windowID, t.rect), o)
+                let (hold, vstrike) = voter.vote(VideoVoter.key(ctx.windowID, t.rect), o, confirmed: covers)
                 if hold && display == .clear { display = t.rect.shortSide < config.coverMinSide ? .contain : .cover; reason = .videoHold }
                 if vstrike && t.rect.shortSide >= config.strikeMinSide && !o.forced { strike = true }
             } else if o.strikeBoth && t.rect.shortSide >= config.strikeMinSide && !o.forced {
@@ -186,7 +212,7 @@ public final class Detector {
                 else if (wasHot || becameHot) && t.rect.shortSide < config.hotBelow { display = .contain; reason = .hotContext }
             }
             _ = band
-            out.append(RegionVerdict(rect: t.rect, display: display, reason: reason))
+            out.append(RegionVerdict(rect: t.rect, display: display, reason: reason, pass: t.pass))
         }
         if becameHot { hot.mark(ctx.windowID, ctx.now); wasHot = true }
         // A hot window with very many picture tiles blurs its whole picture area.
@@ -262,7 +288,7 @@ public final class Detector {
         }
         o.strikeBoth = strikeA && strikeB
         o.disputed = o.flagA != o.flagB
-        if o.disputed, let r = models.referee {
+        if o.disputed, config.rule == .balanced, let r = models.referee {
             let cut = table.cutoffs(model: r.id, band: band)
             var tensors: [[UInt8]] = []
             for p in t.pieces {

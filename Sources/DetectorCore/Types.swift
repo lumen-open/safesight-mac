@@ -23,10 +23,19 @@ public enum Reason: String, Sendable, Codable {
     #endif
 }
 
+/// Which of the three scales produced an entry (register 8a, verdict record).
+public enum JudgePass: String, Sendable, Codable { case whole, slice, region }
+
+/// The detector rule (register SD-125). Balanced: cover when both families agree, or when exactly one
+/// flags and the tie-breaker confirms. Either: cover when either family flags; the tie-breaker is not asked.
+public enum DetectorRule: String, Sendable, Codable, CaseIterable { case balanced, either }
+
 public struct RegionVerdict: Sendable, Equatable {
     public var rect: PixelRect
     public var display: DisplayClass
     public var reason: Reason
+    /// The scale that produced this entry.
+    public var pass: JudgePass = .region
 }
 
 public struct FrameVerdict: Sendable {

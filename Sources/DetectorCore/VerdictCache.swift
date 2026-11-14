@@ -42,6 +42,8 @@ final class VerdictCache {
         return nil
     }
 
+    func removeAll() { store.removeAll(); order.removeAll() }
+
     func put(_ k: Data, _ v: TileOutcome) {
         if store[k] == nil { order.append(k) }
         store[k] = v
