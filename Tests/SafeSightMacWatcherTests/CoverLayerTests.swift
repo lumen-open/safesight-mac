@@ -113,16 +113,32 @@ import Testing
     }
 
     @Test func aContainedPictureIsBlurredNotShownSharp() throws {
-        // One family only, no tie-breaker, under Balanced: a dispute nobody could settle is contained.
+        // A both-family hit makes the window hot; a faintly marked picture under 128 px shown in it
+        // next is contained (blurred until cleared), not shown sharp.
+        let p = pipeline(.balanced)
+        var hit = Fixtures.blank(800, 600)
+        Fixtures.paintFlagged(&hit, PixelRect(x: 40, y: 40, w: 160, h: 160))
+        #expect(p.process(Fixtures.frame(hit, display: display, scale: 2, t: 0), snapshot: window, now: 0).covers(CGRect(x: 1460, y: 20, width: 80, height: 80)))
         var img = Fixtures.blank(800, 600)
-        let picture = PixelRect(x: 200, y: 100, w: 160, h: 160)
-        Fixtures.paint(&img, picture, channel: 0, seed: 3)
-        let plan = pipeline(.balanced).process(Fixtures.frame(img, display: display, scale: 2, t: 0), snapshot: window, now: 0)
-        let g = CGRect(x: 1540, y: 50, width: 80, height: 80)
+        let faint = PixelRect(x: 500, y: 300, w: 100, h: 100)
+        Fixtures.paint(&img, faint, channel: nil, seed: 7)
+        Fixtures.paint(&img, PixelRect(x: faint.x, y: faint.y, w: faint.w, h: 10), channel: 0, seed: 71)
+        let plan = p.process(Fixtures.frame(img, display: display, scale: 2, t: 0.1), snapshot: window, now: 0.1)
+        let g = CGRect(x: 1440 + 250, y: 150, width: 50, height: 50)
         #expect(plan.covers(g))
         let blurs = plan.items.compactMap { item -> BlurTile? in if case let .blur(t) = item.kind { return t }; return nil }
         #expect(!blurs.isEmpty)
         #expect(blurs.allSatisfy { max($0.columns, $0.rows) <= ContainBlur.maxCells })
+    }
+
+    @Test func aDisputeNobodyCouldSettleIsCovered() throws {
+        // One family only, no tie-breaker, under Balanced: the dispute is covered (SD-125, C06-3 c).
+        var img = Fixtures.blank(800, 600)
+        let picture = PixelRect(x: 200, y: 100, w: 160, h: 160)
+        Fixtures.paint(&img, picture, channel: 0, seed: 3)
+        let g = CGRect(x: 1540, y: 50, width: 80, height: 80)
+        let balanced = pipeline(.balanced).process(Fixtures.frame(img, display: display, scale: 2, t: 0), snapshot: window, now: 0)
+        #expect(balanced.covers(g, kind: .plain))
         // Under Either, the same picture is covered.
         let either = pipeline(.either).process(Fixtures.frame(img, display: display, scale: 2, t: 0), snapshot: window, now: 0)
         #expect(either.covers(g, kind: .plain))

@@ -189,7 +189,7 @@ public final class Detector {
             var display = DisplayClass.clear
             var reason = Reason.judgedClean
             // Agreement policy: cover when both families agree, or when the referee confirms a dispute.
-            // A dispute nobody could settle is blurred, never covered.
+            // A dispute nobody could settle is covered too (SD-125, C06-3 c), but makes nothing hot.
             #if KESTREL_LAB
             if o.forced { display = .cover; reason = .labForced }
             #endif
@@ -201,8 +201,9 @@ public final class Detector {
                 if t.rect.shortSide >= config.coverMinSide { becameHot = true }
                 if t.pass == .whole { coverWindow = true }
             } else if display == .clear && config.rule == .balanced && o.disputed && !o.refereeRan {
-                display = .contain
+                display = .cover
                 reason = .disputed
+                if t.pass == .whole { coverWindow = true }
             }
             if ctx.isVideo {
                 let (hold, vstrike) = voter.vote(VideoVoter.key(ctx.windowID, t.rect), o, confirmed: covers)

@@ -70,7 +70,7 @@ public struct ModelSet {
 
     /// The standard screen-watcher set: Marqo (A) and NSFWJS (B) on the Neural Engine, Bumble as the
     /// referee for disagreements (float32 on the GPU; its float16 build failed parity). `referee: false`
-    /// gives the browser-like set, where disputes are blurred instead.
+    /// gives the browser-like set, where a dispute nobody can settle is covered (SD-125).
     /// `familyB` picks the family-B model: NSFWJS today, or the screen-aware model from the cloud run
     /// (`kestrel-screen-b-224`, classes [NSFW, SFW]) once Stage 3 has converted it.
     public static func watcher(directory d: URL, bundleVersion: String, referee: Bool = true,

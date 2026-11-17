@@ -12,17 +12,21 @@ final class ContractTests: XCTestCase {
         v.regions.filter { $0.rect.intersection(r).map { $0.area * 2 >= r.area } ?? false }.max { $0.display < $1.display }
     }
 
-    /// Under Either, one family's flag covers; under Balanced with no tie-breaker it only blurs.
+    /// Under Either, one family's flag covers. Under Balanced with no tie-breaker it covers too, as a
+    /// dispute nobody could settle (SD-125, C06-3 c).
     func testEitherCoversOneFamilyAlone() {
         var img = canvas(400, 300)
         let ra = PixelRect(x: 40, y: 40, w: 96, h: 96)
         paint(&img, ra, channel: 0, seed: 1)
         let (balanced, _, _) = detector()
-        XCTAssertEqual(verdict(balanced.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)), ra)?.display, .contain)
+        let b = verdict(balanced.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)), ra)
+        XCTAssertEqual(b?.display, .cover)
+        XCTAssertEqual(b?.reason, .disputed)
         let (either, _, _) = detector()
         either.setRule(.either)
         let v = either.judge(img, context: JudgeContext(windowID: 2, startsCovered: false))
         XCTAssertEqual(verdict(v, ra)?.display, .cover)
+        XCTAssertNotEqual(verdict(v, ra)?.reason, .disputed, "Either never disputes")
     }
 
     /// Changing the rule empties the cache, so the next call judges again under the new rule.

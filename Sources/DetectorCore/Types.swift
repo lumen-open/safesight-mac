@@ -16,7 +16,7 @@ public enum DisplayClass: String, Sendable, Codable, Comparable {
 /// Why a region got its class (for logs and tests; carries no score).
 public enum Reason: String, Sendable, Codable {
     /// bothFamilies: the two families agreed. referee: one family flagged and the referee confirmed.
-    /// disputed: one family flagged and no referee could settle it, so the picture is blurred (never covered).
+    /// disputed: one family flagged and no referee could settle it, so the picture is covered (SD-125).
     case judgedClean, bothFamilies, referee, disputed, containedSmall, hotContext, overload, cached, videoHold
     #if KESTREL_LAB
     case labForced

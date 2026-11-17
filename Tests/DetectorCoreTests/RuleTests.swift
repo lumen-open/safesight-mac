@@ -64,17 +64,20 @@ final class RuleTests: XCTestCase {
         v.regions.filter { $0.rect.intersection(r).map { $0.area * 2 >= r.area } ?? false }.max { $0.display < $1.display }
     }
 
-    /// Agreement policy: a picture only one family flags is blurred when nobody can referee it, never covered.
-    func testOneFamilyAloneIsBlurredNotCovered() {
+    /// Agreement policy: a picture only one family flags is covered when nobody can referee it (SD-125,
+    /// C06-3 c). It never strikes and never makes the window hot.
+    func testUnansweredDisputeIsCovered() {
         var img = canvas(400, 300)
         let ra = PixelRect(x: 40, y: 40, w: 96, h: 96), rb = PixelRect(x: 240, y: 40, w: 96, h: 96)
         paint(&img, ra, channel: 0, seed: 1); paint(&img, rb, channel: 2, seed: 2)
         let (d, _, _) = detector()
         let v = d.judge(img, context: ctxShow)
-        XCTAssertEqual(verdict(v, ra)?.display, .contain)
+        XCTAssertEqual(verdict(v, ra)?.display, .cover)
         XCTAssertEqual(verdict(v, ra)?.reason, .disputed)
-        XCTAssertEqual(verdict(v, rb)?.display, .contain)
+        XCTAssertEqual(verdict(v, rb)?.display, .cover)
+        XCTAssertEqual(verdict(v, rb)?.reason, .disputed)
         XCTAssertFalse(v.strike, "one family alone never strikes")
+        XCTAssertFalse(v.hot, "a dispute never makes the window hot")
     }
 
     func testBothFamiliesAgreeingCovers() {
