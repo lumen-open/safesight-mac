@@ -8,6 +8,8 @@
 #![forbid(unsafe_code)]
 
 pub mod constants;
+pub mod frame;
+pub mod records;
 
 /// The keeper's own version. Any change to the keeper's bytes is a lock-core change.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
