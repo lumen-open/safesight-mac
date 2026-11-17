@@ -5,6 +5,10 @@
 //! the time lock, the request journal and the fault ladder, each behind tests that
 //! run unprivileged on CI against a scratch store.
 
+#![forbid(unsafe_code)]
+
+pub mod constants;
+
 /// The keeper's own version. Any change to the keeper's bytes is a lock-core change.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
