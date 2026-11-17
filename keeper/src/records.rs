@@ -625,7 +625,7 @@ pub fn newer_clock_slot(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InstantLeaveMarker {
     pub lock_round: u64,
-    pub lock_wall_clock_unix_seconds: u64,
+    pub lock_date_unix_seconds: u64,
 }
 
 impl InstantLeaveMarker {
@@ -642,16 +642,16 @@ impl InstantLeaveMarker {
         self.validate()?;
         let mut w = Writer::begin(TYPE_INSTANT_LEAVE_MARKER, VERSION_1, Self::LEN);
         w.put_u64(self.lock_round);
-        w.put_u64(self.lock_wall_clock_unix_seconds);
+        w.put_u64(self.lock_date_unix_seconds);
         w.finish()
     }
 
     pub fn decode(bytes: &[u8]) -> Result<InstantLeaveMarker, RecordError> {
         let mut r = Reader::open(bytes, TYPE_INSTANT_LEAVE_MARKER, VERSION_1, Self::LEN)?;
         let lock_round = r.read_u64()?;
-        let lock_wall_clock_unix_seconds = r.read_u64()?;
+        let lock_date_unix_seconds = r.read_u64()?;
         r.close()?;
-        let marker = InstantLeaveMarker { lock_round, lock_wall_clock_unix_seconds };
+        let marker = InstantLeaveMarker { lock_round, lock_date_unix_seconds };
         marker.validate()?;
         Ok(marker)
     }
@@ -1294,11 +1294,11 @@ mod tests {
     #[test]
     fn marker_round_trips_and_is_strict() {
         assert_eq!(InstantLeaveMarker::LEN, 32);
-        let marker = InstantLeaveMarker { lock_round: 1_000_000, lock_wall_clock_unix_seconds: 1_795_000_000 };
+        let marker = InstantLeaveMarker { lock_round: 1_000_000, lock_date_unix_seconds: 1_795_000_000 };
         let bytes = marker.encode().unwrap();
         assert_eq!(InstantLeaveMarker::decode(&bytes), Ok(marker));
         assert_strict(&bytes, &|b: &[u8]| InstantLeaveMarker::decode(b).err());
-        let zero = InstantLeaveMarker { lock_round: 0, lock_wall_clock_unix_seconds: 1 };
+        let zero = InstantLeaveMarker { lock_round: 0, lock_date_unix_seconds: 1 };
         assert_eq!(zero.encode(), Err(RecordError::InvalidField));
     }
 

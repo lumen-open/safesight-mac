@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The keeper: the one root part of SafeSight Mac.
 //!
-//! Step 0 holds only the version record. Later steps add the sealed admin secret,
-//! the time lock, the request journal and the fault ladder, each behind tests that
-//! run unprivileged on CI against a scratch store.
+//! Step 2, first pass: the pure core only. The constants the register fixes, the first
+//! fixed-layout records, the clock and the wait state machine, with every edge of the
+//! real system behind a trait in `boundary`. Nothing here touches the Mac: no launch
+//! item, no account, no password, no Secure Enclave, no network. `docs/STEP-2-STATUS.md`
+//! says what exists, what is open and what comes next.
 
 #![forbid(unsafe_code)]
 
+pub mod boundary;
+pub mod clock;
 pub mod constants;
 pub mod frame;
 pub mod records;
+pub mod waits;
+
+#[cfg(test)]
+mod fakes;
 
 /// The keeper's own version. Any change to the keeper's bytes is a lock-core change.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
