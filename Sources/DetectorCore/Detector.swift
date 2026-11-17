@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Vendored from the kestrel lab detector (v3-detector, commit 49ecdd9) under Apache-2.0.
 // The judging core: three scales, jitter before every judgement, the decision and strike rules, the
-// grid rule, video voting, containment for small pictures, hot contexts, the verdict cache, and an
+// video voting, containment for small pictures, hot contexts, the verdict cache, and an
 // overload path that always falls toward covering. Outputs are classes only.
 import Foundation
 import Preprocess
@@ -23,8 +23,6 @@ public struct DetectorConfig: Sendable {
     public var coverMinSide = 32
     /// A hot window with more picture tiles than this blurs its whole picture area.
     public var blurAllAbove = 200
-    /// Tiles at the grid's low level needed to make a grid hot.
-    public var gridHotCount = 3
     /// The detector rule. Balanced is the default (founder decision S-01).
     public var rule: DetectorRule = .balanced
     public init() {}
@@ -165,13 +163,9 @@ public final class Detector {
             }
         }
 
-        // Grid rule: several low-level tiles make the window hot (never a strike).
-        var gridLowCount = 0
-        // Low-level grid tiles count as group evidence unless the referee looked at them and declined.
-        for t in tasks where t.gridMember {
-            if let o = t.outcome, o.gridLow && !(o.refereeRan && !o.refereeFlag) { gridLowCount += 1 }
-        }
-        var becameHot = gridLowCount >= config.gridHotCount
+        // A window turns hot only after a both-family hit (SD-125, C06-3 d). The lab's grid trigger
+        // (several low-level tiles) and the tie-breaker-confirmed trigger are removed.
+        var becameHot = false
 
         var out: [RegionVerdict] = []
         var coverWindow = false, strike = false, overloaded = 0
@@ -198,7 +192,7 @@ public final class Detector {
                 // A flagged picture under 32 detail pixels is covered too (SD-125), but makes nothing hot.
                 display = .cover
                 reason = o.flagA && o.flagB ? .bothFamilies : .referee
-                if t.rect.shortSide >= config.coverMinSide { becameHot = true }
+                if o.flagA && o.flagB && t.rect.shortSide >= config.coverMinSide { becameHot = true }
                 if t.pass == .whole { coverWindow = true }
             } else if display == .clear && config.rule == .balanced && o.disputed && !o.refereeRan {
                 display = .cover

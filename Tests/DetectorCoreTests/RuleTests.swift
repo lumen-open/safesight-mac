@@ -100,13 +100,14 @@ final class RuleTests: XCTestCase {
         for id in ["fa", "fb", "fr"] { m[id] = Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) }) }
         let d = Detector(models: ModelSet(models: [a, b], referee: refRed, bundleVersion: "ref"), table: ThresholdTable(schema: "t", models: m),
                          config: DetectorConfig(), finder: RegionFinder())
-        // Separate windows: a confirmed hit makes its own window hot, which would blur the other picture.
+        // Separate windows, so each picture is judged on its own.
         var redImg = canvas(400, 300), blueImg = canvas(400, 300)
         let red = PixelRect(x: 40, y: 40, w: 96, h: 96), blue = PixelRect(x: 240, y: 40, w: 96, h: 96)
         paint(&redImg, red, channel: 0, seed: 1); paint(&blueImg, blue, channel: 2, seed: 2)
         let v = d.judge(redImg, context: JudgeContext(windowID: 31, startsCovered: false))
         XCTAssertEqual(verdict(v, red)?.display, .cover, "referee confirms family A")
         XCTAssertEqual(verdict(v, red)?.reason, .referee)
+        XCTAssertFalse(v.hot, "a tie-breaker-confirmed hit does not make the window hot (C06-3 d)")
         let w = d.judge(blueImg, context: JudgeContext(windowID: 32, startsCovered: false))
         XCTAssertEqual(verdict(w, blue)?.display, .clear, "referee declines family B's lone flag")
         XCTAssertGreaterThan(d.refereeCalls, 0)
@@ -202,7 +203,8 @@ final class RuleTests: XCTestCase {
         XCTAssertEqual(verdict(after, r)?.display, .clear, "hot context lasts 15 minutes")
     }
 
-    func testGridOfLowTilesMakesWindowHot() {
+    /// The lab's grid trigger is removed (SD-125, C06-3 d): low-level tiles in a grid make nothing hot.
+    func testGridOfLowTilesDoesNotMakeWindowHot() {
         var img = canvas(600, 200)
         for i in 0..<5 {
             let r = PixelRect(x: 20 + i * 100, y: 40, w: 90, h: 90)
@@ -212,8 +214,9 @@ final class RuleTests: XCTestCase {
         }
         let (d, _, _) = detector()
         let v = d.judge(img, context: ctxShow)
-        XCTAssertTrue(v.hot)
+        XCTAssertFalse(v.hot, "only a both-family hit makes a window hot")
         XCTAssertFalse(v.strike, "group evidence never strikes")
+        XCTAssertTrue(v.regions.allSatisfy { $0.display == .clear }, "faint tiles in a show-first window are shown")
     }
 
     func testOverloadNeverShowsUnjudgedPictures() {

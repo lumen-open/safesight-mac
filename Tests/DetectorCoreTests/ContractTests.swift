@@ -27,6 +27,7 @@ final class ContractTests: XCTestCase {
         let v = either.judge(img, context: JudgeContext(windowID: 2, startsCovered: false))
         XCTAssertEqual(verdict(v, ra)?.display, .cover)
         XCTAssertNotEqual(verdict(v, ra)?.reason, .disputed, "Either never disputes")
+        XCTAssertFalse(v.hot, "one family's hit does not make the window hot (C06-3 d)")
     }
 
     /// Changing the rule empties the cache, so the next call judges again under the new rule.

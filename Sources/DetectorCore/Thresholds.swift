@@ -13,7 +13,8 @@ struct Cutoffs: Codable, Sendable, Equatable {
     var strike: Float
     /// Inside a grid, a tile is covered at this lower level.
     var gridMember: Float
-    /// Several tiles at or above this make the grid a hot context.
+    /// The grid's low level. It no longer makes a window hot (SD-125, C06-3 d); kept so the table's
+    /// schema is unchanged.
     var gridLow: Float
 }
 
