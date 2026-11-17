@@ -18,8 +18,8 @@ public struct DetectorConfig: Sendable {
     public var hotBelow = 128
     /// Strikes need pictures at least this big (small-picture rules never create strikes).
     public var strikeMinSide = 64
-    /// Below this short side a model flag blurs (contains) instead of covering, and never makes the
-    /// window hot: the models are least reliable on tiny upscaled tiles, where most false alarms came from.
+    /// Below this short side a model flag still covers (register SD-125, correction C06-3 b) but never
+    /// makes the window hot: the models are least reliable on tiny upscaled tiles.
     public var coverMinSide = 32
     /// A hot window with more picture tiles than this blurs its whole picture area.
     public var blurAllAbove = 200
@@ -194,13 +194,11 @@ public final class Detector {
             if o.forced { display = .cover; reason = .labForced }
             #endif
             let covers = confirmed(o)
-            if display == .clear && covers && t.rect.shortSide < config.coverMinSide && !o.forced {
-                display = .contain
-                reason = .containedSmall
-            } else if display == .clear && covers {
+            if display == .clear && covers {
+                // A flagged picture under 32 detail pixels is covered too (SD-125), but makes nothing hot.
                 display = .cover
                 reason = o.flagA && o.flagB ? .bothFamilies : .referee
-                becameHot = true
+                if t.rect.shortSide >= config.coverMinSide { becameHot = true }
                 if t.pass == .whole { coverWindow = true }
             } else if display == .clear && config.rule == .balanced && o.disputed && !o.refereeRan {
                 display = .contain
@@ -208,7 +206,7 @@ public final class Detector {
             }
             if ctx.isVideo {
                 let (hold, vstrike) = voter.vote(VideoVoter.key(ctx.windowID, t.rect), o, confirmed: covers)
-                if hold && display == .clear { display = t.rect.shortSide < config.coverMinSide ? .contain : .cover; reason = .videoHold }
+                if hold && display == .clear { display = .cover; reason = .videoHold }
                 if vstrike && t.rect.shortSide >= config.strikeMinSide && !o.forced { strike = true }
             } else if o.strikeBoth && t.rect.shortSide >= config.strikeMinSide && !o.forced {
                 strike = true

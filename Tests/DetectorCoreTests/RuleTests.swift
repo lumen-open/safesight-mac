@@ -141,17 +141,21 @@ final class RuleTests: XCTestCase {
         XCTAssertFalse(v2.strike)
     }
 
-    /// Below 32 px even an agreed flag only blurs: tiny upscaled tiles were the main false-alarm source.
-    func testTinyConfirmedFlagBlursNotCovers() {
+    /// Below 32 px an agreed flag still covers (SD-125, C06-3 b), but it never makes the window hot.
+    func testTinyConfirmedFlagCoversAndMakesNothingHot() {
         var img = canvas(300, 200)
         let r = PixelRect(x: 60, y: 60, w: 24, h: 24)
         paint(&img, PixelRect(x: 60, y: 60, w: 12, h: 24), channel: 0, seed: 1)
         paint(&img, PixelRect(x: 72, y: 60, w: 12, h: 24), channel: 2, seed: 2)
         let (d, _, _) = detector(cover: 0.3)
         let v = d.judge(img, context: ctxShow)
-        let rv = v.regions.filter { $0.rect.intersects(r) && $0.rect.shortSide < 32 }.max { $0.display < $1.display }
-        XCTAssertEqual(rv?.display, .contain)
+        let tiny = v.regions.filter { $0.pass == .region && $0.rect.intersects(r) && $0.rect.shortSide < 32 }
+        XCTAssertFalse(tiny.isEmpty, "the finder proposes the tiny picture")
+        let rv = tiny.max { $0.display < $1.display }
+        XCTAssertEqual(rv?.display, .cover)
+        XCTAssertEqual(rv?.reason, .bothFamilies)
         XCTAssertFalse(v.strike)
+        XCTAssertFalse(v.hot, "a tiny hit never makes the window hot")
     }
 
     func testSmallPicturesContainedOnlyWhereAppsStartCovered() {
