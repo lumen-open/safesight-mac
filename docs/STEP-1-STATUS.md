@@ -12,7 +12,8 @@ These parts are built, and each is exercised by tests or the harness:
 - **The detector, vendored.** The kestrel lab build (v3-detector, commit 49ecdd9) is in `Sources/Preprocess`, `Sources/RegionFinder` and `Sources/DetectorCore`, under Apache-2.0.
   - Its tests pass here: 12 rule tests, and the preprocessing spec's 18 of 18 vectors bit-exact.
   - It uses the lab build's current Balanced rule (agreement plus a tie-breaker) and its committed cut-off table (`models/thresholds.json`, `agreement+referee/1`).
-  - Added for step 1: the Either rule, the caller's budget, the pass of each entry and a separate `find`. Under Balanced it behaves exactly as the lab build.
+  - Added for step 1: the Either rule, the caller's budget, the pass of each entry and a separate `find`.
+  - Changed from the lab build, as SD-125 and C06-3 require: a flagged picture under 32 detail pixels is covered, not blurred; a dispute the tie-breaker could not answer is covered, not blurred; a window turns hot only after a both-family hit. Under Balanced it therefore no longer behaves exactly as the lab build.
   - No weights are in git. `tools/models/fetch_upstream.py` and `tools/models/pins.json` hold the pinned upstream hashes. At run time the models load from a local folder, and every file is checked against the hash list sealed in the build (`models/watcher-models.sha256`).
 - **The capture layer** (`Sources/SafeSightMacCapture`).
   - One ScreenCaptureKit display stream for every active display, at the source's full pixel size. It captures 8-bit BGRA in sRGB, with no cursor and no audio. The app's own windows are left out of capture.
@@ -59,8 +60,8 @@ Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 82 test functions: 18 XCTest + 64 Swift Testing, all pass
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 84: adds the 2 stand-in tests, all pass
+swift test                                                 # 83 test functions: 18 XCTest + 65 Swift Testing, all pass
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 85: adds the 2 stand-in tests, all pass
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
 swift run -c release safesightmac-harness demo --models ../v3-detector/models/converted
@@ -68,12 +69,12 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 
 | Area | Tests (target) | How |
 |---|---|---|
-| Detector rules, as built | 12 `RuleTests` (DetectorCoreTests) | Fake marker models; the lab build's own tests, unchanged |
-| Detector additions | 5 `ContractTests` | Either covers one family's flag; a rule change empties the cache; a budget of 0 gives only `overload`, never `clear`; every entry names its pass; `find` matches the finder |
+| Detector rules, as built | 12 `RuleTests` (DetectorCoreTests) | Fake marker models; the lab build's own tests, with four changed for SD-125: a tiny agreed flag covers and makes nothing hot; an unanswered dispute covers; a tie-breaker-confirmed hit makes nothing hot; a grid of low-level tiles makes nothing hot |
+| Detector additions | 5 `ContractTests` | Either covers one family's flag without making the window hot, and Balanced with no tie-breaker covers it as a dispute; a rule change empties the cache; a budget of 0 gives only `overload`, never `clear`; every entry names its pass; `find` matches the finder |
 | Preprocessing | 1 `VectorTests` | 18 of 18 spec vectors bit-exact |
 | Region-to-screen mapping across scales | `MappingTests` | 1x, 2x, 3x, a rotated portrait display, displays left of and above the primary (negative origins), and a letterboxed frame. Round trip within 1 detail pixel and never smaller. Retina halving, the Cocoa flip, the canvas layer space, outward snapping, refusing unusable metadata |
 | Changed areas, window split, mailbox | `DirtyRegionTests`, `WindowSplitTests`, `MailboxTests` | Grid growth and merging, clipping; the front-most window gets the change; desktop areas go to the display surface; visible-area subtraction; a window across two displays; no changed area lost when frames are coalesced |
-| A flagged region produces a cover window frame | `CoverLayerTests` | The real detector (fake marker models) and the real pipeline on a 2x display to the right of the primary. The flagged picture is covered, and the overlay window frame (Cocoa) and canvas layer frame are checked. Also: a clean screen draws nothing; the lift after 4 clean judgements; a reflag resets the count; containment is a blur (a plain cover under Either); overload never shows a picture sharp; covers follow a moving window and cover its old place once; covers are clipped by windows in front; the app's own windows are never judged |
+| A flagged region produces a cover window frame | `CoverLayerTests` | The real detector (fake marker models) and the real pipeline on a 2x display to the right of the primary. The flagged picture is covered, and the overlay window frame (Cocoa) and canvas layer frame are checked. Also: a clean screen draws nothing; the lift after 4 clean judgements; a reflag resets the count; containment (a faint small picture in a hot window) is a blur; a dispute nobody could settle is a plain cover, as under Either; overload never shows a picture sharp; covers follow a moving window and cover its old place once; covers are clipped by windows in front; the app's own windows are never judged |
 | Fault to cover | `FaultToCoverTests` | Blank, suspended or stopped frames; missing metadata; a map that does not match the pixels; a stopped stream; a failed detector; judging behind; too many displays. Each covers the whole display, and the next judged frame lowers it |
 | Practice-state signal | `PracticeSignalTests`, `PracticeMenuTests` | A fake folder: no keeper file means practice; a root-owned keeper file (release, lab, any case) ends it; a non-root file is not a keeper; similar names do not count; an unreadable folder or owner means not practice. The real `lstat` probe on a temporary folder, including a symbolic link. Pause is allowed only in practice. The menu says "no lock" |
 | Model check | `ModelCheckTests` | Changed, missing and unlisted files and a malformed list are refused. The sealed list and table match the committed files. Locally only: the lab build's converted models match the sealed list |
@@ -127,13 +128,13 @@ With the real models (release build, read in place from `v3-detector`), the same
    - clicks pass through.
 
    Film the screen to count the flash (ST-031). Use synthetic patterns only.
-4. **Decide a detector discrepancy, with the second reader.** This build follows the lab build's latest commit, as instructed. Register SD-125 and correction C06-3 ask for four changes that are not made:
-   - a flagged picture under 32 detail pixels should get `cover` (here it gets `contain`, a blur);
-   - a dispute the tie-breaker could not answer should get `cover` (here `contain`);
-   - a window should turn hot only after a both-family hit (here a tie-breaker-confirmed hit or a grid of low-level tiles also does);
-   - the Either rule, which is now restored.
+4. **Detector discrepancy: done.** You approved building the register's rules. Register SD-125 and correction C06-3 asked for four changes to the lab build; all four are now in:
+   - a flagged picture under 32 detail pixels gets `cover` (it got `contain`, a blur). It still never strikes or makes the window hot, and a video hold on it covers too;
+   - a dispute the tie-breaker could not answer gets `cover` (it got `contain`). It never strikes or makes the window hot;
+   - a window turns hot only after a both-family hit. The grid trigger (several low-level grid tiles) and the tie-breaker-confirmed trigger are removed, and under Either one family's hit no longer makes the window hot;
+   - the Either rule, restored earlier.
 
-   The first three trade false covers against misses, and the lab measurements were made without them.
+   The code is in `Sources/DetectorCore/Detector.swift`, and `RuleTests`, `ContractTests` and `CoverLayerTests` pin each change. The first two cover more harmless things; the third blurs fewer. **The lab false-alarm measurements were made without these rules, so ST-040 must re-run on this build before any false-cover figure is used.**
 5. **Model conversion.** The Core ML conversion tools, with their parity checks and broken controls, are still only in `v3-detector/convert/`. Vendoring them means vendoring Python tooling. Decide whether that belongs in this repository.
 
 ## Known limits
