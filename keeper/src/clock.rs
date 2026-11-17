@@ -476,6 +476,7 @@ mod tests {
         let mut clock = clock_at(&time);
         time.pass_awake_ms(300_000);
         assert_eq!(clock.estimate(&time), R0 + 100);
+        assert_eq!(clock.awake_now_ms(&time), 4_300_000);
         time.boot_ms -= 200_000;
         time.awake_ms -= 200_000;
         assert_eq!(clock.estimate(&time), R0 + 100);

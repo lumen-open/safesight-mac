@@ -750,7 +750,8 @@ mod tests {
     /// one version, a checksum that matters, and no single damaged byte accepted.
     fn assert_strict(good: &[u8], decode_error: &dyn Fn(&[u8]) -> Option<RecordError>) {
         assert_eq!(decode_error(good), None);
-        assert_eq!(decode_error(&[]), Some(RecordError::TooShort));
+        let empty: [u8; 0] = [];
+        assert_eq!(decode_error(&empty[..]), Some(RecordError::TooShort));
         assert_eq!(decode_error(&good[..good.len() - 1]), Some(RecordError::WrongLength));
 
         let mut longer = good.to_vec();
