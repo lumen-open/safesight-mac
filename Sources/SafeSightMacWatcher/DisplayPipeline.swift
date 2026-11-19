@@ -456,6 +456,7 @@ public final class DisplayPipeline {
             h.clean >= Register.VIDEO_VOTE || (h.missingSince.map { now - $0 >= Register.WINDOW_GONE } ?? false && h.clean >= Register.WINDOW_GONE_VOTE)
         }
         for n in fresh { merge(n) }
+        clipToTargets(snapshot)
         held.removeAll { fullRect($0, snapshot, visible) == nil }
         for i in held.indices where held[i].missingSince == nil { held[i].lastGlobal = fullRect(held[i], snapshot, visible) }
         contentOffset = contentOffset.filter { visible[$0.key] != nil }
@@ -568,6 +569,7 @@ public final class DisplayPipeline {
         }
         held += split
         for c in copies { merge(c) }
+        clipToTargets(snapshot)
         return lead
     }
 
@@ -679,6 +681,22 @@ public final class DisplayPipeline {
                       !(map.toPixels(g).map { OwnCoverColours.shown(in: img, $0) } ?? true) {
                 held[i].clean += 1
             }
+        }
+    }
+
+    /// Cuts every region cover to its window's bounds (or the display, for the display surface), so merging and moving
+    /// with content never grow one past where its window can show anything. One left with nothing is dropped: no part of
+    /// its window is there.
+    func clipToTargets(_ snapshot: WindowSnapshot) {
+        for i in held.indices.reversed() where !held[i].whole && present(held[i].target, snapshot) {
+            let frame: CGRect
+            if let b = snapshot.bounds(of: held[i].target) {
+                frame = CGRect(origin: .zero, size: b.size).intersection(display.bounds.offsetBy(dx: -b.minX, dy: -b.minY))
+            } else {
+                frame = CGRect(origin: .zero, size: display.bounds.size)
+            }
+            let r = held[i].rel.intersection(frame)
+            if r.hasArea { held[i].rel = r } else { held.remove(at: i) }
         }
     }
 

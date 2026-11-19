@@ -275,6 +275,39 @@ final class VerdictScript: Judging {
         #expect(box.take()?.windows == b, "the list read with the newest pixels")
     }
 
+    @Test func aCoverNeverGrowsPastItsWindowWhileContentScrollsUnderAStillToolbar() {
+        // A window 400 points tall: a still toolbar (top 60 points), content below it scrolling down 16 points a frame. A
+        // cover straddles the toolbar's edge.
+        let w = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let list = WindowSnapshot(windows: [w], time: 0)
+        let p = DisplayPipeline(display: d, judger: VerdictScript { area in
+            // Every judgement flags, so nothing lifts and every merge is kept: the worst case for growth.
+            FrameVerdict(regions: [RegionVerdict(rect: area, display: .cover, reason: .bothFamilies, pass: .region)],
+                         coverWindow: false, strike: false, hot: false, judgements: 2, overloaded: 0)
+        }, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        p.coverGoalMs = 1e9
+        var tall = Fixtures.blank(600, 340 + 16 * 30)
+        Fixtures.paint(&tall, PixelRect(x: 0, y: 0, w: 600, h: tall.height), channel: nil, seed: 13)
+        func view(_ k: Int) -> RGBAImage {
+            var img = Fixtures.blank(600, 400)
+            Fixtures.paint(&img, PixelRect(x: 0, y: 0, w: 600, h: 60), channel: nil, seed: 3)   // the toolbar
+            let off = 16 * 30 - 16 * k
+            for y in 60..<400 { for x in 0..<600 { for c in 0..<4 { img.pixels[(y * 600 + x) * 4 + c] = tall.pixels[((y - 60 + off) * 600 + x) * 4 + c] } } }
+            return img
+        }
+        _ = p.process(Fixtures.frame(view(0), display: d, scale: 1, t: 0), snapshot: list, now: 0)
+        p.held = [DisplayPipeline.Held(target: .window(number: 1, ownerPID: 500), rel: CGRect(x: 100, y: 40, width: 200, height: 60),
+                                       whole: false, kind: .plain, clean: 0)]
+        var t = 0.0
+        for k in 1...24 {
+            t += 0.1
+            _ = p.process(Fixtures.frame(view(k), display: d, scale: 1, dirty: [PixelRect(x: 0, y: 60, w: 600, h: 340)], t: t), snapshot: list, now: t)
+            let window = CGRect(x: 0, y: 0, width: 600, height: 400)
+            #expect(p.held.allSatisfy { window.contains($0.rel) }, "frame \(k): \(p.held.map(\.rel))")
+            #expect(p.held.count <= 6, "frame \(k): \(p.held.count)")
+        }
+    }
+
     @Test func onlyThePartOfACoverThatMovedGoesWithTheContent() {
         // Textured content in one column scrolls up 16 points; the rest of the window stays still. A cover reaching
         // beyond the column must not move with it.
