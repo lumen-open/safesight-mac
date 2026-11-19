@@ -1,0 +1,681 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-e6ModwgdnbqWSMZnHyPbNbqFPXJbWUoG6i3euEzz1a4='; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f3f6f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1112" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Free, open-source protection from explicit images on your Mac, with an off switch that takes as long as you decide.">
+<title>SafeSight Mac · Free, open-source protection from explicit images</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230b7f73'/%3E%3Ccircle cx='16' cy='16' r='8.5' fill='none' stroke='%23fff' stroke-width='2.6'/%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f6f6;
+  --card: #ffffff;
+  --text: #0e1b1d;
+  --muted: #56686b;
+  --line: #dde6e6;
+  --accent: #0b7f73;
+  --accent-press: #086a60;
+  --accent-soft: #dcf1ee;
+  --on-accent: #ffffff;
+  --accent-text: #086a60;
+  --link: #086a60;
+  --tile: #eef3f3;
+  --glyph: #d2dede;
+  --hover: rgba(14, 27, 29, .05);
+  --us-bg: #f5fbfa;
+  --head-bg: #f8fafa;
+  --glow: rgba(11, 127, 115, .11);
+  --accent-shadow: rgba(11, 127, 115, .42);
+  --shadow: 0 1px 2px rgba(14, 27, 29, .04), 0 10px 30px -12px rgba(14, 27, 29, .10);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius: 22px;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1112;
+    --card: #121a1c;
+    --text: #ecf4f3;
+    --muted: #97aaa8;
+    --line: #22322f;
+    --accent: #4fd8c4;
+    --accent-press: #3cc2ae;
+    --accent-soft: #123430;
+    --on-accent: #06201c;
+    --accent-text: #4fd8c4;
+    --link: #4fd8c4;
+    --tile: #172224;
+    --glyph: #263735;
+    --hover: rgba(236, 244, 243, .06);
+    --us-bg: #10201f;
+    --head-bg: #0f1719;
+    --glow: rgba(79, 216, 196, .09);
+    --accent-shadow: rgba(79, 216, 196, .22);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px -12px rgba(0, 0, 0, .5);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body {
+  margin: 0;
+  background: radial-gradient(1100px 820px at 92% -14%, var(--glow), transparent) no-repeat, var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+img, svg { display: block; }
+p { margin: 0; }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: .2em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+[id] { scroll-margin-top: 24px; }
+strong { font-weight: 650; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.skip {
+  position: absolute; left: 16px; top: -80px; z-index: 10;
+  background: var(--card); color: var(--text); padding: 10px 16px; border-radius: 12px;
+  border: 1px solid var(--line); box-shadow: var(--shadow); font-weight: 600; text-decoration: none;
+}
+.skip:focus { top: 12px; }
+
+.ic { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.ic-fill { fill: currentColor; stroke: none; }
+
+.wrap { width: 100%; max-width: 1160px; margin-inline: auto; padding-inline: 20px; }
+@media (min-width: 720px) { .wrap { padding-inline: 40px; } }
+
+/* Header */
+.top { padding-block: 16px; }
+.top-in { display: flex; align-items: center; gap: 16px; }
+.brand {
+  display: inline-flex; align-items: center; gap: 11px;
+  color: var(--text); text-decoration: none; font-weight: 650; font-size: 1.0625rem; letter-spacing: -.01em;
+}
+.mark { width: 38px; height: 38px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; }
+.mark svg { width: 24px; height: 24px; }
+.mk-ring { fill: none; stroke: currentColor; stroke-width: 2.4; }
+.mk-dot { fill: currentColor; }
+.mk-glint { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; opacity: .55; }
+.top nav { display: none; }
+.nav { display: flex; list-style: none; margin: 0; padding: 0; gap: 2px; }
+.nav a { display: block; color: var(--muted); text-decoration: none; font-size: .9375rem; font-weight: 500; padding: 8px 12px; border-radius: 999px; }
+.nav a:hover { color: var(--text); background: var(--hover); }
+.top .btn { margin-left: auto; }
+@media (min-width: 880px) {
+  .top nav { display: block; margin-left: auto; }
+  .top .btn { margin-left: 8px; }
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 52px; padding: 0 24px; border-radius: 14px; border: 1px solid transparent;
+  font-size: 1rem; font-weight: 600; line-height: 1.2; text-decoration: none; white-space: nowrap;
+}
+.btn .ic { width: 20px; height: 20px; }
+.btn-primary { background: var(--accent); color: var(--on-accent); box-shadow: 0 10px 24px -12px var(--accent-shadow); }
+.btn-primary:hover { background: var(--accent-press); }
+.btn-secondary { background: var(--card); color: var(--text); border-color: var(--line); }
+.btn-secondary:hover { border-color: var(--muted); }
+.btn-small { min-height: 40px; padding: 0 14px; font-size: .9375rem; border-radius: 12px; gap: 8px; }
+.btn-small .ic { width: 18px; height: 18px; }
+@media (prefers-reduced-motion: no-preference) {
+  .btn, .nav a { transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+}
+
+/* Hero */
+.hero { padding-block: 28px 56px; }
+.hero-grid { display: grid; gap: 28px; align-items: center; }
+.pill {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 6px 14px 6px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line);
+  color: var(--muted); font-size: .875rem; font-weight: 500; line-height: 1.4;
+}
+.pill-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); flex: none; }
+h1 {
+  margin: 22px 0 0; font-size: clamp(2.125rem, 1.2rem + 2.9vw, 3.125rem); line-height: 1.08;
+  letter-spacing: -.03em; font-weight: 700; text-wrap: balance;
+}
+h1 .soft { color: var(--accent-text); }
+.lead { margin-top: 22px; max-width: 33em; color: var(--muted); font-size: clamp(1.125rem, 1.03rem + .35vw, 1.3rem); line-height: 1.55; text-wrap: pretty; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+.hero-note { display: flex; gap: 10px; align-items: flex-start; margin-top: 22px; color: var(--muted); font-size: .9375rem; line-height: 1.5; }
+.hero-note .ic { width: 20px; height: 20px; color: var(--accent-text); margin-top: 1px; }
+.hero-art { margin: 0; }
+.hero-art svg { width: 100%; height: auto; max-width: 420px; margin-inline: auto; }
+@media (max-width: 479px) {
+  .actions .btn { flex: 1 1 100%; }
+}
+@media (min-width: 960px) {
+  .hero { padding-block: 48px 104px; }
+  .hero-grid { grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 48px; }
+  .hero-art svg { max-width: 540px; }
+}
+
+/* Hero art */
+.a-g0 { stop-color: var(--accent); stop-opacity: .26; }
+.a-g1 { stop-color: var(--accent); stop-opacity: 0; }
+.a-c0 { stop-color: var(--accent); stop-opacity: .30; }
+.a-c1 { stop-color: var(--accent); stop-opacity: 0; }
+.a-ring { fill: none; stroke: var(--accent); stroke-opacity: .24; }
+.a-ring.r2 { stroke-opacity: .14; }
+.a-ring.r3 { stroke-opacity: .08; }
+.a-win { fill: var(--card); stroke: var(--line); }
+.a-sep { stroke: var(--line); }
+.a-dot { fill: var(--line); }
+.a-ln { fill: var(--tile); }
+.a-ln-strong { fill: var(--glyph); }
+.a-tile { fill: var(--tile); }
+.a-glyph { fill: var(--glyph); }
+.a-cover { fill: var(--accent-soft); stroke: var(--accent); stroke-opacity: .5; }
+.a-lens { fill: none; stroke: var(--accent); stroke-width: 3; }
+.a-lens-dot { fill: var(--accent); }
+.a-badge { fill: var(--accent-soft); }
+.a-flood { flood-color: #0e1b1d; flood-opacity: .10; }
+@media (prefers-color-scheme: dark) {
+  .a-flood { flood-color: #000000; flood-opacity: .55; }
+}
+
+/* Sections */
+.sec { padding-block: clamp(64px, 9vw, 120px); }
+.sec-band { background: var(--card); border-block: 1px solid var(--line); }
+.sec-head { max-width: 46rem; }
+.eyebrow { margin: 0 0 14px; color: var(--accent-text); font-size: .8125rem; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; }
+h2 { margin: 0; font-size: clamp(1.75rem, 1.2rem + 2.1vw, 2.625rem); line-height: 1.12; letter-spacing: -.024em; font-weight: 700; text-wrap: balance; }
+h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em; font-weight: 650; }
+.sec-lead { margin-top: 18px; max-width: 38em; color: var(--muted); font-size: clamp(1.0625rem, 1rem + .3vw, 1.1875rem); text-wrap: pretty; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 20px 24px; }
+@media (min-width: 820px) { .card { padding: 26px 24px 28px; } }
+.card p { color: var(--muted); }
+.badge { width: 48px; height: 48px; border-radius: 14px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; }
+
+/* Off switch */
+.steps { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 14px; }
+.step-head { display: grid; grid-template-columns: 48px minmax(0, 1fr); grid-template-areas: "badge title"; align-items: center; column-gap: 16px; margin-bottom: 12px; }
+.step-head .badge { grid-area: badge; }
+.step-head h3 { grid-area: title; }
+.step-num { display: none; grid-area: num; color: var(--muted); font-size: .875rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.friend { margin-top: 14px; display: flex; gap: 16px; align-items: center; padding: 20px; border-radius: var(--radius); background: var(--accent-soft); }
+.friend .badge { background: var(--card); }
+.friend p { font-size: 1.0625rem; text-wrap: pretty; }
+.sec-foot { margin-top: 22px; color: var(--muted); font-size: .9375rem; }
+@media (min-width: 820px) {
+  .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .step-head { grid-template-columns: 48px 1fr auto; grid-template-areas: "badge . num" "title title title"; row-gap: 22px; margin-bottom: 8px; }
+  .step-num { display: block; }
+  .friend { margin-top: 20px; padding: 24px 28px; gap: 18px; }
+}
+
+/* Cards with an icon: icon beside the title on phones, above it on wider screens */
+.card-head { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+@media (min-width: 820px) { .card-head { flex-direction: column; align-items: flex-start; gap: 22px; margin-bottom: 8px; } }
+
+/* Phone note */
+.sec-mid { padding-block: clamp(48px, 6vw, 72px); }
+.callout { padding: 22px 20px 24px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
+.callout h2 { font-size: 1.1875rem; letter-spacing: -.012em; line-height: 1.3; }
+.callout p { color: var(--muted); max-width: 60rem; text-wrap: pretty; }
+@media (min-width: 720px) {
+  .callout { display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 20px; padding: 28px 32px; }
+  .callout .card-head { display: contents; }
+  .callout .badge { grid-row: 1 / span 2; }
+  .callout h2 { margin: 2px 0 6px; }
+}
+.sec-tight { padding-block: 0 clamp(64px, 9vw, 120px); }
+
+/* Why it exists */
+.essay { max-width: 41rem; margin-inline: auto; }
+.essay h2 { margin-bottom: 30px; }
+.essay p { font-size: clamp(1.125rem, 1.05rem + .3vw, 1.25rem); line-height: 1.75; text-wrap: pretty; }
+.essay p + p { margin-top: 1.15em; }
+.essay .coda {
+  margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--line);
+  font-size: clamp(1.375rem, 1.1rem + 1.1vw, 1.8rem); line-height: 1.42; letter-spacing: -.016em; font-weight: 600; text-wrap: balance;
+}
+
+/* Comparison */
+.compare { margin-top: 44px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.compare table { width: 100%; border-collapse: collapse; }
+.compare th, .compare td { text-align: left; vertical-align: top; padding: 18px 24px; border-top: 1px solid var(--line); }
+.compare thead th { border-top: 0; padding-block: 15px; background: var(--head-bg); color: var(--muted); font-size: .8125rem; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.compare thead th.us { color: var(--accent-text); background: var(--accent-soft); }
+.compare tbody th { font-weight: 600; }
+.compare td { color: var(--muted); }
+@media (min-width: 760px) {
+  .compare tbody th { width: 31%; }
+  .compare td.no { width: 28%; }
+  .compare td.us { width: 41%; }
+}
+.compare td.us { background: var(--us-bg); color: var(--text); }
+.cell { display: flex; gap: 12px; align-items: flex-start; }
+.cell .ic { width: 20px; height: 20px; margin-top: 2px; stroke-width: 2.2; }
+.no .ic { color: var(--muted); opacity: .7; }
+.yes .ic { color: var(--accent-text); }
+.open .ic { color: var(--muted); }
+.lbl { display: none; }
+@media (max-width: 759px) {
+  .compare { background: none; border: 0; border-radius: 0; overflow: visible; box-shadow: none; }
+  .compare table, .compare tbody, .compare tr, .compare th, .compare td { display: block; width: auto; }
+  .compare thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .compare tbody { display: grid; gap: 12px; }
+  .compare tr { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .compare tbody th { border: 0; padding: 16px 20px 2px; font-size: 1.0625rem; line-height: 1.4; }
+  .compare td { border: 0; padding: 10px 20px 14px; line-height: 1.5; }
+  .compare td.us { border-top: 1px solid var(--line); padding-top: 12px; padding-bottom: 16px; }
+  .lbl { display: block; margin-bottom: 4px; font-size: .75rem; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  td.us .lbl { color: var(--accent-text); }
+}
+.note { margin-top: 20px; display: flex; gap: 16px; align-items: flex-start; padding: 22px 24px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
+.note .ic { color: var(--accent-text); margin-top: 2px; }
+.note p { color: var(--muted); max-width: 62rem; }
+.note strong { color: var(--text); }
+
+/* How it works */
+.cards3 { margin-top: 40px; display: grid; gap: 14px; }
+.cards3 .card { display: flex; flex-direction: column; align-items: flex-start; }
+.more { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font-weight: 600; font-size: .9375rem; }
+.more .ic { width: 18px; height: 18px; }
+@media (min-width: 820px) { .cards3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; } }
+
+/* Limits and status */
+.two { display: grid; gap: 14px; }
+.two .card { padding: 28px 22px 30px; display: flex; flex-direction: column; align-items: flex-start; }
+.two .card > .more { margin-top: auto; padding-top: 22px; }
+.two h2 { font-size: clamp(1.4rem, 1.2rem + .8vw, 1.75rem); margin-bottom: 20px; }
+.limits { list-style: none; margin: 0; padding: 0; }
+.limits li { position: relative; padding: 14px 0 14px 34px; border-top: 1px solid var(--line); color: var(--text); }
+.limits li:first-child { border-top: 0; padding-top: 0; }
+.limits li:last-child { padding-bottom: 0; }
+.limits .ic { position: absolute; left: 0; top: 16px; width: 20px; height: 20px; color: var(--muted); }
+.limits li:first-child .ic { top: 2px; }
+.limits, .status { align-self: stretch; }
+.status { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 10px; }
+.status li { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; background: var(--bg); }
+.status strong { display: block; color: var(--text); }
+.status .st-text { display: block; margin-top: 2px; color: var(--muted); font-size: .9375rem; line-height: 1.45; text-wrap: pretty; }
+.st { width: 14px; height: 14px; border-radius: 50%; flex: none; margin-top: 5px; border: 2px solid var(--accent); }
+.st-done { background: var(--accent); }
+.st-now { background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
+.st-later { border-color: var(--muted); opacity: .8; }
+.two .card > p { color: var(--muted); }
+@media (min-width: 820px) { .two { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; } .two .card { padding: 36px 34px 38px; } }
+
+/* Promise */
+.promise {
+  position: relative; isolation: isolate; overflow: hidden; margin: 0;
+  padding: clamp(36px, 7vw, 88px) clamp(24px, 7vw, 96px);
+  border-radius: 30px; border: 1px solid var(--line);
+  background: linear-gradient(160deg, var(--accent-soft) 0%, var(--card) 62%);
+  box-shadow: var(--shadow);
+}
+.promise-rings { position: absolute; z-index: -1; right: -360px; top: -360px; width: 720px; height: 720px; pointer-events: none; }
+@media (max-width: 719px) { .promise-rings { right: -250px; top: -250px; width: 500px; height: 500px; opacity: .7; } }
+.promise h2 { font-size: .875rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); font-weight: 650; line-height: 1.4; display: flex; align-items: center; gap: 12px; }
+.promise h2 .mark { width: 34px; height: 34px; border-radius: 11px; background: var(--card); }
+.promise h2 .mark svg { width: 21px; height: 21px; }
+.promise blockquote { margin: 28px 0 0; max-width: 46rem; }
+.promise blockquote p { font-size: clamp(1.25rem, 1.05rem + .9vw, 1.65rem); line-height: 1.55; letter-spacing: -.012em; font-weight: 500; text-wrap: pretty; }
+
+/* Get involved */
+@media (min-width: 820px) { .cards3 .card { padding: 28px 26px 30px; } }
+.code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .9em; padding: 1px 6px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
+
+/* Footer */
+.foot { border-top: 1px solid var(--line); padding-block: 40px 48px; }
+.foot-in { display: grid; gap: 24px; }
+.foot p { color: var(--muted); font-size: .9375rem; }
+.foot .brand { margin-bottom: 12px; }
+.foot-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.foot-links a { color: var(--text); text-decoration: none; font-size: .9375rem; font-weight: 500; }
+.foot-links a:hover { text-decoration: underline; }
+.foot-small { font-size: .875rem; }
+@media (min-width: 820px) {
+  .foot-in { grid-template-columns: 1fr auto; align-items: start; }
+  .foot-small { grid-column: 1 / -1; }
+}
+</style>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-github" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M6.5 3h11M6.5 21h11M8 3v2.6c0 2.6 4 3.9 4 6.4s-4 3.8-4 6.4V21M16 3v2.6c0 2.6-4 3.9-4 6.4s4 3.8 4 6.4V21"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-friend" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.3"/><path d="M3 19.5c.8-3.1 3.1-4.8 6-4.8s5.2 1.7 6 4.8"/><circle cx="16.8" cy="9.2" r="2.6"/><path d="M16.2 14.7c2.4-.3 4.3 1 5 3.6"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.8"/><path d="M10.8 18.3h2.4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.3 4.3L19 7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8.5 12h7"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="10.5" rx="1.8"/><path d="M2.5 19h19"/></symbol>
+  <symbol id="i-infinity" viewBox="0 0 24 24"><path d="M12 12c-2-2.7-3.7-4-5.6-4a4 4 0 0 0 0 8c1.9 0 3.6-1.3 5.6-4Zm0 0c2 2.7 3.7 4 5.6 4a4 4 0 0 0 0-8c-1.9 0-3.6 1.3-5.6 4Z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2 5 6v5.6c0 4.3 2.9 7.6 7 9.2 4.1-1.6 7-4.9 7-9.2V6l-7-2.8Z"/><path d="M12 9v4M12 16v.1"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24"><path d="M12 21c4.4 0 8-3.6 8-8V9.5a1.6 1.6 0 0 0-3.2 0V12M16.8 11V6.5a1.6 1.6 0 0 0-3.2 0V11M13.6 10.5V5a1.6 1.6 0 0 0-3.2 0v6M10.4 11V7.5a1.6 1.6 0 0 0-3.2 0V14l-1.4-1.5a1.7 1.7 0 0 0-2.5 2.3L7 19c1.3 1.3 3 2 5 2Z"/></symbol>
+  <symbol id="i-mark" viewBox="0 0 32 32"><circle class="mk-ring" cx="16" cy="16" r="9.5"/><circle class="mk-dot" cx="16" cy="16" r="3.8"/><path class="mk-glint" d="M10.2 12.6a6.8 6.8 0 0 1 3.4-3.6"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="index.html"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>SafeSight Mac</a>
+    <nav aria-label="Main">
+      <ul class="nav">
+        <li><a href="#off-switch">The off switch</a></li>
+        <li><a href="#why">Why it exists</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#promise">Our promise</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-secondary btn-small" href="https://github.com/lumen-open/safesight-mac"><svg class="ic ic-fill" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="pill"><span class="pill-dot" aria-hidden="true"></span>Free and open source · Early preview</p>
+      <h1 id="hero-title">Protection from explicit images on your Mac, <span class="soft">with an off switch that takes as long as you decide.</span></h1>
+      <p class="lead">SafeSight Mac watches your screen and covers explicit images as soon as they appear: in any app, in any browser, on every display. Everything else is left alone. Your work, your calls, your music and your code carry on as normal.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/lumen-open/safesight-mac"><svg class="ic ic-fill" aria-hidden="true"><use href="#i-github"/></svg>Follow on GitHub</a>
+        <a class="btn btn-secondary" href="https://github.com/lumen-open/safesight-mac/tree/main/Sources"><svg class="ic" aria-hidden="true"><use href="#i-code"/></svg>Read the code</a>
+      </div>
+      <p class="hero-note"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg><span>This is an early preview, and there’s no download yet. One is coming later.</span></p>
+    </div>
+    <figure class="hero-art" aria-hidden="true">
+      <svg viewBox="0 0 520 524" focusable="false">
+        <defs>
+          <radialGradient id="g-glow" cx="50%" cy="50%" r="50%"><stop offset="0" class="a-g0"/><stop offset="1" class="a-g1"/></radialGradient>
+          <radialGradient id="g-cover" cx="50%" cy="50%" r="50%"><stop offset="0" class="a-c0"/><stop offset="1" class="a-c1"/></radialGradient>
+          <filter id="f-shadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow class="a-flood" dx="0" dy="14" stdDeviation="18"/></filter>
+          <filter id="f-shadow-sm" x="-30%" y="-40%" width="160%" height="200%"><feDropShadow class="a-flood" dx="0" dy="8" stdDeviation="10"/></filter>
+        </defs>
+        <circle cx="260" cy="262" r="250" fill="url(#g-glow)"/>
+        <circle class="a-ring r3" cx="260" cy="262" r="244"/>
+        <circle class="a-ring r2" cx="260" cy="262" r="200"/>
+        <circle class="a-ring" cx="260" cy="262" r="156"/>
+        <g filter="url(#f-shadow)">
+          <rect class="a-win" x="60" y="96" width="400" height="282" rx="20"/>
+        </g>
+        <circle class="a-dot" cx="86" cy="120" r="5.5"/>
+        <circle class="a-dot" cx="104" cy="120" r="5.5"/>
+        <circle class="a-dot" cx="122" cy="120" r="5.5"/>
+        <line class="a-sep" x1="60" y1="144.5" x2="460" y2="144.5"/>
+        <rect class="a-ln-strong" x="84" y="166" width="190" height="10" rx="5"/>
+        <rect class="a-ln" x="84" y="186" width="136" height="10" rx="5"/>
+        <rect class="a-tile" x="84" y="214" width="108" height="96" rx="12"/>
+        <path class="a-glyph" d="M96 298 124 262l18 20 14-14 26 30Z"/>
+        <circle class="a-glyph" cx="166" cy="238" r="9"/>
+        <rect class="a-tile" x="328" y="214" width="108" height="96" rx="12"/>
+        <rect class="a-glyph" x="348" y="266" width="12" height="30" rx="3"/>
+        <rect class="a-glyph" x="366" y="250" width="12" height="46" rx="3"/>
+        <rect class="a-glyph" x="384" y="274" width="12" height="22" rx="3"/>
+        <rect class="a-glyph" x="402" y="242" width="12" height="54" rx="3"/>
+        <circle cx="260" cy="262" r="104" fill="url(#g-cover)"/>
+        <rect class="a-cover" x="206.5" y="214.5" width="107" height="95" rx="12"/>
+        <circle class="a-lens" cx="260" cy="262" r="17"/>
+        <circle class="a-lens-dot" cx="260" cy="262" r="6.5"/>
+        <rect class="a-ln" x="84" y="330" width="250" height="10" rx="5"/>
+        <rect class="a-ln" x="84" y="350" width="170" height="10" rx="5"/>
+        <g filter="url(#f-shadow-sm)">
+          <rect class="a-win" x="318" y="352" width="172" height="60" rx="18"/>
+        </g>
+        <circle class="a-badge" cx="350" cy="382" r="16"/>
+        <circle class="a-lens" cx="350" cy="382" r="6.5" stroke-width="2.2"/>
+        <circle class="a-lens-dot" cx="350" cy="382" r="2.4"/>
+        <rect class="a-ln-strong" x="376" y="370" width="92" height="9" rx="4.5"/>
+        <rect class="a-ln" x="376" y="386" width="62" height="9" rx="4.5"/>
+      </svg>
+    </figure>
+  </div>
+</section>
+
+<section class="sec sec-band" id="off-switch" aria-labelledby="off-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">How leaving works</p>
+      <h2 id="off-title">What makes it different is the off switch.</h2>
+    </div>
+    <ol class="steps">
+      <li class="card step">
+        <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg></span><h3>You choose the wait</h3><span class="step-num" aria-hidden="true">01</span></div>
+        <p>When you set it up, you choose how long turning it off should take, anywhere from a week to a year.</p>
+      </li>
+      <li class="card step">
+        <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-hourglass"/></svg></span><h3>Leaving starts a countdown</h3><span class="step-num" aria-hidden="true">02</span></div>
+        <p>If you ask to leave, a countdown starts. When it ends, you’re free to go.</p>
+      </li>
+      <li class="card step">
+        <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></span><h3>Stay, and it never happened</h3><span class="step-num" aria-hidden="true">03</span></div>
+        <p>Change your mind, press <strong>Stay</strong>, and it’s as if you never asked.</p>
+      </li>
+    </ol>
+    <div class="friend">
+      <span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-friend"/></svg></span>
+      <p><strong>You can add a friend</strong> who’s allowed to shorten the wait to a day, but nobody can ever stop you from leaving.</p>
+    </div>
+    <p class="sec-foot">The lock is being built now. <a href="#status">See where things stand</a>.</p>
+  </div>
+</section>
+
+<section class="sec-mid" aria-labelledby="phone-title">
+  <div class="wrap">
+    <aside class="callout" aria-labelledby="phone-title">
+      <div class="card-head">
+        <span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg></span>
+        <h2 id="phone-title">Looking for something for your phone?</h2>
+      </div>
+      <p>We recommend <a href="https://shiftyourphone.com/content-filter/">SHIFT</a>. Its Content Filter is free, works on iPhone and Android, and is set up from your computer so it can’t simply be deleted from the phone. We’re not affiliated with SHIFT; we just think it’s good.</p>
+    </aside>
+  </div>
+</section>
+
+<section class="sec sec-band" id="why" aria-labelledby="why-title">
+  <div class="wrap">
+    <div class="essay">
+      <h2 id="why-title">Why it exists</h2>
+      <p>Pornography is the most patient thing ever built. It’s free, it never closes, it never runs out, and every inch of it was designed by people who get paid when you stay. It doesn’t have to win the argument. It only has to wait until you’re tired, until it’s late, until the house is quiet and the part of you that knows better has gone to sleep. Then it takes a little more of the person you were trying to become.</p>
+      <p>Willpower alone rarely beats that, because willpower is the first thing to leave at two in the morning. So SafeSight Mac moves the decision. You make it in daylight, clear-eyed, knowing what you want your life to look like, and it keeps that promise on the nights you can’t. The person you are on your best day gets the final word. The worst hour of your week doesn’t get a vote.</p>
+      <p>Nobody is watching over your shoulder, nothing is reported to anyone, and there’s no lecture. Wanting this isn’t a confession. It’s the same instinct that makes someone leave their card at home before a night out, or pour the bottle down the sink while they still can. You’re locking a door from the inside. The key is still yours; you’ve just made the walk to it long enough to remember why you locked it.</p>
+      <p class="coda">This is about freedom. Not the thin kind, where you do whatever the next five minutes want, but the real kind: being the same person at midnight that you were at noon.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="by-design" aria-labelledby="design-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">The usual tricks</p>
+      <h2 id="design-title">Hard to get around, by design</h2>
+      <p class="sec-lead">Most blockers fall to a five-minute trick, and everyone who’s needed one knows the tricks. SafeSight Mac is designed so the usual ones don’t work.</p>
+    </div>
+    <div class="compare">
+      <table role="table">
+        <caption class="sr-only">The usual ways around a blocker, and what happens with most blockers and with SafeSight Mac</caption>
+        <thead role="rowgroup">
+          <tr role="row"><th scope="col" role="columnheader">The usual way around it</th><th scope="col" role="columnheader">Most blockers</th><th scope="col" role="columnheader" class="us">SafeSight Mac</th></tr>
+        </thead>
+        <tbody role="rowgroup">
+          <tr role="row">
+            <th scope="row" role="rowheader">Open a private window or a different browser</th>
+            <td role="cell" class="no"><span class="lbl" aria-hidden="true">Most blockers</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span>Often slips straight through</span></span></td>
+            <td role="cell" class="us yes"><span class="lbl" aria-hidden="true">SafeSight Mac</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span>Still covered. It watches the screen, not the browser</span></span></td>
+          </tr>
+          <tr role="row">
+            <th scope="row" role="rowheader">Turn on a VPN or change your DNS</th>
+            <td role="cell" class="no"><span class="lbl" aria-hidden="true">Most blockers</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span>Defeats network filters</span></span></td>
+            <td role="cell" class="us yes"><span class="lbl" aria-hidden="true">SafeSight Mac</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span>Changes nothing. It doesn’t filter the internet at all</span></span></td>
+          </tr>
+          <tr role="row">
+            <th scope="row" role="rowheader">Find it on a “safe” site: social media, image search, a chat app</th>
+            <td role="cell" class="no"><span class="lbl" aria-hidden="true">Most blockers</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span>Blocklists can’t see it</span></span></td>
+            <td role="cell" class="us yes"><span class="lbl" aria-hidden="true">SafeSight Mac</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span>Covered wherever it shows up</span></span></td>
+          </tr>
+          <tr role="row">
+            <th scope="row" role="rowheader">Use an app instead of a browser</th>
+            <td role="cell" class="no"><span class="lbl" aria-hidden="true">Most blockers</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span>Usually not filtered</span></span></td>
+            <td role="cell" class="us yes"><span class="lbl" aria-hidden="true">SafeSight Mac</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span>Covered in every app</span></span></td>
+          </tr>
+          <tr role="row">
+            <th scope="row" role="rowheader">Delete the extension or quit the app</th>
+            <td role="cell" class="no"><span class="lbl" aria-hidden="true">Most blockers</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span>Done in seconds</span></span></td>
+            <td role="cell" class="us yes"><span class="lbl" aria-hidden="true">SafeSight Mac</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span>You’re not an admin any more, and leaving takes the wait you chose</span></span></td>
+          </tr>
+          <tr role="row">
+            <th scope="row" role="rowheader">Ask whoever holds the password</th>
+            <td role="cell" class="no"><span class="lbl" aria-hidden="true">Most blockers</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span>One weak moment, one text</span></span></td>
+            <td role="cell" class="us yes"><span class="lbl" aria-hidden="true">SafeSight Mac</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span>Nobody holds a password. Only the friend you chose can shorten your wait, and only to a day. Not even we can</span></span></td>
+          </tr>
+          <tr role="row">
+            <th scope="row" role="rowheader">Change your Mac’s clock</th>
+            <td role="cell" class="no"><span class="lbl" aria-hidden="true">Most blockers</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span>Fools some timers</span></span></td>
+            <td role="cell" class="us yes"><span class="lbl" aria-hidden="true">SafeSight Mac</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span>The wait is checked against a public time signal</span></span></td>
+          </tr>
+          <tr role="row">
+            <th scope="row" role="rowheader">Wipe the Mac</th>
+            <td role="cell" class="no"><span class="lbl" aria-hidden="true">Most blockers</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span>Works</span></span></td>
+            <td role="cell" class="us open"><span class="lbl" aria-hidden="true">SafeSight Mac</span><span class="cell"><svg class="ic" aria-hidden="true"><use href="#i-dash"/></svg><span>Works here too. That’s an evening of work, not a click</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>
+      <p><strong>About that last row:</strong> wiping is the one way around it we haven’t closed yet, and we’re working on it. If you know macOS well and have ideas for making a wipe harder to use as an escape hatch, we’d love your help. Open an issue or start with <a href="https://github.com/lumen-open/safesight-mac/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>. If your idea involves a way around the lock, please send it privately through <a href="https://github.com/lumen-open/safesight-mac/blob/main/SECURITY.md">SECURITY.md</a> instead.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec-band" id="how" aria-labelledby="how-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">The basics</p>
+      <h2 id="how-title">How it works</h2>
+    </div>
+    <div class="cards3">
+      <div class="card">
+        <div class="card-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-laptop"/></svg></span><h3>Everything stays on your Mac.</h3></div>
+        <p>There’s no account and no server, and your screen is checked on the device itself. Nothing you see is ever uploaded.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-infinity"/></svg></span><h3>It’s free forever.</h3></div>
+        <p>No trial, no card, no account. The core will never be put behind a paywall.</p>
+        <a class="more" href="https://github.com/lumen-open/safesight-mac/blob/main/CORE.md">What the core includes<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-code"/></svg></span><h3>The code is public.</h3></div>
+        <p>The lock is designed to hold even though anyone can read every line.</p>
+        <a class="more" href="https://github.com/lumen-open/safesight-mac">Read it on GitHub<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" aria-label="Limits and progress">
+  <div class="wrap two">
+    <div class="card" id="limits">
+      <h2>What it can’t do</h2>
+      <ul class="limits">
+        <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Wiping your Mac removes it.</li>
+        <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It can miss an image, and it sometimes covers a harmless one.</li>
+        <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It only protects this Mac, not your phone, a TV or another computer.</li>
+      </ul>
+      <a class="more" href="terms.html">Read the terms and risks<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+    </div>
+    <div class="card" id="status">
+      <h2>Where things stand</h2>
+      <p>This is an early preview, and there’s no download yet.</p>
+      <ul class="status">
+        <li><span class="st st-done" aria-hidden="true"></span><span><strong>The screen cover is built.</strong><span class="st-text">So far it has only run in the lab.</span></span></li>
+        <li><span class="st st-now" aria-hidden="true"></span><span><strong>The lock is being built now.</strong><span class="st-text">The wait you choose, Stay, and the friend who can shorten it.</span></span></li>
+        <li><span class="st st-later" aria-hidden="true"></span><span><strong>A download comes later.</strong><span class="st-text">Follow on GitHub to hear when it’s ready.</span></span></li>
+      </ul>
+      <a class="more" href="https://github.com/lumen-open/safesight-mac/blob/main/docs/STEP-1-STATUS.md">Read the details<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec-tight" id="promise" aria-labelledby="promise-title">
+  <div class="wrap">
+    <figure class="promise">
+      <svg class="promise-rings" viewBox="0 0 720 720" aria-hidden="true" focusable="false">
+        <circle class="a-ring" cx="360" cy="360" r="150"/>
+        <circle class="a-ring r2" cx="360" cy="360" r="235"/>
+        <circle class="a-ring r3" cx="360" cy="360" r="320"/>
+      </svg>
+      <h2 id="promise-title"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>Our promise</h2>
+      <blockquote>
+        <p>SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and turning it off takes a waiting period you choose ahead of time. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn’t perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It’s an early release built with the help of AI, so keep a backup.</p>
+      </blockquote>
+    </figure>
+  </div>
+</section>
+
+<section class="sec sec-band" aria-labelledby="involved-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Open source</p>
+      <h2 id="involved-title">Get involved</h2>
+    </div>
+    <div class="cards3">
+      <div class="card">
+        <div class="card-head"><span class="badge"><svg class="ic ic-fill" aria-hidden="true"><use href="#i-github"/></svg></span><h3>Follow along</h3></div>
+        <p>There’s no download yet. Follow the project on GitHub to watch it being built and to hear when there’s something to install.</p>
+        <a class="more" href="https://github.com/lumen-open/safesight-mac">Follow on GitHub<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><h3>Found a weakness?</h3></div>
+        <p>Please tell us privately rather than in a public issue. <a href="https://github.com/lumen-open/safesight-mac/blob/main/SECURITY.md">SECURITY.md</a> explains how.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-hand"/></svg></span><h3>Contributing</h3></div>
+        <p>Help is welcome. Start with <a href="https://github.com/lumen-open/safesight-mac/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>. Every commit needs a <span class="code">Signed-off-by</span> line (<a href="https://github.com/lumen-open/safesight-mac/blob/main/DCO">DCO</a>).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <a class="brand" href="index.html"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>SafeSight Mac</a>
+      <p>Free, open-source software under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>.</p>
+    </div>
+    <nav aria-label="Footer">
+      <ul class="foot-links">
+        <li><a href="https://github.com/lumen-open/safesight-mac">GitHub</a></li>
+        <li><a href="terms.html">Terms and risks</a></li>
+        <li><a href="https://github.com/lumen-open/safesight-mac/blob/main/SECURITY.md">Security</a></li>
+        <li><a href="https://github.com/lumen-open/safesight-mac/blob/main/LICENSE">Licence</a></li>
+      </ul>
+    </nav>
+    <p class="foot-small">Copyright 2026 The SafeSight Mac authors. This site sets no cookies and loads nothing from anywhere else.</p>
+  </div>
+</footer>
+</body>
+</html>
