@@ -31,9 +31,18 @@ pub trait RoundVerifier {
     fn verify_round(&self, round: u64, signature: &[u8; 48]) -> bool;
 }
 
-/// The system random generator, for request IDs (chapter 03 section 3: random, 16 bytes).
+/// The system random generator could not give bytes. Whatever needed them does not
+/// happen, and nothing is changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RandomUnavailable;
+
+/// The system random generator: request IDs (chapter 03 section 3: random, 16 bytes), and
+/// the keys and nonces of a capsule (SD-035, SD-056).
 pub trait RandomSource {
     fn request_id(&mut self) -> [u8; 16];
+
+    /// Fills `out` with fresh random bytes.
+    fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable>;
 }
 
 /// Whether the typed login password has proven the owner for this one message (SD-051).

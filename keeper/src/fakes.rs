@@ -2,7 +2,7 @@
 //! Fake implementations of the boundary traits, for tests only. This module is compiled
 //! only under `cfg(test)`: no fake clock, beacon or random source can reach a release.
 
-use crate::boundary::{RandomSource, RoundVerifier, TimeSource};
+use crate::boundary::{RandomSource, RandomUnavailable, RoundVerifier, TimeSource};
 use crate::constants::{BEACON_CHAIN_HASH, BEACON_GENESIS_UNIX_SECONDS, BEACON_PERIOD_SECONDS};
 use crate::records::RoundRecord;
 
@@ -112,5 +112,72 @@ impl RandomSource for FakeRandom {
     fn request_id(&mut self) -> [u8; 16] {
         self.next = self.next.wrapping_add(1);
         [self.next; 16]
+    }
+
+    fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable> {
+        self.next = self.next.wrapping_add(1);
+        for byte in out.iter_mut() {
+            *byte = self.next;
+        }
+        Ok(())
+    }
+}
+
+/// A random source for the cryptographic tests: bytes that look random and are the same
+/// on every run, so that a test can compare with a vector made by another implementation.
+/// Call n of `fill` gives SHA-256("safesightmac test random" || seed || n as 4 bytes
+/// little-endian || block as 4 bytes little-endian) for blocks 0, 1, ..., cut to length.
+/// It holds no real secret and none of its output is one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeededRandom {
+    seed: u8,
+    calls: u32,
+}
+
+impl SeededRandom {
+    pub fn new(seed: u8) -> SeededRandom {
+        SeededRandom { seed, calls: 0 }
+    }
+}
+
+impl RandomSource for SeededRandom {
+    fn request_id(&mut self) -> [u8; 16] {
+        let mut out = [0u8; 16];
+        let _ = self.fill(&mut out);
+        out
+    }
+
+    fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable> {
+        use sha2::{Digest, Sha256};
+        let mut filled = 0;
+        let mut block: u32 = 0;
+        while filled < out.len() {
+            let mut hash = Sha256::new();
+            hash.update(b"safesightmac test random");
+            hash.update([self.seed]);
+            hash.update(self.calls.to_le_bytes());
+            hash.update(block.to_le_bytes());
+            let digest = hash.finalize();
+            let take = if out.len() - filled < 32 { out.len() - filled } else { 32 };
+            out[filled..filled + take].copy_from_slice(&digest.as_slice()[..take]);
+            filled += take;
+            block += 1;
+        }
+        self.calls += 1;
+        Ok(())
+    }
+}
+
+/// A random generator that has failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BrokenRandom;
+
+impl RandomSource for BrokenRandom {
+    fn request_id(&mut self) -> [u8; 16] {
+        [0u8; 16]
+    }
+
+    fn fill(&mut self, _out: &mut [u8]) -> Result<(), RandomUnavailable> {
+        Err(RandomUnavailable)
     }
 }

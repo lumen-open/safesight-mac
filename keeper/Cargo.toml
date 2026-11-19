@@ -17,6 +17,17 @@ ark-ff = "=0.4.2"
 ark-serialize = "=0.4.2"
 # SHA-256.
 sha2 = "=0.10.8"
+# The age layer of a capsule: the X25519 recipient, the key steps, the payload cipher.
+chacha20poly1305 = { version = "=0.10.1", default-features = false, features = ["alloc"] }
+hkdf = "=0.12.4"
+hmac = "=0.12.1"
+x25519-dalek = "=2.0.1"
+# Wiping keys and the admin secret from memory.
+zeroize = "=1.8.1"
+
+[features]
+# The opener's core (SD-066): opening a capsule. Never in the keeper, which only seals.
+opener = []
 
 [profile.release]
 panic = "abort"
