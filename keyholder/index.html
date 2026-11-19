@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-owFsidZNIcccO3QhKqvrndFBXG9cm0fjNEbIr5beVQ0=' 'sha256-ARIcjR84fOhDPu2ozuCP64PDu6+nD0VA5ERnxbMLlso='; style-src 'sha256-GmHpd4jAoxurl42aJYBtZPvInLBf9qQc9mBt78468hM='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-owFsidZNIcccO3QhKqvrndFBXG9cm0fjNEbIr5beVQ0=' 'sha256-MNYW13wbMJHsBYJODNuPssagKHNoZN00z5nXuqgi1wc='; style-src 'sha256-GmHpd4jAoxurl42aJYBtZPvInLBf9qQc9mBt78468hM='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
@@ -1650,8 +1650,8 @@ const KeyholderCore = (() => {
       stop("This isn't the keyholder page's address", 'Keys for SafeSight Mac can only be made and used on the keyholder page itself.');
       return;
     }
-    const supported = window.isSecureContext && typeof window.PublicKeyCredential === 'function' &&
-      navigator.credentials && typeof navigator.credentials.create === 'function';
+    const supported = Boolean(window.isSecureContext && window.PublicKeyCredential &&
+      navigator.credentials && navigator.credentials.create && navigator.credentials.get);
     if (!supported) {
       stop("This browser can't make passkeys", "Try your phone's main browser, such as Safari on an iPhone or Chrome on Android. The phone also needs a screen lock: a passcode, face or fingerprint.");
       return;

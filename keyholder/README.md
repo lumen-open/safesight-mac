@@ -42,6 +42,7 @@ The SHA-256 of the exact bytes of `keyholder/index.html` is published in every r
 - `node keyholder/build.mjs` prints the hash. So does `shasum -a 256 keyholder/index.html`.
 - Any change to the page or its core changes the hash, so it's a new page for the next release.
 - Host the file untouched. On GitHub Pages, add an empty `.nojekyll` file so nothing processes it.
+- Git never changes line endings in this folder (`.gitattributes`), so every checkout has the same bytes and the same hash.
 
 ## How the page keeps to "sends nothing"
 
@@ -81,7 +82,7 @@ Before showing an approval, the page runs the checks it can make without the pin
 - **Real passkeys.** These tests run in Node, with a P-256 key standing in for the phone. They don't run a browser or make a real passkey. Whether common phones make ES256 passkeys on the page's origin, and sign client data that begins with the fixed prefix, is for ST-029 and ST-030 on real phones.
 - **The page in a browser.** The screens are tested against a small stand-in for the browser, not rendered, and nobody has looked at the design on a phone yet.
 - **QR reading.** The encoder's golden outputs, and a code of every version from 1 to 40, decoded back to the exact text with Apple's CoreImage reader when they were made. Reading them with a Mac's camera off a phone screen is for ST-029.
-- For ST-029 to watch: iOS may ask the host for an `apple-touch-icon` if the friend adds the page to their home screen. The page itself makes no request after it loads.
+- For ST-029 to watch: iOS may ask the host for an `apple-touch-icon` if the friend adds the page to their home screen. The page itself makes no request after it loads. The page removes the request code from the address bar and its history entry, but a browser's own list of visited pages may still hold the address it was opened with.
 
 ## OPEN
 

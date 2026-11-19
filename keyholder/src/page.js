@@ -233,8 +233,8 @@
       stop("This isn't the keyholder page's address", 'Keys for SafeSight Mac can only be made and used on the keyholder page itself.');
       return;
     }
-    const supported = window.isSecureContext && typeof window.PublicKeyCredential === 'function' &&
-      navigator.credentials && typeof navigator.credentials.create === 'function';
+    const supported = Boolean(window.isSecureContext && window.PublicKeyCredential &&
+      navigator.credentials && navigator.credentials.create && navigator.credentials.get);
     if (!supported) {
       stop("This browser can't make passkeys", "Try your phone's main browser, such as Safari on an iPhone or Chrome on Android. The phone also needs a screen lock: a passcode, face or fingerprint.");
       return;
