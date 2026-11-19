@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: Apache-2.0
+// Where the covers sit among the window levels, and the app's own menu under them. Builds windows; shows none.
+import AppKit
+import Testing
+@testable import SafeSightMacCover
+@testable import SafeSightMacWatcher
+
+@MainActor
+@Suite struct LevelTests {
+    init() { _ = NSApplication.shared }
+
+    @Test func theCanvasIsAboveTheScreenSaverAndTheAppAboveTheCanvas() {
+        let saver = Int(CGWindowLevelForKey(.screenSaverWindow))
+        #expect(CoverLevels.canvas.rawValue > saver)
+        #expect(CoverLevels.appAbove.rawValue > CoverLevels.canvas.rawValue)
+        #expect(CoverLevels.canvas.rawValue == CoverLevel.canvas, "the cover layer checks the level the covers use")
+        #expect(CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 10, height: 10)).level == CoverLevels.canvas)
+    }
+
+    @Test func theAppsOwnMenuIsLiftedAboveTheCovers() {
+        let menu = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 10, height: 10), styleMask: [.borderless], backing: .buffered, defer: true)
+        menu.level = .popUpMenu
+        let other = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 10, height: 10), styleMask: [.borderless], backing: .buffered, defer: true)
+        other.level = .normal
+        #expect(OwnMenus.lift([menu, other], isMenu: { $0 === menu }) == 1)
+        #expect(menu.level.rawValue > CoverLevels.canvas.rawValue)
+        #expect(other.level == .normal)
+        #expect(!OwnMenus.isMenuWindow(CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 10, height: 10))), "a cover is never lifted")
+    }
+
+    @Test func eachOpeningOfTheMenuLetsTheLastOnesHandlersGo() {
+        let a = MenuActions()
+        for _ in 0..<5 {
+            a.begin()
+            for t in ["One", "Two", "Three"] { _ = a.item(t) {} }
+        }
+        #expect(a.count == 3)
+    }
+}

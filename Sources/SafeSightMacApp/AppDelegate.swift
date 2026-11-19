@@ -188,9 +188,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         #endif
     }
 
+    /// While the menu is open its windows are kept above the covers, so it can be used under a whole-display cover.
+    private var menuLift: Timer?
+
+    func menuWillOpen(_ menu: NSMenu) {
+        menuLift?.invalidate()
+        let t = Timer(timeInterval: 0.02, repeats: true) { _ in MainActor.assumeIsolated { _ = OwnMenus.lift() } }
+        RunLoop.main.add(t, forMode: .common)
+        RunLoop.main.add(t, forMode: .eventTracking)
+        menuLift = t
+        OwnMenus.lift()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        menuLift?.invalidate(); menuLift = nil
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         refreshPractice()
         menu.removeAllItems()
+        actions.begin()
 
         #if SAFESIGHTMAC_TESTING
         testing.followLayout()
@@ -283,15 +300,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Menu items
 
-    private var handlers: [ClosureTarget] = []
+    private let actions = MenuActions()
 
-    func item(_ title: String, _ action: @escaping () -> Void) -> NSMenuItem {
-        let t = ClosureTarget(action)
-        handlers.append(t)
-        let i = NSMenuItem(title: title, action: #selector(ClosureTarget.fire), keyEquivalent: "")
-        i.target = t
-        return i
-    }
+    func item(_ title: String, _ action: @escaping () -> Void) -> NSMenuItem { actions.item(title, action) }
 
     func label(_ s: String, bold: Bool) -> NSMenuItem {
         let i = NSMenuItem(title: s, action: nil, keyEquivalent: "")
@@ -314,10 +325,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         i.view = v
         return i
     }
-}
-
-final class ClosureTarget: NSObject {
-    let action: () -> Void
-    init(_ a: @escaping () -> Void) { action = a }
-    @objc func fire() { action() }
 }
