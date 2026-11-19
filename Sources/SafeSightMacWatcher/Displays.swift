@@ -152,6 +152,9 @@ public enum HoldReason: Hashable, Sendable, CaseIterable {
     case displaysAsleep
     /// The session is switched away.
     case session
+    /// The OS says the screen is locked or this session is not on the console. Every display is covered whole once it is
+    /// back; meanwhile no cover is drawn at all, so a cover can never stand in front of the lock screen.
+    case locked
 }
 
 /// Which plan each display shows. Owned by the main thread; the cover coordinator draws `shown()`.
