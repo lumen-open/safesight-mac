@@ -60,7 +60,7 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 
 ## Where things stand
 
-This is an early preview, and there's no download yet. The screen cover is built and tested in the lab; the lock is being built now. For the details, see [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md).
+This is an early preview, and there's no download yet. The screen cover is built and tested in the lab; the lock is being built now. For the details, see [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md). What isn't built or proven yet is listed plainly in [docs/KNOWN-GAPS.md](docs/KNOWN-GAPS.md).
 
 ## Our promise
 
