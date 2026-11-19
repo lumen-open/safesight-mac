@@ -44,11 +44,22 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     }
 
     /// The models folder: `SAFESIGHTMAC_MODELS`, else the app's own Resources/models (the shipped place in
-    /// the practice state, SD-223 (b)), else models/local in the working folder.
+    /// the practice state, SD-223 (b)), else models/local in the working folder. The Testing edition reads its
+    /// models only from inside itself.
     static func modelsFolder() -> URL {
+        #if SAFESIGHTMAC_TESTING
+        return Bundle.main.resourceURL?.appendingPathComponent("models") ?? Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/models")
+        #else
         if let p = ProcessInfo.processInfo.environment["SAFESIGHTMAC_MODELS"] { return URL(fileURLWithPath: p) }
         if let r = Bundle.main.resourceURL?.appendingPathComponent("models"), FileManager.default.fileExists(atPath: r.path) { return r }
         return URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("models/local")
+        #endif
+    }
+
+    /// What the covers and the repair card carry besides the way out (the Testing edition's line).
+    @MainActor var notice: CoverNotice? {
+        get { presenter.notice }
+        set { presenter.notice = newValue; repairCard.notice = newValue; present() }
     }
 
     // MARK: Start, stop

@@ -27,11 +27,24 @@ public enum CoverForm: String, Sendable {
     }
 }
 
+/// What the Testing edition adds to covers: its line (AppText.testingLine), on every cover that carries the way
+/// out and on any cover that hides at least half of its display, so that no cover big enough to be in the way
+/// is ever up without saying how to quit. The release edition adds nothing: its picture covers stay wordless.
+public enum CoverNotice: Equatable, Sendable {
+    /// `shortcut`: whether ⌃⌥⌘Q is this copy's; without it the line says to quit from the menu bar icon.
+    case testing(shortcut: Bool)
+
+    /// A cover hiding at least this share of its display carries the line even over a picture.
+    public static let bigShare: CGFloat = 0.5
+}
+
 @MainActor
 public protocol CoverPresenter: AnyObject {
     /// Applies one plan per display. Displays without a plan lose their covers.
     func apply(_ plans: [CoverPlan])
     func removeAll()
+    /// What the covers carry besides the way out (the Testing edition's line), or nil.
+    var notice: CoverNotice? { get set }
 }
 
 /// A panel that can never take focus.
@@ -67,24 +80,40 @@ final class CoverPanel: NSPanel {
 /// harness's bench times it on a detached layer (no window, nothing drawn on a screen); the harness also
 /// renders it into its frames.
 public enum CoverDrawing {
-    public static func layers(for plan: CoverPlan, theme: CoverTheme = .light, scale: CGFloat = 2, menuBar: CGFloat = 0) -> [CALayer] {
-        layers(for: CoverLayout.layerPieces(plan, menuBar: menuBar), theme: theme, scale: scale)
+    public static func layers(for plan: CoverPlan, theme: CoverTheme = .light, scale: CGFloat = 2, menuBar: CGFloat = 0,
+                              notice: CoverNotice? = nil) -> [CALayer] {
+        let d = plan.display.bounds
+        return layers(for: CoverLayout.layerPieces(plan, menuBar: menuBar), theme: theme, scale: scale, notice: notice,
+                      displayArea: d.width * d.height)
     }
 
-    /// Every cover, then every way-out line on top (each line lies inside its own cover, with room to spare).
-    public static func layers(for pieces: [CoverPiece], theme: CoverTheme, scale: CGFloat) -> [CALayer] {
+    /// Every cover, then every line on top (each line lies inside its own cover, with room to spare): the way out
+    /// on whole-window and whole-display covers, and with a `notice`, the Testing line under it, and on any cover
+    /// that hides at least `CoverNotice.bigShare` of `displayArea`.
+    public static func layers(for pieces: [CoverPiece], theme: CoverTheme, scale: CGFloat, notice: CoverNotice? = nil,
+                              displayArea: CGFloat? = nil) -> [CALayer] {
         let covers: [CALayer] = pieces.map { LayerFactory.layer($0.frame, $0.kind, theme) }
-        let lines: [CALayer] = pieces.compactMap { p in
-            p.wayOut.flatMap { WayOutArt.layer(on: p.frame, placement: $0, theme: theme, scale: scale) }
+        var lines: [CALayer] = []
+        for p in pieces {
+            let way = p.wayOut.flatMap { WayOutArt.layer(on: p.frame, placement: $0, theme: theme, scale: scale) }
+            if let way { lines.append(way) }
+            guard case let .testing(shortcut)? = notice else { continue }
+            let big = displayArea.map { $0 > 0 && p.frame.width * p.frame.height >= CoverNotice.bigShare * $0 } ?? false
+            guard p.wayOut != nil || big else { continue }
+            if let t = WayOutArt.testingLayer(on: p.frame, placement: p.wayOut ?? .centre, under: way, shortcut: shortcut,
+                                              theme: theme, scale: scale) {
+                lines.append(t)
+            }
         }
         return covers + lines
     }
 
     /// Replaces a root layer's covers with this plan's, in one transaction with no animation.
-    public static func apply(_ plan: CoverPlan, to root: CALayer, theme: CoverTheme = .light, scale: CGFloat = 2) {
+    public static func apply(_ plan: CoverPlan, to root: CALayer, theme: CoverTheme = .light, scale: CGFloat = 2,
+                             notice: CoverNotice? = nil) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        root.sublayers = layers(for: plan, theme: theme, scale: scale)
+        root.sublayers = layers(for: plan, theme: theme, scale: scale, notice: notice)
         CATransaction.commit()
     }
 }
@@ -119,7 +148,8 @@ enum LayerFactory {
 @MainActor
 public final class CoverCanvas: CoverPresenter {
     private var panels: [UInt32: CoverPanel] = [:]
-    public init() {}
+    public var notice: CoverNotice?
+    public init(notice: CoverNotice? = nil) { self.notice = notice }
 
     static var primaryHeight: CGFloat { CGDisplayBounds(CGMainDisplayID()).height }
 
@@ -144,7 +174,7 @@ public final class CoverCanvas: CoverPresenter {
             let screen = Self.screen(plan.display.id)
             let scale = screen?.backingScaleFactor ?? 2
             let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
-            root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar)
+            root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar, notice: notice)
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()
@@ -160,14 +190,16 @@ public final class CoverCanvas: CoverPresenter {
 @MainActor
 public final class OverlayCovers: CoverPresenter {
     private var pool: [CoverPanel] = []
-    public init() {}
+    public var notice: CoverNotice?
+    public init(notice: CoverNotice? = nil) { self.notice = notice }
 
     public func apply(_ plans: [CoverPlan]) {
         let frames = plans.flatMap { plan in
             let screen = CoverCanvas.screen(plan.display.id)
             let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
+            let area = plan.display.bounds.width * plan.display.bounds.height
             return CoverLayout.overlayPieces(plan, primaryHeight: CoverCanvas.primaryHeight, menuBar: menuBar)
-                .map { ($0, screen?.backingScaleFactor ?? 2) }
+                .map { ($0, screen?.backingScaleFactor ?? 2, area) }
         }
         let theme = CoverTheme.current
         CATransaction.begin()
@@ -175,12 +207,12 @@ public final class OverlayCovers: CoverPresenter {
         while pool.count < frames.count { pool.append(CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1))) }
         for (i, panel) in pool.enumerated() {
             guard i < frames.count else { panel.orderOut(nil); continue }
-            var (piece, scale) = frames[i]
+            var (piece, scale, area) = frames[i]
             panel.setFrame(piece.frame, display: false)
             let root = panel.contentView!.layer!
             root.frame = CGRect(origin: .zero, size: piece.frame.size)
             piece.frame.origin = .zero
-            root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale)
+            root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale, notice: notice, displayArea: area)
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()

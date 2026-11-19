@@ -15,6 +15,27 @@ public enum WayOutArt {
     /// Two sizes: the regular one, and a compact one for covers too narrow for it.
     public enum Size: CaseIterable, Sendable { case regular, compact }
 
+    /// Which line is drawn: the way out, or the Testing edition's line (with ⌃⌥⌘Q, or without it when another app
+    /// holds the shortcut). Both are drawn the same way: plain words, shortcuts as key caps.
+    public enum Line: Hashable, Sendable {
+        case wayOut
+        case testing(shortcut: Bool)
+
+        public var text: String {
+            switch self {
+            case .wayOut: return AppText.wayOutLine
+            case let .testing(shortcut): return AppText.testingLine(shortcut: shortcut)
+            }
+        }
+
+        var pieces: [(text: String, isKey: Bool)] {
+            switch self {
+            case .wayOut: return AppText.wayOutPieces
+            case let .testing(shortcut): return AppText.testingPieces(shortcut: shortcut)
+            }
+        }
+    }
+
     struct Metrics {
         var font: CGFloat, keyFont: CGFloat
         var capHeight: CGFloat, capMinWidth: CGFloat, capRadius: CGFloat, capPad: CGFloat
@@ -49,10 +70,10 @@ public enum WayOutArt {
     }
 
     /// The runs of the line and its width, in points.
-    static func runs(_ m: Metrics, _ t: CoverTheme) -> ([Run], CGFloat) {
+    static func runs(_ m: Metrics, _ t: CoverTheme, _ which: Line = .wayOut) -> ([Run], CGFloat) {
         let words = font(m.font, .regular), keys = font(m.keyFont, .medium)
         var out: [Run] = [], width: CGFloat = 0
-        for piece in AppText.wayOutPieces {
+        for piece in which.pieces {
             if piece.isKey {
                 var caps: [(CTLine, CGRect, CGFloat)] = []
                 var w = m.keyMargin
@@ -75,23 +96,23 @@ public enum WayOutArt {
     }
 
     /// The size of the line alone (no pill), in points.
-    static func lineSize(_ s: Size, _ t: CoverTheme) -> CGSize {
+    static func lineSize(_ s: Size, _ t: CoverTheme, _ which: Line = .wayOut) -> CGSize {
         let m = Metrics.of(s)
-        return CGSize(width: runs(m, t).1, height: m.capHeight + 2)
+        return CGSize(width: runs(m, t, which).1, height: m.capHeight + 2)
     }
 
     /// The pill's size, in points.
-    public static func pillSize(_ s: Size, _ t: CoverTheme = .light) -> CGSize {
+    public static func pillSize(_ s: Size, _ t: CoverTheme = .light, _ which: Line = .wayOut) -> CGSize {
         let m = Metrics.of(s)
-        return CGSize(width: runs(m, t).1 + 2 * m.pillPad, height: m.pillHeight)
+        return CGSize(width: runs(m, t, which).1 + 2 * m.pillPad, height: m.pillHeight)
     }
 
     // MARK: Drawing
 
     /// Draws the line with its vertical centre at `mid`, starting at `x`, in a context in points (y up).
-    static func drawLine(_ ctx: CGContext, x: CGFloat, mid: CGFloat, _ s: Size, _ t: CoverTheme, scale: CGFloat) {
+    static func drawLine(_ ctx: CGContext, x: CGFloat, mid: CGFloat, _ s: Size, _ t: CoverTheme, scale: CGFloat, _ which: Line = .wayOut) {
         let m = Metrics.of(s)
-        let (rs, _) = runs(m, t)
+        let (rs, _) = runs(m, t, which)
         let wordsFont = font(m.font, .regular)
         // Optical centre: capitals centred on the middle.
         let baseline = (mid - CTFontGetCapHeight(wordsFont) / 2)
@@ -143,8 +164,8 @@ public enum WayOutArt {
     }
 
     /// The pill with the line on it, with `shadowRoom` around it for the shadow. Size in points.
-    static func renderPill(_ s: Size, _ t: CoverTheme, scale: CGFloat) -> (CGImage, CGSize)? {
-        let p = pillSize(s, t), m = Metrics.of(s)
+    static func renderPill(_ s: Size, _ t: CoverTheme, scale: CGFloat, _ which: Line = .wayOut) -> (CGImage, CGSize)? {
+        let p = pillSize(s, t, which), m = Metrics.of(s)
         let size = CGSize(width: p.width + 2 * shadowRoom, height: p.height + 2 * shadowRoom)
         guard let ctx = context(size, scale: scale) else { return nil }
         let pill = CGRect(x: shadowRoom, y: shadowRoom, width: p.width, height: p.height)
@@ -159,15 +180,15 @@ public enum WayOutArt {
         ctx.setLineWidth(px)
         ctx.addPath(CGPath(roundedRect: pill.insetBy(dx: px / 2, dy: px / 2), cornerWidth: p.height / 2 - px / 2, cornerHeight: p.height / 2 - px / 2, transform: nil))
         ctx.strokePath()
-        drawLine(ctx, x: pill.minX + m.pillPad, mid: pill.midY, s, t, scale: scale)
+        drawLine(ctx, x: pill.minX + m.pillPad, mid: pill.midY, s, t, scale: scale, which)
         return ctx.makeImage().map { ($0, size) }
     }
 
     /// The line alone, for the repair card. Size in points.
-    public static func lineImage(_ s: Size = .regular, theme t: CoverTheme, scale: CGFloat) -> (CGImage, CGSize)? {
-        let size = lineSize(s, t)
+    public static func lineImage(_ s: Size = .regular, theme t: CoverTheme, scale: CGFloat, line which: Line = .wayOut) -> (CGImage, CGSize)? {
+        let size = lineSize(s, t, which)
         guard let ctx = context(size, scale: scale) else { return nil }
-        drawLine(ctx, x: 0, mid: size.height / 2, s, t, scale: scale)
+        drawLine(ctx, x: 0, mid: size.height / 2, s, t, scale: scale, which)
         return ctx.makeImage().map { ($0, size) }
     }
 
@@ -175,11 +196,11 @@ public enum WayOutArt {
     nonisolated(unsafe) static var cache: [String: (CGImage, CGSize)] = [:]
     static let cacheLock = NSLock()
 
-    static func pill(_ s: Size, _ t: CoverTheme, scale: CGFloat) -> (CGImage, CGSize)? {
-        let key = "\(t.isDark)-\(scale)-\(s)"
+    static func pill(_ s: Size, _ t: CoverTheme, scale: CGFloat, _ which: Line = .wayOut) -> (CGImage, CGSize)? {
+        let key = "\(t.isDark)-\(scale)-\(s)-\(which)"
         cacheLock.lock(); defer { cacheLock.unlock() }
         if let hit = cache[key] { return hit }
-        let made = renderPill(s, t, scale: scale)
+        let made = renderPill(s, t, scale: scale, which)
         if let made { cache[key] = made }
         return made
     }
@@ -218,6 +239,61 @@ public enum WayOutArt {
         }
         return nil
     }
+}
+
+extension WayOutArt {
+    /// Space between the way-out pill and the Testing line's pill under it.
+    public static let lineGap: CGFloat = 8
+
+    /// Where the Testing line's pill goes on a cover (same space as `host`, y up): just under the way-out pill when
+    /// there is one (`under`, the pill's own frame), else where the way-out pill would go; nil without room.
+    public static func testingPillFrame(in host: CGRect, placement: WayOutPlacement, under: CGRect?, size: CGSize,
+                                        scale: CGFloat) -> CGRect? {
+        guard let w = under else { return pillFrame(in: host, placement: placement, size: size, scale: scale) }
+        guard host.width >= size.width + 2 * margin else { return nil }
+        let x = host.midX - size.width / 2
+        // Below the way-out pill, or above it when there is no room below.
+        let below = w.minY - lineGap - size.height, above = w.maxY + lineGap
+        let y: CGFloat
+        if below >= host.minY + margin { y = below }
+        else if above + size.height <= host.maxY - margin { y = above }
+        else { return nil }
+        let s = max(scale, 1)
+        return CGRect(x: (x * s).rounded() / s, y: (y * s).rounded() / s, width: size.width, height: size.height)
+    }
+
+    /// The Testing line's layer for a cover piece, or nil without room. `under` is the way-out layer on the same
+    /// piece, if it has one.
+    static func testingLayer(on frame: CGRect, placement: WayOutPlacement, under: WayOutLayer?, shortcut: Bool,
+                             theme t: CoverTheme, scale: CGFloat) -> TestingLineLayer? {
+        let which = Line.testing(shortcut: shortcut)
+        let wayPill = under.map { $0.frame.insetBy(dx: shadowRoom, dy: shadowRoom) }
+        for s in Size.allCases {
+            guard let at = testingPillFrame(in: frame, placement: placement, under: wayPill, size: pillSize(s, t, which), scale: scale),
+                  let (img, size) = pill(s, t, scale: scale, which) else { continue }
+            let l = TestingLineLayer()
+            l.frame = CGRect(x: at.minX - shadowRoom, y: at.minY - shadowRoom, width: size.width, height: size.height)
+            l.contents = img
+            l.contentsScale = scale
+            l.contentsGravity = .resize
+            l.size = s
+            l.text = which.text
+            return l
+        }
+        return nil
+    }
+}
+
+/// The Testing edition's line on a cover: an image only, never a control. `text` is what it says.
+public final class TestingLineLayer: CALayer {
+    public internal(set) var text = AppText.testingLine
+    public internal(set) var size: WayOutArt.Size = .regular
+    override init() { super.init(); name = "testing-line" }
+    override init(layer: Any) {
+        super.init(layer: layer)
+        if let o = layer as? TestingLineLayer { text = o.text; size = o.size }
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
 }
 
 /// The way-out line on a cover: an image only, never a control. `text` is what it says.

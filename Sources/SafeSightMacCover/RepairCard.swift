@@ -6,6 +6,8 @@
 //
 // The card never takes the keyboard on its own: it is a non-activating panel that becomes key only if a
 // view needs typing (none does), so ⌘W and ⌘[ keep going to the app underneath even after a click on it.
+//
+// In the Testing edition it also carries the edition's line, with ⌃⌥⌘Q.
 import AppKit
 import SafeSightMacCore
 import SafeSightMacWatcher
@@ -23,7 +25,9 @@ public final class RepairCard {
 
     private(set) var panel: RepairPanel?
     private var actions: Actions?
-    private var shown: (cause: FaultCause, pause: Bool, dark: Bool)?
+    private var shown: (cause: FaultCause, pause: Bool, dark: Bool, notice: CoverNotice?)?
+    /// The Testing edition's line, under the way out; nil in the release edition.
+    public var notice: CoverNotice?
     public init() {}
 
     /// Shows the card for the given causes, or hides it when there are none.
@@ -34,14 +38,15 @@ public final class RepairCard {
         let p = panel ?? RepairPanel.make()
         panel = p
         target.card = self
-        if shown.map({ $0.cause != first || $0.pause != (actions.pause != nil) || $0.dark != theme.isDark }) ?? true {
+        if shown.map({ $0.cause != first || $0.pause != (actions.pause != nil) || $0.dark != theme.isDark || $0.notice != notice }) ?? true {
             let v = RepairCardView.make(cause: first, pause: actions.pause != nil, theme: theme, target: target,
-                                        tryAgain: #selector(Target.tryAgain), pause: #selector(Target.pause), quit: #selector(Target.quit))
+                                        tryAgain: #selector(Target.tryAgain), pause: #selector(Target.pause), quit: #selector(Target.quit),
+                                        notice: notice)
             p.appearance = NSAppearance(named: theme.isDark ? .darkAqua : .aqua)
             p.backgroundColor = NSColor(cgColor: theme.card.cg())
             p.contentView = v
             p.setContentSize(v.frame.size)
-            shown = (first, actions.pause != nil, theme.isDark)
+            shown = (first, actions.pause != nil, theme.isDark, notice)
         }
         // Centred on the main display when it appears; after that the owner may move it.
         if !p.isVisible, let screen = NSScreen.main {
@@ -131,7 +136,8 @@ public enum RepairCardView {
     }
 
     public static func make(cause: FaultCause, pause: Bool, theme t: CoverTheme, target: AnyObject?,
-                            tryAgain: Selector?, pause pauseAction: Selector?, quit: Selector?) -> NSView {
+                            tryAgain: Selector?, pause pauseAction: Selector?, quit: Selector?,
+                            notice: CoverNotice? = nil) -> NSView {
         let inner = width - 2 * pad
         let card = Card(frame: CGRect(x: 0, y: 0, width: width, height: 100), theme: t)
         card.setAccessibilityLabel(AppText.productName)
@@ -167,6 +173,22 @@ public enum RepairCardView {
             hint.setAccessibilityLabel(AppText.wayOutLine)
             card.addSubview(hint)
             y += size.height + 22
+        }
+
+        // The Testing edition's line, just under the way out and drawn the same way. Read aloud as its sentence.
+        if case let .testing(shortcut)? = notice {
+            let which = WayOutArt.Line.testing(shortcut: shortcut)
+            let regular = WayOutArt.lineImage(.regular, theme: t, scale: scale, line: which)
+            let fits = regular.map { $0.1.width <= inner } ?? false
+            if let (img, size) = fits ? regular : WayOutArt.lineImage(.compact, theme: t, scale: scale, line: which) {
+                let top = y - 12
+                let line = NSImageView(frame: CGRect(x: pad, y: top, width: min(size.width, inner), height: size.height))
+                line.image = NSImage(cgImage: img, size: size)
+                line.imageScaling = .scaleProportionallyDown
+                line.setAccessibilityLabel(which.text)
+                card.addSubview(line)
+                y = top + size.height + 22
+            }
         }
 
         // Buttons, right-aligned: Quit, Pause (practice state only), Try again. Native push buttons; Try again

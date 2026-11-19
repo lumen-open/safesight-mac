@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // The content of the "How it works" window: plain words, then the honest promise in its own panel. Built from
 // views alone (no window), so the lab harness can draw it offscreen. Its colours follow the appearance while
-// the window is open. Draws no picture.
+// the window is open. Draws no picture. In the Testing edition it opens with the edition's line, set as a heading,
+// and leaves out the paragraph that promises a lock later (AppText.howItWorksParagraphs).
 import AppKit
 import SafeSightMacCore
 
@@ -48,20 +49,39 @@ public enum HowItWorksView {
         ])
         f.isSelectable = true
         f.drawsBackground = false
-        f.preferredMaxLayoutWidth = width
+        // Measured a little narrower than it is drawn: on a Retina display a line that only just fits when measured
+        // can wrap when drawn, and its last word was cut off (the Testing edition's second paragraph). Measuring
+        // narrower leaves room for that extra line; the text is drawn from the top, so no room is lost otherwise.
+        f.preferredMaxLayoutWidth = width - wrapAllowance
         f.frame.size = CGSize(width: width, height: ceil(f.fittingSize.height))
+        f.preferredMaxLayoutWidth = width
         return f
     }
 
-    public static func make() -> NSView {
+    /// How much narrower a paragraph is measured than drawn.
+    static let wrapAllowance: CGFloat = 8
+
+    /// `shortcut`: whether ⌃⌥⌘Q is this copy's (Testing edition only); without it, the line names no shortcut and a
+    /// note says why.
+    public static func make(edition: Edition = .standard, shortcut: Bool = true) -> NSView {
         let inner = width - 2 * pad
         let page = Page(frame: CGRect(x: 0, y: 0, width: width, height: 100))
         var y: CGFloat = 16
-        for p in AppText.howItWorksBody {
-            let l = text(p, font: CoverTheme.body(13), color: \.text, width: inner)
+        for p in AppText.howItWorksParagraphs(edition) {
+            let isLine = edition == .testing && p == AppText.testingLine
+            let l = isLine
+                ? text(AppText.testingLine(shortcut: shortcut), font: CoverTheme.heading(15), color: \.text, width: inner,
+                       lineHeight: 1.1, kern: CoverTheme.headingKern(15))
+                : text(p, font: CoverTheme.body(13), color: \.text, width: inner)
             l.frame.origin = CGPoint(x: pad - 2, y: y)   // a label draws its text 2 points in
             page.addSubview(l)
-            y += l.frame.height + 10
+            y += l.frame.height + (isLine ? 14 : 10)
+            if isLine && !shortcut {
+                let n = text(AppText.testingShortcutTaken, font: CoverTheme.body(13), color: \.muted, width: inner)
+                n.frame.origin = CGPoint(x: pad - 2, y: y)
+                page.addSubview(n)
+                y += n.frame.height + 10
+            }
         }
 
         y += 14

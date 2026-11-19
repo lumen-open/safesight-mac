@@ -75,11 +75,14 @@ public enum AppText {
     public static let wayOutKeys = ["⌘W", "⌘["]
 
     /// `wayOutLine` cut into plain words and shortcuts, in order. Joined, the pieces give the line exactly.
-    public static var wayOutPieces: [(text: String, isKey: Bool)] {
+    public static var wayOutPieces: [(text: String, isKey: Bool)] { pieces(of: wayOutLine, keys: wayOutKeys) }
+
+    /// A line cut into plain words and the shortcuts it names, in order. Joined, the pieces give the line exactly.
+    public static func pieces(of line: String, keys: [String]) -> [(text: String, isKey: Bool)] {
         var out: [(text: String, isKey: Bool)] = []
-        var rest = Substring(wayOutLine)
+        var rest = Substring(line)
         while !rest.isEmpty {
-            let next = wayOutKeys.compactMap { k in rest.firstRange(of: k).map { (k, $0) } }.min { $0.1.lowerBound < $1.1.lowerBound }
+            let next = keys.compactMap { k in rest.firstRange(of: k).map { (k, $0) } }.min { $0.1.lowerBound < $1.1.lowerBound }
             guard let found = next else { out.append((String(rest), false)); break }
             let (key, r) = found
             if r.lowerBound > rest.startIndex { out.append((String(rest[..<r.lowerBound]), false)) }
@@ -87,6 +90,74 @@ public enum AppText {
             rest = rest[r.upperBound...]
         }
         return out
+    }
+
+    // MARK: The Testing edition (owner, 19 November 2026: a testing mode that is guaranteed to be only that)
+
+    /// The edition's name: its menu, its windows and its bundle (packaging/Testing-Info.plist).
+    public static let testingName = "\(productName) Testing"
+    /// Carried everywhere the Testing edition shows itself: the menu bar item (as its tooltip and spoken label), the
+    /// top of its menu, the repair card, whole-window and whole-display covers, and the "How it works" window.
+    public static let testingLine = "Testing edition: no lock. Quit any time with ⌃⌥⌘Q."
+    /// The emergency shortcut in `testingLine`, drawn as key caps.
+    public static let testingKeys = ["⌃⌥⌘Q"]
+    /// The line when macOS would not give this copy ⌃⌥⌘Q (another app holds it): it never names a shortcut that
+    /// does not work.
+    public static let testingLineNoShortcut = "Testing edition: no lock. Quit any time from its menu bar icon."
+    /// The word beside the menu bar icon.
+    public static let testingBadge = "Testing"
+    /// The menu's edition line and its explanation (in place of the practice state's).
+    public static let testingTitle = "Testing edition: no lock"
+    public static let testingDetail = "This is the Testing edition, for people helping to test \(productName). It has no lock and installs nothing: no keeper, no login item, and it never asks for your administrator password. macOS keeps it in its own sandbox, so it can't write anywhere but its own folder. Pause it or quit it whenever you like."
+    public static let testingShortcutTaken = "Another app is using ⌃⌥⌘Q, so this copy can't. Quit from this menu instead."
+    /// Shown, and nothing is checked or covered, when the app finds it is not inside the App Sandbox.
+    public static let testingNotSandboxed = "Not sandboxed: covering is off"
+    public static let testingNotSandboxedDetail = "This copy of the Testing edition is not running inside macOS's App Sandbox, so it checks and covers nothing. Make the app with tools/make-app.sh --testing, or quit it."
+    public static let testingAlreadyRunning = "\(testingName) is already running. Look for it in the menu bar."
+    public static let testingQuit = "Quit \(testingName)"
+    /// The one-click removal of the app's own settings and data.
+    public static let testingRemove = "Remove \(testingName)"
+    public static let testingRemovedTitle = "\(testingName) has removed its settings and data."
+    public static let testingRemovedDetail = "Two things are left, because macOS keeps them. To remove the Screen Recording permission, open Screen Recording settings, select \(testingName) and click the minus button. Then drag \(testingName) to the Trash. macOS also keeps an empty folder for the app's sandbox; the Testing guide says how to remove it."
+    public static let testingRemovedOpenSettings = "Open Screen Recording settings"
+    public static let testingRemovedShowApp = "Show the app in Finder"
+    public static let testingRemovedDone = "Quit"
+    /// The "How it works" window's title and opening paragraphs in the Testing edition.
+    public static let testingHowItWorksTitle = "How \(testingName) works"
+    public static let testingHowItWorksBody: [String] = [
+        testingLine,
+        "This is the Testing edition, for people helping to test \(productName). It has no lock and installs nothing: no keeper, no login item, and it never asks for your administrator password. macOS keeps it in its own sandbox, so it can't write anywhere but its own folder.",
+        "To stop it, choose Quit from its menu or press ⌃⌥⌘Q, even when a cover is in the way. Its covers go the moment it quits. To take it off your Mac, choose Remove \(testingName) from its menu, then drag the app to the Trash.",
+        "Please test it with what you normally do, and never with explicit material. Tell us when it covers something harmless, when it feels slow, and how it copes with your displays.",
+    ]
+
+    /// The edition's line: `testingLine`, or `testingLineNoShortcut` when the shortcut could not be had.
+    public static func testingLine(shortcut: Bool) -> String { shortcut ? testingLine : testingLineNoShortcut }
+    /// The edition's line cut into words and key caps.
+    public static func testingPieces(shortcut: Bool = true) -> [(text: String, isKey: Bool)] {
+        pieces(of: testingLine(shortcut: shortcut), keys: shortcut ? testingKeys : [])
+    }
+
+    /// The "How it works" paragraphs of an edition. The Testing edition opens with its own and leaves out the
+    /// paragraph that promises a lock later: it never gets one.
+    public static func howItWorksParagraphs(_ edition: Edition) -> [String] {
+        switch edition {
+        case .standard: return howItWorksBody
+        case .testing: return testingHowItWorksBody + howItWorksBody.filter { !$0.contains("comes in a later version") }
+        }
+    }
+
+    /// The "How it works" window's title in an edition.
+    public static func howItWorksWindowTitle(_ edition: Edition) -> String {
+        edition == .testing ? testingHowItWorksTitle : howItWorksTitle
+    }
+
+    /// Every Testing edition string, for checks.
+    public static var testingAll: [String] {
+        [testingName, testingLine, testingLineNoShortcut, testingBadge, testingTitle, testingDetail, testingShortcutTaken,
+         testingNotSandboxed, testingNotSandboxedDetail, testingAlreadyRunning, testingQuit, testingRemove,
+         testingRemovedTitle, testingRemovedDetail, testingRemovedOpenSettings, testingRemovedShowApp, testingRemovedDone,
+         testingHowItWorksTitle] + testingHowItWorksBody
     }
 
     // MARK: The repair card
@@ -106,6 +177,6 @@ public enum AppText {
          statusNeedsPermission, needsPermissionDetail, grantPermission, statusPaused, statusStarting, statusFault, statusModelsMissing,
          modeHeader, modeBalanced, modeEither, modeSentence, strictCoverMode, pauseFor15, pauseFor60, resume, howItWorks, quit,
          howItWorksTitle, wayOutLine, repairHeading, repairDetail, repairTryAgain, repairPause, repairQuit]
-            + howItWorksBody
+            + howItWorksBody + testingAll
     }
 }

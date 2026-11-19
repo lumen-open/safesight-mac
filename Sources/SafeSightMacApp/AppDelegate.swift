@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // The minimal menu-bar app of the cover-only build: status, the practice state, the detector mode
 // picker, strict cover mode shown as "not in this version", pause (practice state only), "How it
-// works" and Quit. No Dock icon, no login item, no network.
+// works" and Quit. No Dock icon, no login item, no network. The Testing edition has no keeper check and says
+// what it is everywhere it shows.
 import AppKit
 import DetectorCore
 import SafeSightMacCapture
@@ -13,7 +14,7 @@ import SafeSightMacWatcher
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let watcher = WatcherController(presenter: CoverForm.current == .overlays ? OverlayCovers() : CoverCanvas())
-    private var practice: PracticeSignal = .unknown(reason: "not read yet")
+    private var practice: PracticePresentation = PracticePresentation(.unknown(reason: "not read yet"))
     private var pausedUntil: Date?
     private var pausedIndefinitely = false
     private var resumeTimer: Timer?
@@ -26,7 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ note: Notification) {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        #if SAFESIGHTMAC_TESTING
+        // No emergency shortcut yet: the line says to quit from the menu bar icon.
+        watcher.notice = .testing(shortcut: false)
+        #endif
+
+        statusItem = NSStatusBar.system.statusItem(withLength: BuildInfo.edition == .testing ? NSStatusItem.variableLength : NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: AppText.productName)
         let menu = NSMenu()
         menu.delegate = self
@@ -57,10 +63,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var permission: Bool { ScreenRecordingPermission.granted }
 
-    /// Reads the practice signal and offers Pause on the repair card only in the practice state.
+    /// Reads the practice signal and offers Pause on the repair card only in the practice state. The Testing
+    /// edition has no keeper check: it always allows pausing.
     private func refreshPractice() {
-        practice = PracticeState.read()
-        let allowed = PracticePresentation(practice).pauseAllowed
+        #if SAFESIGHTMAC_TESTING
+        practice = .testing
+        #else
+        practice = PracticePresentation(PracticeState.read())
+        #endif
+        let allowed = practice.pauseAllowed
         watcher.repairActions = RepairCard.Actions(
             tryAgain: { [weak self] in self?.tryAgain() },
             pause: allowed ? { [weak self] in self?.pauseFromCard() } : nil,
@@ -91,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func pause(minutes: Int?) {
         refreshPractice()
-        guard PracticePresentation(practice).pauseAllowed else { return }
+        guard practice.pauseAllowed else { return }
         watcher.stop()
         resumeTimer?.invalidate()
         if let m = minutes {
@@ -127,12 +138,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .needsScreenRecording, .detectorUnavailable, .displayCovered: symbol = "exclamationmark.triangle"
         }
         statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: AppText.productName + ": " + status.title)
+        #if SAFESIGHTMAC_TESTING
+        if let b = statusItem?.button {
+            b.title = AppText.testingBadge
+            b.imagePosition = .imageLeading
+            b.toolTip = AppText.testingLine(shortcut: false)
+            b.setAccessibilityLabel(AppText.testingName + ". " + AppText.testingLine(shortcut: false) + " " + status.title)
+        }
+        #endif
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         refreshPractice()
-        let pp = PracticePresentation(practice)
         menu.removeAllItems()
+
+        #if SAFESIGHTMAC_TESTING
+        menu.addItem(label(AppText.testingLine(shortcut: false), bold: true))
+        menu.addItem(note(AppText.testingDetail))
+        menu.addItem(.separator())
+        #endif
 
         menu.addItem(label(status.title, bold: true))
         switch status {
@@ -146,9 +170,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         default: break
         }
 
-        menu.addItem(.separator())
-        menu.addItem(label(pp.title, bold: true))
-        menu.addItem(note(pp.detail))
+        if BuildInfo.edition == .standard {
+            menu.addItem(.separator())
+            menu.addItem(label(practice.title, bold: true))
+            menu.addItem(note(practice.detail))
+        }
 
         menu.addItem(.separator())
         menu.addItem(label(AppText.modeHeader, bold: true))
@@ -167,18 +193,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             for (t, m) in [(AppText.pauseFor15, 15), (AppText.pauseFor60, 60)] {
                 let i = item(t) { [weak self] in self?.pause(minutes: m) }
-                i.isEnabled = pp.pauseAllowed
+                i.isEnabled = practice.pauseAllowed
                 menu.addItem(i)
             }
         }
 
         menu.addItem(.separator())
         menu.addItem(item(AppText.howItWorks) { [weak self] in self?.showHowItWorks() })
+        #if SAFESIGHTMAC_TESTING
+        menu.addItem(item(AppText.testingQuit) { NSApp.terminate(nil) })
+        #else
         menu.addItem(item(AppText.quit) { NSApp.terminate(nil) })
+        #endif
     }
 
     private func showHowItWorks() {
+        #if SAFESIGHTMAC_TESTING
+        let w = howItWorks ?? HowItWorksWindow(shortcut: false)
+        #else
         let w = howItWorks ?? HowItWorksWindow()
+        #endif
         howItWorks = w
         w.show()
     }

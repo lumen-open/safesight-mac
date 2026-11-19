@@ -7,6 +7,10 @@
 // ladder, no heartbeat, no updater. Quit is honoured, and pausing is allowed only because there is no
 // lock. When the signal cannot be read, the watcher does not claim the practice state (it covers as
 // usual and turns pause off): an unreadable signal never loosens anything.
+//
+// The Testing edition (SAFESIGHTMAC_TESTING) has no lock by construction and never works with a keeper, so it
+// has no keeper check at all: the probe and its folder are compiled out, and its menu shows
+// `PracticePresentation.testing`, where pausing is always allowed.
 import Darwin
 import SafeSightMacCore
 import Foundation
@@ -30,6 +34,7 @@ public protocol LaunchFolderProbe {
     func ownerUID(of path: String) throws -> uid_t
 }
 
+#if !SAFESIGHTMAC_TESTING
 /// The real file system: `lstat`, so a symbolic link is judged by its own owner.
 public struct SystemLaunchFolderProbe: LaunchFolderProbe {
     public init() {}
@@ -77,6 +82,7 @@ public enum PracticeState {
         return .practice
     }
 }
+#endif
 
 /// What the app's menu shows for the practice state, and whether pausing is allowed.
 public struct PracticePresentation: Equatable, Sendable {
@@ -84,6 +90,13 @@ public struct PracticePresentation: Equatable, Sendable {
     public let detail: String
     /// Pausing is allowed only in the practice state, because only then is there no lock.
     public let pauseAllowed: Bool
+
+    init(title: String, detail: String, pauseAllowed: Bool) {
+        self.title = title; self.detail = detail; self.pauseAllowed = pauseAllowed
+    }
+
+    /// The Testing edition: no lock and no keeper check, so pausing is always allowed.
+    public static let testing = PracticePresentation(title: AppText.testingTitle, detail: AppText.testingDetail, pauseAllowed: true)
 
     public init(_ s: PracticeSignal) {
         switch s {

@@ -12,10 +12,19 @@ let labSettings: [SwiftSetting] = lab ? [.define("SAFESIGHTMAC_LAB"), .define("K
 // The vendored detector keeps Swift 5 language mode, as it was built and tested.
 let detectorSettings: [SwiftSetting] = labSettings + [.swiftLanguageMode(.v5)]
 
+// The Testing edition, for volunteer helpers (docs/TESTING-EDITION.md):
+// `SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path .build-testing`. It has no lock and nothing that
+// could add one: no keeper check, no installer, no login item, nothing that asks for an administrator. The flag is
+// independent of the lab flag: a lab Testing build (both set) adds the stand-in, for the harness only.
+let testing = env["SAFESIGHTMAC_TESTING"] == "1"
+let editionSettings: [SwiftSetting] = testing ? [.define("SAFESIGHTMAC_TESTING")] : []
+let coreSettings: [SwiftSetting] = labSettings + editionSettings
+let appSettings: [SwiftSetting] = detectorSettings + editionSettings
+
 var targets: [Target] = [
-    .target(name: "SafeSightMacCore", swiftSettings: labSettings),
+    .target(name: "SafeSightMacCore", swiftSettings: coreSettings),
     .executableTarget(name: "SafeSightMacHello", dependencies: ["SafeSightMacCore"]),
-    .testTarget(name: "SafeSightMacCoreTests", dependencies: ["SafeSightMacCore"], swiftSettings: labSettings),
+    .testTarget(name: "SafeSightMacCoreTests", dependencies: ["SafeSightMacCore"], swiftSettings: coreSettings),
 
     // The detector (vendored kestrel lab build).
     .target(name: "Preprocess", swiftSettings: [.swiftLanguageMode(.v5)]),
@@ -28,20 +37,20 @@ var targets: [Target] = [
     // The watcher. SafeSightMacWatcher is the pure cover layer (no AppKit, no capture); SafeSightMacCapture holds
     // the ScreenCaptureKit streams. Neither has any networking code.
     .target(name: "SafeSightMacWatcher", dependencies: ["SafeSightMacCore", "DetectorCore", "Preprocess", "RegionFinder"],
-            swiftSettings: detectorSettings),
-    .target(name: "SafeSightMacCapture", dependencies: ["SafeSightMacWatcher", "Preprocess"], swiftSettings: detectorSettings),
-    .target(name: "SafeSightMacCover", dependencies: ["SafeSightMacWatcher", "SafeSightMacCore"], swiftSettings: detectorSettings),
+            swiftSettings: appSettings),
+    .target(name: "SafeSightMacCapture", dependencies: ["SafeSightMacWatcher", "Preprocess"], swiftSettings: appSettings),
+    .target(name: "SafeSightMacCover", dependencies: ["SafeSightMacWatcher", "SafeSightMacCore"], swiftSettings: appSettings),
     // The cover-only menu-bar app.
     .executableTarget(name: "SafeSightMacApp", dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCapture", "SafeSightMacCover", "DetectorCore"],
-                      swiftSettings: detectorSettings),
+                      swiftSettings: appSettings),
     // The lab harness: frames from files or synthetic scenes through the pipeline, never the screen.
-    .executableTarget(name: "SafeSightMacHarness", dependencies: ["SafeSightMacWatcher", "SafeSightMacCover", "DetectorCore", "Preprocess"] + (lab ? ["LabStandIn"] : []),
-                      swiftSettings: detectorSettings),
+    .executableTarget(name: "SafeSightMacHarness", dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCover", "DetectorCore", "Preprocess"] + (lab ? ["LabStandIn"] : []),
+                      swiftSettings: appSettings),
     // The drawing of covers: way-out lines, colours, click-through panels. Builds layers and panels; shows nothing.
     .testTarget(name: "SafeSightMacCoverTests", dependencies: ["SafeSightMacCover", "SafeSightMacWatcher", "SafeSightMacCore"],
-                swiftSettings: detectorSettings),
+                swiftSettings: appSettings),
     .testTarget(name: "SafeSightMacWatcherTests", dependencies: ["SafeSightMacWatcher", "DetectorCore", "Preprocess", "RegionFinder"] + (lab ? ["LabStandIn"] : []),
-                swiftSettings: detectorSettings),
+                swiftSettings: appSettings),
 ]
 if lab {
     targets.append(.target(name: "LabStandIn", dependencies: ["DetectorCore", "Preprocess"], swiftSettings: detectorSettings))

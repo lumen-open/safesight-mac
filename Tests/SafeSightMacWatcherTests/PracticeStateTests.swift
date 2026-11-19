@@ -5,6 +5,7 @@ import Foundation
 import Testing
 @testable import SafeSightMacWatcher
 
+#if !SAFESIGHTMAC_TESTING
 /// A fake launch folder: names and owners, or a failure.
 struct FakeFolder: LaunchFolderProbe {
     var entries: [String: uid_t] = [:]
@@ -88,6 +89,8 @@ struct FakeFolder: LaunchFolderProbe {
     }
 }
 
+#endif
+
 @Suite struct PracticeMenuTests {
     @Test func pauseIsAllowedOnlyInThePracticeState() {
         #expect(PracticePresentation(.practice).pauseAllowed)
@@ -101,10 +104,19 @@ struct FakeFolder: LaunchFolderProbe {
         #expect(p.detail.contains("no lock"))
     }
 
+    #if !SAFESIGHTMAC_TESTING
     @Test func theSignalFlowsFromTheFolderToTheMenu() {
         let with = PracticePresentation(PracticeState.read(probe: FakeFolder(entries: ["org.safesightmac.keeper.plist": 0])))
         let without = PracticePresentation(PracticeState.read(probe: FakeFolder(entries: ["com.apple.x.plist": 0])))
         #expect(!with.pauseAllowed && without.pauseAllowed)
+    }
+    #endif
+
+    @Test func theTestingEditionAlwaysAllowsPauseAndSaysThereIsNoLock() {
+        let t = PracticePresentation.testing
+        #expect(t.pauseAllowed)
+        #expect(t.title == "Testing edition: no lock")
+        #expect(t.detail.contains("no lock") && t.detail.contains("installs nothing"))
     }
 }
 

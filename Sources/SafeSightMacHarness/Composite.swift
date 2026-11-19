@@ -9,15 +9,19 @@ import Foundation
 import ImageIO
 import Preprocess
 import QuartzCore
+import SafeSightMacCore
 import SafeSightMacCover
 import SafeSightMacWatcher
 import UniformTypeIdentifiers
 
 enum Composite {
+    /// What this build's covers and card carry besides the way out: the Testing edition's line in a Testing build.
+    static var notice: CoverNotice? { BuildInfo.edition == .testing ? .testing(shortcut: true) : nil }
+
     /// The frame (or black, for a frame with no pixels) with the plan's covers over it, at `scale`.
     /// `above` draws on top, in display points (y up): the repair card in the way-out scenes.
     static func render(_ img: RGBAImage?, _ plan: CoverPlan, scale: CGFloat, theme: CoverTheme, menuBar: CGFloat = 0,
-                       above: ((CGContext) -> Void)? = nil) -> CGImage? {
+                       notice: CoverNotice? = Composite.notice, above: ((CGContext) -> Void)? = nil) -> CGImage? {
         let size = plan.display.bounds.size
         let w = img?.width ?? Int(size.width * scale), h = img?.height ?? Int(size.height * scale)
         guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
@@ -31,15 +35,17 @@ enum Composite {
         ctx.scaleBy(x: CGFloat(w) / size.width, y: CGFloat(h) / size.height)
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: size)
-        root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar)
+        root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar, notice: notice)
         root.render(in: ctx)
         above?(ctx)
         return ctx.makeImage()
     }
 
     /// The repair card, drawn offscreen from its views (no window is shown), with its size in points.
-    @MainActor static func card(_ cause: FaultCause, pause: Bool, theme t: CoverTheme, scale: CGFloat) -> (CGImage, CGSize)? {
-        snapshot(RepairCardView.make(cause: cause, pause: pause, theme: t, target: nil, tryAgain: nil, pause: nil, quit: nil), theme: t, scale: scale)
+    @MainActor static func card(_ cause: FaultCause, pause: Bool, theme t: CoverTheme, scale: CGFloat,
+                                notice: CoverNotice? = Composite.notice) -> (CGImage, CGSize)? {
+        snapshot(RepairCardView.make(cause: cause, pause: pause, theme: t, target: nil, tryAgain: nil, pause: nil, quit: nil, notice: notice),
+                 theme: t, scale: scale)
     }
 
     /// A view drawn offscreen in the theme's appearance (no window is shown), with its size in points.
