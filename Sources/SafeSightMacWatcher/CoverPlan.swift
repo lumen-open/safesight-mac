@@ -85,7 +85,10 @@ public enum CoverLevel {
     /// stay above it, so a cover can never hide them. That is far above the screen saver's and the assistive-technology
     /// levels, so another app cannot simply choose a level above the covers; one that does anyway, over a cover, covers
     /// the display whole (`DisplayPipeline.canvasLevel`). The app's own windows and menus sit one level higher.
-    public static let canvas = Int(CGShieldingWindowLevel()) - 3
+    /// (Five under the cursor's level, which is two above the shielding level; written from the cursor's so that no part
+    /// of the app names the shielding level, which only an app taking the screen over needs. The tests check where it
+    /// lies against the shielding level itself.)
+    public static let canvas = Int(CGWindowLevelForKey(.cursorWindow)) - 5
     /// The app's own windows, its menu and the repair card: one level above the canvas.
     public static let appAbove = canvas + 1
 }
