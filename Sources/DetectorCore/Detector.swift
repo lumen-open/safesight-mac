@@ -301,6 +301,13 @@ public final class Detector {
             firstWithKey[tasks[i].key] = i
             if let seen = seenClear.get(tasks[i].key) { again.append((i, seen.serial)) } else { fresh.append(i) }
         }
+        // The whole pass, never judged, comes right after the first picture (the one nearest the pointer, or the smallest):
+        // it costs little, and left unjudged it covers the whole call area plainly, where an unjudged picture is only
+        // blurred where it is.
+        if let w = fresh.firstIndex(where: { tasks[$0].pass == .whole }), w > 1 {
+            let whole = fresh.remove(at: w)
+            fresh.insert(whole, at: 1)
+        }
         var nextCost = 0
         for i in fresh + again.sorted(by: { $0.1 < $1.1 }).map(\.0) {
             let cost = tasks[i].pieces.count * (models.models.count + (tasks[i].rect.shortSide < config.containBelow ? models.students.count : 0))
@@ -433,7 +440,7 @@ public final class Detector {
         timings.judgements += judgements
         timings.overloaded += overloaded
         return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded,
-                            modelFaults: faultTotal - faultsBefore, nextCost: overloaded > 0 ? nextCost : 0)
+                            modelFaults: faultTotal - faultsBefore, nextCost: nextCost)
     }
 
     #if KESTREL_LAB

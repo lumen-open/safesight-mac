@@ -66,9 +66,9 @@ public struct FrameVerdict: Sendable {
     /// family model failed on is in `overloaded`, and a dispute the tie-breaker failed on is unanswered, so it
     /// is covered. A count only.
     public var modelFaults = 0
-    /// What the first entry the budget did not reach would have cost (model judgements), in the order this call judges;
-    /// 0 when the budget reached every entry it had to judge. A caller whose calls keep leaving such an entry can save its
-    /// budget up for it.
+    /// What the first entry the budget did not reach would have cost (model judgements), in the order this call judges,
+    /// whether it was left unjudged or shown as judged earlier; 0 when the budget reached every entry it had to judge. A
+    /// caller whose calls keep leaving such an entry can save its budget up for it.
     public var nextCost = 0
 }
 
