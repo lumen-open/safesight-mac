@@ -16,7 +16,7 @@ import Testing
     func pipeline() throws -> DisplayPipeline {
         let d = try Detector(models: .labNull(), thresholdsJSON: WatcherModels.committedThresholds)
         d.standIn = CheckerStandIn()
-        return DisplayPipeline(display: display, judger: d, budgetShare: 40, ignoredPIDs: [])
+        return DisplayPipeline(display: display, judger: d, budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
     }
 
     @Test func theStandInIsCoveredAndPlacedOnScreen() throws {

@@ -16,7 +16,7 @@ import RegionFinder
 
     @Test func aReloadedPageIsNotJudgedAgainAndStaysCovered() {
         let d = Fixtures.detector()
-        let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         var page = Fixtures.blank(600, 400)
         Fixtures.paint(&page, PixelRect(x: 40, y: 40, w: 120, h: 90), channel: nil, seed: 3)
         Fixtures.paint(&page, PixelRect(x: 300, y: 200, w: 100, h: 100), channel: nil, seed: 4)
@@ -85,7 +85,7 @@ import RegionFinder
         var page = Self.page(600, 400, seed: 5)
         let pic = PixelRect(x: 380, y: 200, w: 120, h: 120)
         Fixtures.paintFlagged(&page, pic)
-        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         p.coverGoalMs = 1e9   // this test is about motion alone
         #expect(p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0).covers(CGRect(x: 380, y: 200, width: 120, height: 120)))
         // The page scrolls up by 60 pixels.
@@ -108,7 +108,7 @@ import RegionFinder
         var page = Self.page(600, 400, seed: 6)
         let pic = PixelRect(x: 380, y: 200, w: 120, h: 120)
         Fixtures.paintFlagged(&page, pic)
-        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
         var next = Self.shifted(page, dx: 0, dy: -60)
         Fixtures.paint(&next, PixelRect(x: 380, y: 140, w: 120, h: 120), channel: nil, seed: 77)   // harmless now
@@ -121,7 +121,7 @@ import RegionFinder
     @Test func nothingMovesAndNothingIsHandedOutWhenNothingScrolled() {
         var page = Self.page(600, 400, seed: 7)
         Fixtures.paintFlagged(&page, PixelRect(x: 380, y: 200, w: 120, h: 120))
-        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         p.coverGoalMs = 1e9   // this test is about motion alone
         _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
         var changed = page
@@ -186,7 +186,7 @@ final class OrderJudger: Judging {
     func g(_ r: PixelRect) -> CGRect { CGRect(x: CGFloat(r.x), y: CGFloat(r.y), width: CGFloat(r.w), height: CGFloat(r.h)) }
 
     @Test func aBusyPageIsBlurredFirstAndShownWhenCleared() {
-        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         _ = p.process(Fixtures.frame(Fixtures.blank(800, 500), display: display, scale: 1, t: 0), snapshot: window, now: 0)
         let (page, pics) = busyPage(seed: 10)
         var early: [CoverPlan] = []
@@ -203,7 +203,7 @@ final class OrderJudger: Judging {
         // The same new picture, once with a goal judging easily meets and once with one it cannot meet.
         // (Unoptimised test builds are too slow to time the 0.1 s goal itself; the bench does that.)
         for (goal, blurred) in [(1e9, false), (0.0, true)] {
-            let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [])
+            let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
             p.coverGoalMs = goal
             _ = p.process(Fixtures.frame(Fixtures.blank(800, 500), display: display, scale: 1, t: 0), snapshot: window, now: 0)
             var img = Fixtures.blank(800, 500)
@@ -218,7 +218,7 @@ final class OrderJudger: Judging {
     }
 
     @Test func aFastFlagIsBlurredBeforeTheFullRuleCovers() {
-        let p = DisplayPipeline(display: display, judger: slowDetector(ms: 1), budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: slowDetector(ms: 1), budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         _ = p.process(Fixtures.frame(Fixtures.blank(800, 500), display: display, scale: 1, t: 0), snapshot: window, now: 0)
         var img = Fixtures.blank(800, 500)
         let r = PixelRect(x: 300, y: 150, w: 120, h: 120)
@@ -231,7 +231,7 @@ final class OrderJudger: Judging {
     }
 
     @Test func earlyPlansKeepEveryCoverAlreadyShown() {
-        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         var base = Fixtures.blank(800, 500)
         let flagged = PixelRect(x: 640, y: 340, w: 120, h: 120)
         Fixtures.paintFlagged(&base, flagged)
@@ -245,7 +245,7 @@ final class OrderJudger: Judging {
     }
 
     @Test func noEarlyPlanWhileTheDisplayIsCoveredWhole() {
-        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         let (page, _) = busyPage(seed: 40)
         var early: [CoverPlan] = []
         _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0) { early.append($0) }
@@ -258,7 +258,7 @@ final class OrderJudger: Judging {
         let right = WindowInfo(number: 2, ownerPID: 501, layer: 0, bounds: CGRect(x: 400, y: 0, width: 400, height: 400))
         let snap = WindowSnapshot(windows: [left, right], time: 0)
         let j = OrderJudger(Fixtures.detector())
-        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         _ = p.process(Fixtures.frame(Fixtures.blank(800, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
         var img = Fixtures.blank(800, 400)
         Fixtures.paint(&img, PixelRect(x: 50, y: 50, w: 100, h: 100), channel: nil, seed: 1)

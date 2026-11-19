@@ -56,3 +56,51 @@ import Testing
         }
     }
 }
+
+// MARK: The Testing edition
+
+@Test func theTestingLineIsTheOwnersWordForWord() {
+    #expect(AppText.testingLine == "Testing edition: no lock. Quit any time with ⌃⌥⌘Q.")
+    #expect(AppText.all.contains(AppText.testingLine), "the forbidden-words check reads it")
+    #expect(AppText.testingPieces().map(\.text).joined() == AppText.testingLine)
+    #expect(AppText.testingPieces().filter(\.isKey).map(\.text) == AppText.testingKeys)
+    #expect(AppText.testingKeys == ["⌃⌥⌘Q"])
+}
+
+@Test func withoutTheShortcutTheLineStillSaysThereIsNoLockAndHowToQuit() {
+    let l = AppText.testingLine(shortcut: false)
+    #expect(l == AppText.testingLineNoShortcut)
+    #expect(l.hasPrefix("Testing edition: no lock.") && l.contains("Quit any time"))
+    #expect(!l.contains("⌃⌥⌘Q"), "never names a shortcut this copy does not have")
+}
+
+@Test func everyTestingTextIsCheckedAndSaysWhatTheEditionIs() {
+    for s in AppText.testingAll { #expect(AppText.all.contains(s), "\(s)") }
+    #expect(AppText.testingTitle.lowercased().contains("no lock"))
+    #expect(AppText.testingDetail.contains("no lock") && AppText.testingDetail.contains("installs nothing"))
+    #expect(AppText.testingDetail.contains("administrator password"), "says it never asks for one")
+    #expect(AppText.testingRemove == "Remove SafeSight Mac Testing")
+    #expect(AppText.testingRemovedDetail.contains("Screen Recording") && AppText.testingRemovedDetail.contains("Trash"))
+}
+
+@Test func theTestingHowItWorksOpensWithTheLineAndPromisesNoLockLater() {
+    let t = AppText.howItWorksParagraphs(.testing)
+    #expect(t.first == AppText.testingLine)
+    #expect(!t.contains { $0.contains("comes in a later version") }, "the Testing edition never gets a lock")
+    #expect(t.contains { $0.contains("⌃⌥⌘Q") && $0.contains("Remove SafeSight Mac Testing") })
+    #expect(t.count == AppText.testingHowItWorksBody.count + AppText.howItWorksBody.count - 1)
+    #expect(AppText.howItWorksParagraphs(.standard) == AppText.howItWorksBody)
+    #expect(AppText.howItWorksWindowTitle(.testing) == "How SafeSight Mac Testing works")
+}
+
+@Test func helpersAreAskedNeverToTestWithExplicitMaterial() {
+    #expect(AppText.testingHowItWorksBody.contains { $0.contains("never with explicit material") })
+}
+
+@Test func theBuildsEditionFollowsItsFlag() {
+    #if SAFESIGHTMAC_TESTING
+    #expect(BuildInfo.edition == .testing)
+    #else
+    #expect(BuildInfo.edition == .standard)
+    #endif
+}

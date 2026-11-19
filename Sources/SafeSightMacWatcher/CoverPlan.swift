@@ -55,6 +55,46 @@ public struct CoverPiece: Equatable, Sendable {
     public init(frame: CGRect, kind: CoverKind, wayOut: WayOutPlacement? = nil) { self.frame = frame; self.kind = kind; self.wayOut = wayOut }
 }
 
+/// The covers' own plain colours (the light and dark themes' `cover`). Covers are left out of capture, so the watcher
+/// should never see them; if it does (capture that failed to leave the app's windows out), a cover would look like a
+/// clean picture of itself. A place whose captured pixels are all one of these colours never counts as judged clean.
+///
+/// A backstop only: a blur cover, and a cover carrying the way-out line or the Testing line, do not match it. The real
+/// guard is that no stream starts unless the app's own windows are left out of it (`CaptureExclusion`).
+public enum OwnCoverColours {
+    public static let rgb: [UInt32] = [0xE5E7E1, 0x121828]
+
+    /// True when every sampled pixel of `r` is within a few levels of one of the covers' colours.
+    public static func shown(in img: RGBAImage, _ r: PixelRect) -> Bool {
+        guard let c = r.clamped(width: img.width, height: img.height), c.w > 0, c.h > 0 else { return false }
+        let n = 12
+        return rgb.contains { hex in
+            let want = [Int(hex >> 16 & 0xFF), Int(hex >> 8 & 0xFF), Int(hex & 0xFF)]
+            for i in 0..<n { for j in 0..<n {
+                let x = c.x + (c.w - 1) * i / (n - 1), y = c.y + (c.h - 1) * j / (n - 1), p = (y * img.width + x) * 4
+                for k in 0..<3 where abs(Int(img.pixels[p + k]) - want[k]) > 3 { return false }
+            } }
+            return true
+        }
+    }
+}
+
+/// The window levels the covers use (kCGWindowLayer in the window list is the same number).
+public enum CoverLevel {
+    /// The cover canvas: above the screen saver's level (1000) and the assistive-technology levels (up to 1500), and
+    /// safely below the lock screen. loginwindow's windows were read at levels 2001 and 2004 on a locked Mac, so the lock
+    /// screen's password field, the login window, authorization prompts and other system dialogs stay above every cover:
+    /// a cover must never be what stops the owner unlocking their Mac. An app that raises its own window to this level
+    /// or above is not covered itself; over a cover, it covers the display whole (`DisplayPipeline.canvasLevel`). Raising
+    /// the canvas above the lock screen is not allowed until a test Mac shows all of those stay usable over a whole-display
+    /// cover (`docs/STEP-1-STATUS.md`).
+    public static let canvas = 1990
+    /// The app's own windows, its menu and the repair card: one level above the canvas, still below the lock screen.
+    public static let appAbove = 1991
+    /// The lowest level loginwindow's windows were seen at on a locked Mac.
+    public static let lockScreenSeen = 2001
+}
+
 /// Everything drawn on one display, applied in one step.
 public struct CoverPlan: Equatable, Sendable {
     public var display: DisplayDescriptor

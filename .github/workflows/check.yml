@@ -47,6 +47,12 @@ jobs:
           swift test
       - name: No lab stand-in in release builds
         run: tools/check-no-standin.sh
+      - name: Testing edition (modules, sources, binary and bundle)
+        run: tools/check-testing-edition.sh
+      - name: Testing edition tests
+        run: SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing
+      - name: Covers vanish with their process
+        run: tools/check-covers-vanish.sh
       - name: Keeper build and test
         working-directory: keeper
         run: |

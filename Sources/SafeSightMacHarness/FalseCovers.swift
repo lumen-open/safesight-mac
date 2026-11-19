@@ -56,7 +56,7 @@ enum FalseCovers {
         var falseCoverEntries = 0, falseCoverEntriesFirstCall = 0, falseBlurEntries = 0, judgedEntries = 0, judgedRegions = 0
         var byReason: [String: Int] = [:], byPass: [String: Int] = [:], byBand: [String: Int] = [:], judgedByBand: [String: Int] = [:]
         var under32Covers = 0, calls = 0, ms = 0.0, coveredShareSum = 0.0
-        var firstCallOverloaded = 0
+        var firstCallOverloaded = 0, modelFaults = 0
 
         func json() -> [String: Any] {
             ["screens": screens, "screensWithFalseCover": screensWithFalseCover, "screensWithFalseCover95": FalseCovers.wilson(screensWithFalseCover, screens),
@@ -67,7 +67,7 @@ enum FalseCovers {
              "judgedEntries": judgedEntries, "falseCoverPerEntry95": FalseCovers.wilson(falseCoverEntries, judgedEntries),
              "judgedRegionEntries": judgedRegions,
              "falseCoversByReason": byReason, "falseCoversByPass": byPass, "falseCoverRegionsByBand": byBand, "judgedRegionsByBand": judgedByBand,
-             "falseCoversUnder32px": under32Covers, "firstCallOverloadedEntries": firstCallOverloaded,
+             "falseCoversUnder32px": under32Covers, "firstCallOverloadedEntries": firstCallOverloaded, "modelFaults": modelFaults,
              "meanCoveredShareOfFinalPlan": screens > 0 ? (coveredShareSum / Double(screens) * 1e5).rounded() / 1e5 : 0,
              "calls": calls, "msPerScreen": screens > 0 ? (ms / Double(screens)).rounded() : 0]
         }
@@ -155,6 +155,7 @@ enum FalseCovers {
                 k.ms += ms
                 k.coveredShareSum += share
                 k.firstCallOverloaded += rec.verdicts.prefix(firstCallCount).reduce(0) { $0 + $1.overloaded }
+                k.modelFaults += rec.verdicts.reduce(0) { $0 + $1.modelFaults }
                 if c == "_total" { total = k } else { groups[c] = k }
             }
             let line: [String: Any] = ["file": f, "group": g, "w": img.width, "h": img.height,

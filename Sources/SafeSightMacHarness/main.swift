@@ -14,6 +14,12 @@
 //            window drawn from its own views; see WayOutScenes.swift
 //   safesightmac-harness displays --out DIR [--appearance light|dark]
 //            (lab build only) a display being attached, step by step, through the display rule; see DisplayScenes.swift
+//   safesightmac-harness vanish
+//            a real cover window, invisible and off every display, goes the moment its process is killed or quits;
+//            see Vanish.swift
+//   safesightmac-harness jitter --models DIR --list FILE [--root DIR] [--draws N] [--per-band K] [--background B]
+//            [--every K] [--seed S] [--json FILE]
+//            (lab build only) how far jitter moves each model's score on harmless screens; see JitterSpread.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
 //            --models DIR (real models, checked against the sealed hash list)  --null-models (lab build only)
@@ -45,6 +51,7 @@ struct Options {
     var nullModels = false
     var out: String?
     var bench = BenchSettings()
+    var jitter = JitterSettings()
     var list: String?
     var root: String?
     var jsonl: String?
@@ -60,6 +67,15 @@ struct BenchSettings {
     var label = "bench"
     var busyPages = 6
     var scrollSpeeds = [8, 32, 96]
+}
+
+/// Jitter-measurement options, parsed in every build so that a release build can refuse `jitter` plainly.
+struct JitterSettings {
+    var draws = 24
+    var perBand = 3000
+    var background = 400
+    var every = 1
+    var seed: UInt64 = 7
 }
 
 func fail(_ s: String) -> Never { FileHandle.standardError.write(Data((s + "\n").utf8)); exit(2) }
@@ -93,6 +109,11 @@ func parse() -> Options {
         case "--label": o.bench.label = v()
         case "--busy-pages": o.bench.busyPages = Int(v()) ?? 6
         case "--scroll-speeds": o.bench.scrollSpeeds = v().split(separator: ",").compactMap { Int($0) }
+        case "--draws": o.jitter.draws = max(2, Int(v()) ?? 24)
+        case "--per-band": o.jitter.perBand = max(0, Int(v()) ?? 3000)
+        case "--background": o.jitter.background = max(0, Int(v()) ?? 400)
+        case "--every": o.jitter.every = max(1, Int(v()) ?? 1)
+        case "--seed": o.jitter.seed = UInt64(v()) ?? 7
         case "--help", "-h": print("see the header of Sources/SafeSightMacHarness/main.swift"); exit(0)
         default:
             if k.hasPrefix("--") { fail("unknown option \(k)") }
@@ -166,10 +187,17 @@ func report(_ i: Int, _ label: String, _ plan: CoverPlan, primaryHeight: CGFloat
 
 // MARK: Run
 
+if CommandLine.arguments.dropFirst().first == "vanish" {
+    if CommandLine.arguments.contains("--child") { Vanish.child() }
+    Vanish.run()
+}
+
 let o = parse()
 
 func makeDetector() -> Detector {
     if let m = o.models {
+        // Packages are compiled once each, to a fixed place in this tool's Caches folder (DetectorCore's
+        // CompiledModels); an app's models folder holds them compiled already.
         do { return try WatcherModels.loadDetector(folder: URL(fileURLWithPath: m), rule: o.rule) }
         catch { fail("models refused: \(error)") }
     }
@@ -210,6 +238,17 @@ if o.command == "displays" {
     exit(0)
     #else
     fail("displays needs a lab build (the lab stand-in forces its covers): SAFESIGHTMAC_LAB=1 swift run --scratch-path .build-lab safesightmac-harness displays --out DIR")
+    #endif
+}
+
+if o.command == "jitter" {
+    #if SAFESIGHTMAC_LAB
+    guard let list = o.list, let m = o.models else { fail("jitter needs --models DIR and --list FILE") }
+    JitterSpread.run(detector: detector, list: list, root: o.root ?? FileManager.default.currentDirectoryPath, o: o.jitter, json: o.bench.json,
+                     modelsNote: "real models (\((m as NSString).lastPathComponent)), checked against the sealed hash list; sealed cut-off table")
+    exit(0)
+    #else
+    fail("jitter needs a lab build (it reads scores, which release builds never expose): SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter")
     #endif
 }
 

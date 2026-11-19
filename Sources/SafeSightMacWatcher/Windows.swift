@@ -11,9 +11,15 @@ public struct WindowInfo: Equatable, Hashable, Sendable {
     public let layer: Int
     /// Bounds in global points.
     public let bounds: CGRect
-    public init(number: UInt32, ownerPID: Int32, layer: Int, bounds: CGRect) {
+    /// The window's opacity (kCGWindowAlpha). A window at 0 shows nothing: it hides nothing behind it.
+    public let alpha: Double
+    public init(number: UInt32, ownerPID: Int32, layer: Int, bounds: CGRect, alpha: Double = 1) {
         self.number = number; self.ownerPID = ownerPID; self.layer = layer; self.bounds = bounds
+        self.alpha = alpha.isFinite ? alpha : 1
     }
+
+    /// True when the window can be seen at all. A fully transparent window is no judging target and hides nothing.
+    public var shows: Bool { alpha > 0.001 }
 }
 
 /// A judging context: a window, or the part of a display no window covers (desktop, system surfaces).
@@ -44,8 +50,15 @@ public struct TargetArea: Equatable, Sendable {
 public struct WindowSnapshot: Equatable, Sendable {
     public let windows: [WindowInfo]
     public let time: TimeInterval
-    public init(windows: [WindowInfo], time: TimeInterval) { self.windows = windows; self.time = time }
+    /// False when the window list could not be read. An unreadable list is a fault (the display is covered whole), never
+    /// an empty screen.
+    public let readable: Bool
+    public init(windows: [WindowInfo], time: TimeInterval, readable: Bool = true) {
+        self.windows = windows; self.time = time; self.readable = readable
+    }
     public static let empty = WindowSnapshot(windows: [], time: 0)
+    /// A window list that could not be read.
+    public static func unreadable(time: TimeInterval) -> WindowSnapshot { WindowSnapshot(windows: [], time: time, readable: false) }
 
     /// Where each window is visible on `display`: its bounds minus every window in front of it.
     /// Windows of `ignoredPIDs` (the watcher and the app, whose windows are never covered and are left
@@ -53,7 +66,7 @@ public struct WindowSnapshot: Equatable, Sendable {
     public func visibleAreas(on display: CGRect, ignoring ignoredPIDs: Set<Int32>) -> [(JudgeTarget, [CGRect])] {
         var free: [CGRect] = [display]
         var out: [(JudgeTarget, [CGRect])] = []
-        for w in windows where !ignoredPIDs.contains(w.ownerPID) {
+        for w in windows where !ignoredPIDs.contains(w.ownerPID) && w.shows {
             let b = w.bounds.intersection(display)
             guard b.hasArea else { continue }
             let vis = free.clipped(to: b)

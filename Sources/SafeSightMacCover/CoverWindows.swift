@@ -12,11 +12,13 @@ import SafeSightMacWatcher
 import QuartzCore
 
 public enum CoverLevels {
-    /// The canvas sits above full-screen apps, the menu bar, menus, the Dock and notifications.
-    /// Not specified in the register; ST-032 finds the lowest level that works per surface. Working value.
-    public static let canvas = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
-    /// The app's own windows and the repair card sit one level above the canvas (SD-229).
-    public static let appAbove = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)) + 1)
+    /// The canvas sits above full-screen apps, the menu bar, menus, the Dock, notifications, screen-saver-level and
+    /// assistive-technology windows, and safely below the lock screen (`CoverLevel.canvas`). Not specified in the
+    /// register; ST-032 checks it per surface on a test Mac. A window of another app at or above it, over a cover, covers
+    /// the display whole (`DisplayPipeline.canvasLevel`).
+    public static let canvas = NSWindow.Level(rawValue: CoverLevel.canvas)
+    /// The app's own windows, its menu and the repair card sit one level above the canvas (SD-229).
+    public static let appAbove = NSWindow.Level(rawValue: CoverLevel.appAbove)
 }
 
 public enum CoverForm: String, Sendable {
@@ -27,11 +29,25 @@ public enum CoverForm: String, Sendable {
     }
 }
 
+/// What the Testing edition adds to covers: its line (AppText.testingLine), on every cover that carries the way
+/// out, on any cover that hides at least half of its display, and, when smaller covers together hide half of it,
+/// on the largest of them that has room, so that covers big enough to be in the way never stand without saying
+/// how to quit. The release edition adds nothing: its picture covers stay wordless.
+public enum CoverNotice: Equatable, Sendable {
+    /// `shortcut`: whether ⌃⌥⌘Q is this copy's; without it the line says to quit from the menu bar icon.
+    case testing(shortcut: Bool)
+
+    /// A cover hiding at least this share of its display carries the line even over a picture.
+    public static let bigShare: CGFloat = 0.5
+}
+
 @MainActor
 public protocol CoverPresenter: AnyObject {
     /// Applies one plan per display. Displays without a plan lose their covers.
     func apply(_ plans: [CoverPlan])
     func removeAll()
+    /// What the covers carry besides the way out (the Testing edition's line), or nil.
+    var notice: CoverNotice? { get set }
 }
 
 /// A panel that can never take focus.
@@ -50,6 +66,7 @@ final class CoverPanel: NSPanel {
         p.isReleasedWhenClosed = false
         p.hidesOnDeactivate = false
         p.isExcludedFromWindowsMenu = true
+        p.isRestorable = false
         p.title = ""
         p.setAccessibilityElement(false)
         p.setAccessibilityRole(.unknown)
@@ -63,28 +80,69 @@ final class CoverPanel: NSPanel {
     }
 }
 
+extension CoverDrawing {
+    /// A cover window exactly as the cover layer makes it, for the lab harness's check that a process's covers go
+    /// when it ends (`safesightmac-harness vanish`). The harness keeps it invisible and off every display.
+    @MainActor public static func coverWindowForLifetimeCheck(frame: CGRect) -> NSPanel { CoverPanel.make(frame: frame) }
+}
+
 /// The canvas's layers for one plan, built without any window. The canvas form uses it, and the lab
 /// harness's bench times it on a detached layer (no window, nothing drawn on a screen); the harness also
 /// renders it into its frames.
 public enum CoverDrawing {
-    public static func layers(for plan: CoverPlan, theme: CoverTheme = .light, scale: CGFloat = 2, menuBar: CGFloat = 0) -> [CALayer] {
-        layers(for: CoverLayout.layerPieces(plan, menuBar: menuBar), theme: theme, scale: scale)
+    public static func layers(for plan: CoverPlan, theme: CoverTheme = .light, scale: CGFloat = 2, menuBar: CGFloat = 0,
+                              notice: CoverNotice? = nil) -> [CALayer] {
+        let d = plan.display.bounds
+        return layers(for: CoverLayout.layerPieces(plan, menuBar: menuBar), theme: theme, scale: scale, notice: notice,
+                      displayArea: d.width * d.height)
     }
 
-    /// Every cover, then every way-out line on top (each line lies inside its own cover, with room to spare).
-    public static func layers(for pieces: [CoverPiece], theme: CoverTheme, scale: CGFloat) -> [CALayer] {
+    /// Every cover, then every line on top (each line lies inside its own cover, with room to spare): the way out
+    /// on whole-window and whole-display covers, and with a `notice`, the Testing line under it, and on any cover
+    /// that hides at least `CoverNotice.bigShare` of `displayArea`.
+    public static func layers(for pieces: [CoverPiece], theme: CoverTheme, scale: CGFloat, notice: CoverNotice? = nil,
+                              displayArea: CGFloat? = nil, testingLineOn: Set<Int>? = nil) -> [CALayer] {
         let covers: [CALayer] = pieces.map { LayerFactory.layer($0.frame, $0.kind, theme) }
-        let lines: [CALayer] = pieces.compactMap { p in
-            p.wayOut.flatMap { WayOutArt.layer(on: p.frame, placement: $0, theme: theme, scale: scale) }
+        let hosts = testingLineOn ?? testingLineHosts(pieces, notice: notice, displayArea: displayArea, theme: theme, scale: scale)
+        var lines: [CALayer] = []
+        for (i, p) in pieces.enumerated() {
+            let way = p.wayOut.flatMap { WayOutArt.layer(on: p.frame, placement: $0, theme: theme, scale: scale) }
+            if let way { lines.append(way) }
+            guard case let .testing(shortcut)? = notice, hosts.contains(i) else { continue }
+            if let t = WayOutArt.testingLayer(on: p.frame, placement: p.wayOut ?? .centre, under: way, shortcut: shortcut,
+                                              theme: theme, scale: scale) {
+                lines.append(t)
+            }
         }
         return covers + lines
     }
 
+    /// Which of a display's cover pieces carry the Testing line (see `CoverNotice`): those with the way out, those
+    /// hiding `CoverNotice.bigShare` of the display, and, when none of those has room for it but the pieces
+    /// together hide that much, the largest piece that has room. None without a notice.
+    public static func testingLineHosts(_ pieces: [CoverPiece], notice: CoverNotice?, displayArea: CGFloat?,
+                                        theme: CoverTheme, scale: CGFloat) -> Set<Int> {
+        guard case let .testing(shortcut)? = notice else { return [] }
+        let areas = pieces.map { $0.frame.width * $0.frame.height }
+        let big = displayArea.map { $0 > 0 ? CoverNotice.bigShare * $0 : .infinity } ?? .infinity
+        var hosts = Set(pieces.indices.filter { pieces[$0].wayOut != nil || areas[$0] >= big })
+        let compact = WayOutArt.pillSize(.compact, theme, .testing(shortcut: shortcut))
+        func roomy(_ i: Int) -> Bool {
+            WayOutArt.testingPillFrame(in: pieces[i].frame, placement: .centre, under: nil, size: compact, scale: scale) != nil
+        }
+        if !hosts.contains(where: roomy), areas.reduce(0, +) >= big,
+           let largest = pieces.indices.filter(roomy).max(by: { areas[$0] < areas[$1] }) {
+            hosts.insert(largest)
+        }
+        return hosts
+    }
+
     /// Replaces a root layer's covers with this plan's, in one transaction with no animation.
-    public static func apply(_ plan: CoverPlan, to root: CALayer, theme: CoverTheme = .light, scale: CGFloat = 2) {
+    public static func apply(_ plan: CoverPlan, to root: CALayer, theme: CoverTheme = .light, scale: CGFloat = 2,
+                             notice: CoverNotice? = nil) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        root.sublayers = layers(for: plan, theme: theme, scale: scale)
+        root.sublayers = layers(for: plan, theme: theme, scale: scale, notice: notice)
         CATransaction.commit()
     }
 }
@@ -119,7 +177,8 @@ enum LayerFactory {
 @MainActor
 public final class CoverCanvas: CoverPresenter {
     private var panels: [UInt32: CoverPanel] = [:]
-    public init() {}
+    public var notice: CoverNotice?
+    public init(notice: CoverNotice? = nil) { self.notice = notice }
 
     static var primaryHeight: CGFloat { CGDisplayBounds(CGMainDisplayID()).height }
 
@@ -144,8 +203,10 @@ public final class CoverCanvas: CoverPresenter {
             let screen = Self.screen(plan.display.id)
             let scale = screen?.backingScaleFactor ?? 2
             let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
-            root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar)
-            if !panel.isVisible { panel.orderFrontRegardless() }
+            root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar, notice: notice)
+            // Ordered to the front of its level on every plan, not only when first shown: a window that came up at the
+            // same level since never stays over the covers.
+            panel.orderFrontRegardless()
         }
         CATransaction.commit()
     }
@@ -160,28 +221,38 @@ public final class CoverCanvas: CoverPresenter {
 @MainActor
 public final class OverlayCovers: CoverPresenter {
     private var pool: [CoverPanel] = []
-    public init() {}
+    public var notice: CoverNotice?
+    /// When every panel was last brought to the front: at most four times a second, besides each panel newly shown.
+    private var frontedAt: TimeInterval = -.infinity
+    public init(notice: CoverNotice? = nil) { self.notice = notice }
 
     public func apply(_ plans: [CoverPlan]) {
+        let theme = CoverTheme.current
         let frames = plans.flatMap { plan in
             let screen = CoverCanvas.screen(plan.display.id)
             let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
-            return CoverLayout.overlayPieces(plan, primaryHeight: CoverCanvas.primaryHeight, menuBar: menuBar)
-                .map { ($0, screen?.backingScaleFactor ?? 2) }
+            let area = plan.display.bounds.width * plan.display.bounds.height
+            let scale = screen?.backingScaleFactor ?? 2
+            let pieces = CoverLayout.overlayPieces(plan, primaryHeight: CoverCanvas.primaryHeight, menuBar: menuBar)
+            // Chosen across the display's pieces, then drawn piece by piece, each in its own window.
+            let hosts = CoverDrawing.testingLineHosts(pieces, notice: notice, displayArea: area, theme: theme, scale: scale)
+            return pieces.enumerated().map { ($0.element, scale, hosts.contains($0.offset)) }
         }
-        let theme = CoverTheme.current
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         while pool.count < frames.count { pool.append(CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1))) }
+        let now = ProcessInfo.processInfo.systemUptime
+        let refront = now - frontedAt >= 0.25
+        if refront { frontedAt = now }
         for (i, panel) in pool.enumerated() {
             guard i < frames.count else { panel.orderOut(nil); continue }
-            var (piece, scale) = frames[i]
+            var (piece, scale, lined) = frames[i]
             panel.setFrame(piece.frame, display: false)
             let root = panel.contentView!.layer!
             root.frame = CGRect(origin: .zero, size: piece.frame.size)
             piece.frame.origin = .zero
-            root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale)
-            if !panel.isVisible { panel.orderFrontRegardless() }
+            root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale, notice: notice, testingLineOn: lined ? [0] : [])
+            if refront || !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()
     }

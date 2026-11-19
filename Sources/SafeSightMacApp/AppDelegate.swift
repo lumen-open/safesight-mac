@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // The minimal menu-bar app of the cover-only build: status, the practice state, the detector mode
 // picker, strict cover mode shown as "not in this version", pause (practice state only), "How it
-// works" and Quit. No Dock icon, no login item, no network.
+// works" and Quit. No Dock icon, no login item, no network. The Testing edition has no keeper check, says what
+// it is everywhere it shows, and adds its own ways out (TestingEdition.swift).
 import AppKit
 import DetectorCore
 import SafeSightMacCapture
@@ -12,8 +13,8 @@ import SafeSightMacWatcher
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
-    private let watcher = WatcherController(presenter: CoverForm.current == .overlays ? OverlayCovers() : CoverCanvas())
-    private var practice: PracticeSignal = .unknown(reason: "not read yet")
+    let watcher = WatcherController(presenter: CoverForm.current == .overlays ? OverlayCovers() : CoverCanvas())
+    private var practice: PracticePresentation = PracticePresentation(.unknown(reason: "not read yet"))
     private var pausedUntil: Date?
     private var pausedIndefinitely = false
     private var resumeTimer: Timer?
@@ -21,6 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var howItWorks: HowItWorksWindow?
     /// CoreGraphics' display reconfiguration callback: every display is covered the moment macOS announces a change.
     private var reconfiguration: DisplayReconfiguration?
+    #if SAFESIGHTMAC_TESTING
+    let testing = TestingEditionApp()
+    #endif
 
     private var rule: DetectorRule {
         get { DetectorRule(rawValue: UserDefaults.standard.string(forKey: "detectorRule") ?? "") ?? .balanced }
@@ -28,7 +32,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ note: Notification) {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // It starts only when its owner opens it: never again by itself at the next login, and with no window
+        // state kept for one (found in the Testing edition's safety pass).
+        NSApp.disableRelaunchOnLogin()
+        UserDefaults.standard.register(defaults: ["NSQuitAlwaysKeepsWindows": false])
+        #if SAFESIGHTMAC_TESTING
+        guard testing.launch(watcher: watcher) else { return }
+        #endif
+
+        statusItem = NSStatusBar.system.statusItem(withLength: BuildInfo.edition == .testing ? NSStatusItem.variableLength : NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: AppText.productName)
         let menu = NSMenu()
         menu.delegate = self
@@ -79,10 +91,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var permission: Bool { ScreenRecordingPermission.granted }
 
-    /// Reads the practice signal and offers Pause on the repair card only in the practice state.
+    /// Whether this copy may check and cover at all: always in the release edition; in the Testing edition, only
+    /// inside the App Sandbox.
+    private var mayRun: Bool {
+        #if SAFESIGHTMAC_TESTING
+        return testing.sandboxed
+        #else
+        return true
+        #endif
+    }
+
+    /// Reads the practice signal and offers Pause on the repair card only in the practice state. The Testing
+    /// edition has no keeper check: it always allows pausing.
     private func refreshPractice() {
-        practice = PracticeState.read()
-        let allowed = PracticePresentation(practice).pauseAllowed
+        #if SAFESIGHTMAC_TESTING
+        practice = .testing
+        #else
+        practice = PracticePresentation(PracticeState.read())
+        #endif
+        let allowed = practice.pauseAllowed
         watcher.repairActions = RepairCard.Actions(
             tryAgain: { [weak self] in self?.tryAgain() },
             pause: allowed ? { [weak self] in self?.pauseFromCard() } : nil,
@@ -90,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func startIfAllowed() {
-        guard pausedUntil == nil, !pausedIndefinitely else { return }
+        guard pausedUntil == nil, !pausedIndefinitely, mayRun else { updateIcon(); return }
         if permission {
             permissionTimer?.invalidate(); permissionTimer = nil
             watcher.start(rule: rule)
@@ -107,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// cannot run at all (paused, or no Screen Recording).
     private func tryAgain() {
         refreshPractice()
-        if permission, pausedUntil == nil, !pausedIndefinitely {
+        if permission, pausedUntil == nil, !pausedIndefinitely, mayRun {
             watcher.restart(rule: rule)
             updateIcon()
         } else {
@@ -120,7 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func pause(minutes: Int?) {
         refreshPractice()
-        guard PracticePresentation(practice).pauseAllowed else { return }
+        guard practice.pauseAllowed else { return }
         watcher.stop()
         resumeTimer?.invalidate()
         if let m = minutes {
@@ -151,33 +178,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateIcon() {
         let symbol: String
         switch status {
-        case .on, .starting: symbol = "rectangle.dashed"
+        case .on, .starting: symbol = mayRun ? "rectangle.dashed" : "exclamationmark.triangle"
         case .paused: symbol = "pause.rectangle"
         case .needsScreenRecording, .detectorUnavailable, .displayCovered: symbol = "exclamationmark.triangle"
         }
         statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: AppText.productName + ": " + status.title)
+        #if SAFESIGHTMAC_TESTING
+        if let b = statusItem?.button { testing.label(b, status: mayRun ? status.title : AppText.testingNotSandboxed) }
+        #endif
+    }
+
+    /// While the menu is open its windows are kept above the covers, so it can be used under a whole-display cover.
+    private var menuLift: Timer?
+
+    func menuWillOpen(_ menu: NSMenu) {
+        menuLift?.invalidate()
+        let t = Timer(timeInterval: 0.02, repeats: true) { _ in MainActor.assumeIsolated { _ = OwnMenus.lift() } }
+        RunLoop.main.add(t, forMode: .common)
+        RunLoop.main.add(t, forMode: .eventTracking)
+        menuLift = t
+        OwnMenus.lift()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        menuLift?.invalidate(); menuLift = nil
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         refreshPractice()
-        let pp = PracticePresentation(practice)
         menu.removeAllItems()
+        actions.begin()
 
-        menu.addItem(label(status.title, bold: true))
-        switch status {
-        case .needsScreenRecording:
-            menu.addItem(note(AppText.needsPermissionDetail))
-            menu.addItem(item(AppText.grantPermission) { ScreenRecordingPermission.request(); Self.openScreenRecordingSettings() })
-        case let .displayCovered(cause):
-            menu.addItem(note(cause.plainWords))
-        case .paused(let until):
-            if let u = until { menu.addItem(note("Covering resumes at \(DateFormatter.localizedString(from: u, dateStyle: .none, timeStyle: .short)).")) }
-        default: break
+        #if SAFESIGHTMAC_TESTING
+        testing.followLayout()
+        for i in testing.menuHeader() { menu.addItem(i) }
+        menu.addItem(.separator())
+        if !mayRun {
+            menu.addItem(label(AppText.testingNotSandboxed, bold: true))
+            menu.addItem(note(AppText.testingNotSandboxedDetail))
+        }
+        #endif
+
+        if mayRun {
+            menu.addItem(label(status.title, bold: true))
+            switch status {
+            case .needsScreenRecording:
+                menu.addItem(note(AppText.needsPermissionDetail))
+                menu.addItem(item(AppText.grantPermission) { ScreenRecordingPermission.request(); Self.openScreenRecordingSettings() })
+            case let .displayCovered(cause):
+                menu.addItem(note(cause.plainWords))
+            case .paused(let until):
+                if let u = until { menu.addItem(note("Covering resumes at \(DateFormatter.localizedString(from: u, dateStyle: .none, timeStyle: .short)).")) }
+            default: break
+            }
         }
 
-        menu.addItem(.separator())
-        menu.addItem(label(pp.title, bold: true))
-        menu.addItem(note(pp.detail))
+        if BuildInfo.edition == .standard {
+            menu.addItem(.separator())
+            menu.addItem(label(practice.title, bold: true))
+            menu.addItem(note(practice.detail))
+        }
 
         menu.addItem(.separator())
         menu.addItem(label(AppText.modeHeader, bold: true))
@@ -196,21 +256,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             for (t, m) in [(AppText.pauseFor15, 15), (AppText.pauseFor60, 60)] {
                 let i = item(t) { [weak self] in self?.pause(minutes: m) }
-                i.isEnabled = pp.pauseAllowed
+                i.isEnabled = practice.pauseAllowed && mayRun
                 menu.addItem(i)
             }
         }
 
         menu.addItem(.separator())
         menu.addItem(item(AppText.howItWorks) { [weak self] in self?.showHowItWorks() })
+        #if SAFESIGHTMAC_TESTING
+        menu.addItem(item(AppText.testingReportMenu) { [weak self] in self?.testing.showReport() })
+        menu.addItem(item(AppText.testingRemove) { [weak self] in self?.removeEverything() })
+        let quit = item(AppText.testingQuit) { NSApp.terminate(nil) }
+        testing.showShortcut(on: quit)
+        menu.addItem(quit)
+        #else
         menu.addItem(item(AppText.quit) { NSApp.terminate(nil) })
+        #endif
     }
 
     private func showHowItWorks() {
+        #if SAFESIGHTMAC_TESTING
+        // Made afresh, so that it says whether ⌃⌥⌘Q works now.
+        let w = HowItWorksWindow(shortcut: testing.shortcutWorks)
+        #else
         let w = howItWorks ?? HowItWorksWindow()
+        #endif
         howItWorks = w
         w.show()
     }
+
+    #if SAFESIGHTMAC_TESTING
+    /// "Remove SafeSight Mac Testing": stop, clear its own data, say what is left, quit.
+    private func removeEverything() {
+        if let s = statusItem { NSStatusBar.system.removeStatusItem(s) }
+        statusItem = nil
+        testing.removeEverything(watcher: watcher)
+    }
+    #endif
 
     static func openScreenRecordingSettings() {
         if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(u) }
@@ -218,17 +300,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Menu items
 
-    private var handlers: [ClosureTarget] = []
+    private let actions = MenuActions()
 
-    private func item(_ title: String, _ action: @escaping () -> Void) -> NSMenuItem {
-        let t = ClosureTarget(action)
-        handlers.append(t)
-        let i = NSMenuItem(title: title, action: #selector(ClosureTarget.fire), keyEquivalent: "")
-        i.target = t
-        return i
-    }
+    func item(_ title: String, _ action: @escaping () -> Void) -> NSMenuItem { actions.item(title, action) }
 
-    private func label(_ s: String, bold: Bool) -> NSMenuItem {
+    func label(_ s: String, bold: Bool) -> NSMenuItem {
         let i = NSMenuItem(title: s, action: nil, keyEquivalent: "")
         if bold { i.attributedTitle = NSAttributedString(string: s, attributes: [.font: NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)]) }
         i.isEnabled = false
@@ -236,7 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// A wrapped paragraph inside the menu.
-    private func note(_ s: String) -> NSMenuItem {
+    func note(_ s: String) -> NSMenuItem {
         let i = NSMenuItem()
         let f = NSTextField(wrappingLabelWithString: s)
         f.font = .menuFont(ofSize: NSFont.smallSystemFontSize)
@@ -249,10 +325,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         i.view = v
         return i
     }
-}
-
-final class ClosureTarget: NSObject {
-    let action: () -> Void
-    init(_ a: @escaping () -> Void) { action = a }
-    @objc func fire() { action() }
 }

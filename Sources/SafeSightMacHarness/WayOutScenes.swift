@@ -188,13 +188,13 @@ enum WayOutScenes {
         }
         // The "How it works" window on the plain desktop, drawn offscreen from its own views.
         let titleBar: CGFloat = 28
-        if let page = MainActor.assumeIsolated({ Composite.snapshot(HowItWorksView.make(), theme: theme, scale: scale) }) {
+        if let page = MainActor.assumeIsolated({ Composite.snapshot(HowItWorksView.make(edition: BuildInfo.edition), theme: theme, scale: scale) }) {
             let h = min(page.1.height + titleBar, size.height - menuBar - 16)
             let r = CGRect(x: (size.width - page.1.width) / 2, y: (size.height - menuBar - h) / 2, width: page.1.width, height: h)
             let img = frame { ctx in desktop(ctx, p) }
             let file = out.appendingPathComponent("howitworks-\(look).png")
             if let cg = Composite.render(img, CoverPlan(display: display, items: []), scale: scale, theme: theme, above: { ctx in
-                Composite.drawWindow(ctx, page, title: AppText.howItWorksTitle, at: r, titleBar: titleBar, theme: theme)
+                Composite.drawWindow(ctx, page, title: AppText.howItWorksWindowTitle(BuildInfo.edition), at: r, titleBar: titleBar, theme: theme)
             }) { Composite.writePNG(cg, to: file) }
             let line: [String: Any] = ["scene": "howitworks", "appearance": look, "file": file.path, "window": rectJSON(r)]
             print(String(data: try! JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]), encoding: .utf8)!)

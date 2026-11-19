@@ -18,6 +18,7 @@ import SafeSightMacWatcher
 enum DisplayScenes {
     /// Records what the coordinator draws instead of drawing it on a screen.
     @MainActor final class Recorder: CoverPresenter {
+        var notice: CoverNotice?
         var plans: [CoverPlan] = []
         func apply(_ p: [CoverPlan]) { plans = p }
         func removeAll() { plans = [] }

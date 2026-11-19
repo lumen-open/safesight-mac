@@ -41,7 +41,7 @@ public struct ScreenCaptureBackend: CaptureBackend {
     }
 }
 
-enum ScreenCaptureFailure: Error { case notListed }
+enum ScreenCaptureFailure: Error { case notListed, ownWindowsNotListed }
 
 /// One ScreenCaptureKit content list: its displays, and the app's own windows to leave out of every stream.
 struct ScreenCaptureListing: CaptureListing, @unchecked Sendable {
@@ -53,7 +53,10 @@ struct ScreenCaptureListing: CaptureListing, @unchecked Sendable {
 
     func open(_ id: UInt32, generation: Int, stoppedByItself: @escaping @Sendable () -> Void) async throws -> any CaptureStream {
         guard let display = content.displays.first(where: { $0.displayID == id }) else { throw ScreenCaptureFailure.notListed }
-        let own = content.applications.filter { $0.processID == ownPID }
+        // The app's own windows (the covers) must be left out, or the stream would see the covers instead of what they hide.
+        guard let own = CaptureExclusion.own(content.applications, pid: { $0.processID }, ownPID: ownPID) else {
+            throw ScreenCaptureFailure.ownWindowsNotListed
+        }
         let s = DisplayStream(display: display, excluding: own, sink: sink, generation: generation, stoppedByItself: stoppedByItself)
         try await s.start()
         return s
@@ -71,6 +74,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
     private let stoppedByItself: @Sendable () -> Void
     private let lock = NSLock()
     private var ended = false
+    /// Set when capture starts and taken when it is closed, under `lock`: `start` and `close` can run on different threads.
     private var stream: SCStream?
 
     init(display: SCDisplay, excluding own: [SCRunningApplication], sink: CaptureSink, generation: Int,
@@ -110,14 +114,19 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
         let s = SCStream(filter: filter, configuration: Self.configuration(for: filter, displayID: display.displayID), delegate: self)
         try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
         try await s.startCapture()
-        stream = s
+        // Closed while it was starting: stop it now rather than keep it.
+        let closed = lock.withLock { () -> Bool in
+            if ended { return true }
+            stream = s
+            return false
+        }
+        if closed { try? await s.stopCapture() }
     }
 
     func close() async {
         _ = end()
-        guard let s = stream else { return }
-        stream = nil
-        try? await s.stopCapture()
+        let s = lock.withLock { () -> SCStream? in defer { stream = nil }; return stream }
+        try? await s?.stopCapture()
     }
 
     // MARK: SCStreamOutput

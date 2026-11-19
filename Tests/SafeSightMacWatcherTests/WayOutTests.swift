@@ -57,7 +57,7 @@ extension CoverPlan {
         let p = DisplayPipeline(display: display, judger: ScriptedJudge { area in
             FrameVerdict(regions: [RegionVerdict(rect: area, display: .cover, reason: .bothFamilies, pass: .whole)],
                          coverWindow: true, strike: false, hot: false, judgements: 1, overloaded: 0)
-        }, budgetShare: 40, ignoredPIDs: [])
+        }, budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0), snapshot: snapshot, now: 0)
         #expect(!plan.touches(band), "the title bar, tab strip and toolbar stay in sight")
         let below = CGRect(x: windowBounds.minX, y: band.maxY, width: windowBounds.width, height: windowBounds.maxY - band.maxY)
@@ -72,7 +72,7 @@ extension CoverPlan {
         Fixtures.paintFlagged(&img, page)
         let inBand = PixelRect(x: 700, y: 2 * 30 + 24, w: 128, h: 128)   // 64 x 64 points at (350, 42)
         Fixtures.paintFlagged(&img, inBand, seed: 9)
-        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         let plan = p.process(Fixtures.frame(img, display: display, scale: 2, t: 0), snapshot: snapshot, now: 0)
         #expect(plan.covers(CGRect(x: 350, y: 42, width: 64, height: 64), kind: .plain), "the picture in the band is covered")
         #expect(plan.covers(CGRect(x: 50, y: band.maxY, width: 500, height: 370 - band.maxY), kind: .plain), "the page is covered whole")
@@ -86,7 +86,7 @@ extension CoverPlan {
         let p = DisplayPipeline(display: display, judger: ScriptedJudge { _ in
             FrameVerdict(regions: [RegionVerdict(rect: slice, display: .cover, reason: .bothFamilies, pass: .slice)],
                          coverWindow: false, strike: false, hot: false, judgements: 1, overloaded: 0)
-        }, budgetShare: 40, ignoredPIDs: [])
+        }, budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0), snapshot: snapshot, now: 0)
         #expect(plan.covers(CGRect(x: 50, y: 30, width: 256, height: 256), kind: .plain), "the slice, band part included")
         #expect(plan.covers(CGRect(x: 50, y: band.maxY, width: 500, height: 370 - band.maxY), kind: .plain), "the window below the band")
@@ -96,7 +96,7 @@ extension CoverPlan {
     @Test func aFullScreenWindowIsCoveredWholeWithNoBand() {
         let p = DisplayPipeline(display: display, judger: ScriptedJudge { area in
             FrameVerdict(regions: [], coverWindow: true, strike: false, hot: false, judgements: 1, overloaded: 0)
-        }, budgetShare: 40, ignoredPIDs: [])
+        }, budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0),
                              snapshot: Fixtures.oneWindow(display.bounds), now: 0)
         #expect(plan.covers(display.bounds, kind: .plain))
@@ -113,7 +113,7 @@ extension CoverPlan {
             WindowInfo(number: 2, ownerPID: 600, layer: 3, bounds: CGRect(x: 400, y: 200, width: 200, height: 100)),
             WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: windowBounds),
         ], time: 0)
-        let p = DisplayPipeline(display: display, judger: flagWhole, budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: flagWhole, budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0), snapshot: snap, now: 0)
         let marked = plan.items.filter(\.wayOut)
         #expect(marked.count == 1, "one line for the window; the floating window (layer 3) and the desktop carry none")
@@ -125,7 +125,7 @@ extension CoverPlan {
     @Test func aFullScreenWindowCoveredWholeStillCarriesTheLine() {
         let p = DisplayPipeline(display: display, judger: ScriptedJudge { _ in
             FrameVerdict(regions: [], coverWindow: true, strike: false, hot: false, judgements: 1, overloaded: 0)
-        }, budgetShare: 40, ignoredPIDs: [])
+        }, budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0),
                              snapshot: Fixtures.oneWindow(display.bounds), now: 0)
         #expect(plan.items.filter(\.wayOut).count == 1)
@@ -146,7 +146,7 @@ extension CoverPlan {
             calls += 1
             return FrameVerdict(regions: calls == 1 ? [] : [RegionVerdict(rect: picture, display: .contain, reason: .overload, pass: .region)],
                                 coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: calls == 1 ? 0 : 1)
-        }, budgetShare: 40, ignoredPIDs: [])
+        }, budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         _ = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0), snapshot: snapshot, now: 0)
         _ = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, dirty: [picture], t: 0.1), snapshot: snapshot, now: 0.1)
         let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, dirty: [picture], t: 0.7), snapshot: snapshot, now: 0.7)

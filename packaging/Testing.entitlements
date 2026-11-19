@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The Testing edition's only entitlement: the App Sandbox. With nothing else, macOS lets it use no network,
+     write files only inside its own container, and reach no other app's data, no camera, microphone, contacts,
+     calendars, location or Apple events. Screen Recording is not an entitlement: the helper grants it in System
+     Settings. tools/check-testing-edition.sh fails unless the signed app has exactly this one entitlement. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key><true/>
+</dict>
+</plist>

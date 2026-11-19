@@ -24,6 +24,18 @@ public enum FrameStatus: String, Sendable {
     case blank, suspended, stopped
     /// The stream has just started; no content yet. The display stays covered whole until judged.
     case started
+
+    /// How much a status protects, for merging frames that wait: one that says "nothing new" (idle, started) never
+    /// replaces pixels waiting to be judged, and nothing but a complete frame with pixels replaces one that covers the
+    /// display (blank, suspended, stopped).
+    var protectiveRank: Int {
+        switch self {
+        case .idle: return 0
+        case .started: return 1
+        case .complete: return 2
+        case .blank, .suspended, .stopped: return 3
+        }
+    }
 }
 
 /// One frame from one display stream.
@@ -41,11 +53,14 @@ public struct CapturedFrame: Sendable {
     /// The generation of the stream that captured it (`GenerationCounter`). A display change raises the generation a
     /// display's frames need, so a frame from an older stream never lowers a cover drawn because of the change.
     public var generation: Int
+    /// The window list read when the frame arrived, so covers are placed on the windows these pixels show; nil when it
+    /// was not read (the cover layer then reads it when it judges).
+    public var windows: WindowSnapshot?
 
     public init(display: DisplayDescriptor, status: FrameStatus, image: RGBAImage?, map: CaptureMap?,
-                dirty: [PixelRect]?, time: TimeInterval, generation: Int = 0) {
+                dirty: [PixelRect]?, time: TimeInterval, generation: Int = 0, windows: WindowSnapshot? = nil) {
         self.display = display; self.status = status; self.image = image; self.map = map; self.dirty = dirty; self.time = time
-        self.generation = generation
+        self.generation = generation; self.windows = windows
     }
 }
 
@@ -76,6 +91,29 @@ public enum DirtyRegions {
         return out.sorted { ($0.y, $0.x) < ($1.y, $1.x) }
     }
 
+    /// True when any pixel outside the reported changed areas differs between two frames of the same size (each row is
+    /// compared outside the areas that cross it). Frames of different sizes always count as changed.
+    public static func changedOutside(old: RGBAImage, new: RGBAImage, reported: [PixelRect]) -> Bool {
+        guard old.width == new.width, old.height == new.height, old.pixels.count == new.pixels.count else { return true }
+        let w = new.width, rects = reported.compactMap { $0.clamped(width: w, height: new.height) }.filter { $0.w > 0 && $0.h > 0 }
+        return old.pixels.withUnsafeBufferPointer { a in
+            new.pixels.withUnsafeBufferPointer { b in
+                for y in 0..<new.height {
+                    let spans = rects.filter { $0.y <= y && y < $0.maxY }.map { ($0.x, $0.maxX) }.sorted { $0.0 < $1.0 }
+                    var x = 0
+                    for (s, e) in spans + [(w, w)] {
+                        if s > x {
+                            let o = (y * w + x) * 4
+                            if memcmp(a.baseAddress! + o, b.baseAddress! + o, (s - x) * 4) != 0 { return true }
+                        }
+                        x = max(x, e)
+                    }
+                }
+                return false
+            }
+        }
+    }
+
     static func touches(_ a: PixelRect, _ b: PixelRect) -> Bool {
         a.x <= b.maxX && b.x <= a.maxX && a.y <= b.maxY && b.y <= a.maxY
     }
@@ -102,17 +140,23 @@ public struct FrameMailbox: Sendable {
         } else {
             dirty = nil  // sizes differ or one says "everything": judge the whole frame
         }
-        // The newest status wins, except that an idle frame never replaces pixels still waiting to be judged.
-        if f.status != .idle || old.status != .complete {
+        // The newest status wins only if it protects at least as much as the waiting one, or it is a complete frame
+        // with pixels: an idle or started frame never replaces pixels still waiting to be judged, and only new pixels
+        // replace a frame that covers the display (blank, suspended, stopped).
+        if (f.status == .complete && f.image != nil) || f.status.protectiveRank >= old.status.protectiveRank {
             old.status = f.status
             old.image = f.image
             old.map = f.map
+            old.windows = f.windows
         }
         old.display = f.display
         old.dirty = dirty
         old.time = f.time
         pending = old
     }
+
+    /// The frame waiting, without taking it.
+    public var peek: CapturedFrame? { pending }
 
     public mutating func take() -> CapturedFrame? {
         defer { pending = nil }
@@ -161,8 +205,10 @@ public final class FrameQueue: @unchecked Sendable {
     }
 
     /// The next frame, from the display whose turn it is. Returns nil, and marks the drain finished, when no frame waits.
-    public func next() -> CapturedFrame? {
-        lock.withLock {
+    /// `windows`, when given, reads the window list for a complete frame that carries none: once per frame taken for
+    /// judging (the newest pixels), never for the frames captured and replaced while it waited.
+    public func next(windows: (() -> WindowSnapshot)? = nil) -> CapturedFrame? {
+        let taken: CapturedFrame? = lock.withLock {
             while !turn.isEmpty {
                 let id = turn.removeFirst()
                 if let f = boxes[id]?.take() { since[id] = nil; return f }
@@ -170,10 +216,46 @@ public final class FrameQueue: @unchecked Sendable {
             scheduled = false
             return nil
         }
+        guard var f = taken else { return nil }
+        if f.windows == nil, f.status == .complete, let read = windows { f.windows = read() }
+        return f
     }
 
     /// How long each display's oldest unjudged frame has waited.
     public func waiting(now: TimeInterval) -> [UInt32: TimeInterval] {
         lock.withLock { since.mapValues { now - $0 } }
     }
+
+    /// What frames that have waited at least `after` would show unjudged: per display, the changed areas of its waiting
+    /// frame (global points), or the whole display when they cannot be told (see `unjudgedAreas`).
+    public func waitingChanges(now: TimeInterval, after: TimeInterval) -> UnjudgedChanges {
+        lock.withLock {
+            var out = UnjudgedChanges()
+            for (id, s) in since where now - s >= after {
+                guard let f = boxes[id]?.peek else { continue }
+                if let a = Self.unjudgedAreas(f) { if !a.isEmpty { out.areas[id] = a } } else { out.whole.insert(id) }
+            }
+            return out
+        }
+    }
+
+    /// The areas a frame shows that have not been judged: none for a frame that says nothing changed; its changed areas
+    /// for a complete frame with a usable map; nil (the whole display) for anything else.
+    public static func unjudgedAreas(_ f: CapturedFrame) -> [CGRect]? {
+        switch f.status {
+        case .idle, .started: return []
+        case .blank, .suspended, .stopped: return nil
+        case .complete:
+            guard let img = f.image, let map = f.map, let dirty = f.dirty else { return nil }
+            return DirtyRegions.prepare(dirty, width: img.width, height: img.height).map(map.toGlobal)
+        }
+    }
+}
+
+/// Changes waiting to be judged, for covering them meanwhile: displays to cover whole, and areas to cover on others.
+public struct UnjudgedChanges: Equatable, Sendable {
+    public var whole: Set<UInt32> = []
+    public var areas: [UInt32: [CGRect]] = [:]
+    public init() {}
+    public var isEmpty: Bool { whole.isEmpty && areas.isEmpty }
 }

@@ -23,9 +23,12 @@ final class CoreMLScoringModel: ScoringModel {
     let flagIndices: [Int]
     private let model: MLModel
 
-    init(id: String, family: Family, side: Int, flagIndices: [Int], url: URL, units: MLComputeUnits = .cpuAndNeuralEngine) throws {
+    /// `url`: a compiled model (`.mlmodelc`), loaded in place, or a package, compiled once to a fixed place
+    /// (`CompiledModels`). `compiledKey` names that compiled copy (a hash of the package's files when nil).
+    init(id: String, family: Family, side: Int, flagIndices: [Int], url: URL, units: MLComputeUnits = .cpuAndNeuralEngine,
+         compiledKey: String? = nil) throws {
         self.id = id; self.family = family; self.side = side; self.flagIndices = flagIndices
-        let compiled = url.pathExtension == "mlmodelc" ? url : try MLModel.compileModel(at: url)
+        let compiled = try CompiledModels.compiled(url, key: compiledKey)
         let cfg = MLModelConfiguration()
         cfg.computeUnits = units
         model = try MLModel(contentsOf: compiled, configuration: cfg)
@@ -73,20 +76,35 @@ public struct ModelSet {
     /// gives the browser-like set, where a dispute nobody can settle is covered (SD-125).
     /// `familyB` picks the family-B model: NSFWJS today, or the screen-aware model from the cloud run
     /// (`kestrel-screen-b-224`, classes [NSFW, SFW]) once Stage 3 has converted it.
+    /// `compiled`: load the compiled models made by tools/make-app.sh (`x/x.mlmodelc`, checked by the caller), and
+    /// nothing else. Otherwise load the packages (`x/x.mlpackage`, checked by the caller), each compiled once to a
+    /// fixed place; `keys` names those compiled copies, by the package's path inside `d` (see `CompiledModels`). A
+    /// compiled copy lying beside a package is never used in its place: only what was checked is loaded.
     public static func watcher(directory d: URL, bundleVersion: String, referee: Bool = true,
-                               familyB: String = "nsfwjs-mobilenet-v2") throws -> ModelSet {
+                               familyB: String = "nsfwjs-mobilenet-v2", compiled: Bool = false,
+                               keys: [String: String] = [:]) throws -> ModelSet {
+        func model(_ id: String, _ family: Family, _ side: Int, _ flags: [Int], _ package: String,
+                   units: MLComputeUnits = .cpuAndNeuralEngine) throws -> CoreMLScoringModel {
+            let url = locate(package, in: d, compiled: compiled)
+            return try CoreMLScoringModel(id: id, family: family, side: side, flagIndices: flags, url: url, units: units,
+                                          compiledKey: compiled ? nil : keys[package])
+        }
         let b: ScoringModel = familyB == "nsfwjs-mobilenet-v2"
-            ? try CoreMLScoringModel(id: familyB, family: .b, side: 224, flagIndices: [1, 3],
-                                     url: d.appendingPathComponent("nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage"))
-            : try CoreMLScoringModel(id: familyB, family: .b, side: 224, flagIndices: [0],
-                                     url: d.appendingPathComponent("\(familyB)/\(familyB).mlpackage"))
+            ? try model(familyB, .b, 224, [1, 3], "nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage")
+            : try model(familyB, .b, 224, [0], "\(familyB)/\(familyB).mlpackage")
         return try ModelSet(models: [
-            CoreMLScoringModel(id: "marqo-vit-tiny-384", family: .a, side: 384, flagIndices: [0],
-                               url: d.appendingPathComponent("marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage")),
+            model("marqo-vit-tiny-384", .a, 384, [0], "marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage"),
             b,
-        ], referee: referee ? try CoreMLScoringModel(id: "bumble-private-detector", family: .b, side: 480, flagIndices: [0],
-                               url: d.appendingPathComponent("bumble-private-detector/bumble-private-detector.fp32.mlpackage"), units: .cpuAndGPU) : nil,
+        ], referee: referee ? try model("bumble-private-detector", .b, 480, [0],
+                                        "bumble-private-detector/bumble-private-detector.fp32.mlpackage", units: .cpuAndGPU) : nil,
            bundleVersion: bundleVersion)
+    }
+
+    /// Where a model is loaded from: the package's place (`x/x.mlpackage`), or for compiled models the same place
+    /// with `.mlmodelc`.
+    public static func locate(_ package: String, in d: URL, compiled: Bool) -> URL {
+        let p = d.appendingPathComponent(package)
+        return compiled ? p.deletingPathExtension().appendingPathExtension("mlmodelc") : p
     }
 
     /// Measurement option: Marqo + Bumble (float32 on the GPU; its float16 Neural Engine build failed parity).

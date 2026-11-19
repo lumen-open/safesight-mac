@@ -10,6 +10,7 @@ import Testing
 @testable import SafeSightMacWatcher
 
 @MainActor final class RecordingPresenter: CoverPresenter {
+    var notice: CoverNotice?
     var applied: [[CoverPlan]] = []
     var removed = 0
     func apply(_ plans: [CoverPlan]) { applied.append(plans) }
@@ -314,5 +315,38 @@ import Testing
         r.coordinator.didChange()
         #expect(r.presenter.last.map(\.display.id) == [1, 2])
         #expect(r.presenter.last.allSatisfy { $0.wholeDisplay == .detectorUnavailable })
+    }
+
+    @Test func atTheLockScreenNoCoverIsDrawnAndAllComeBackCoveredWhole() {
+        let (r, g) = judgedRig([a, b])
+        #expect(r.presenter.whole(1) == nil, "judged clean")
+        let removed = r.presenter.removed, applied = r.presenter.applied.count
+        // The OS says the screen is locked: every canvas goes, and nothing is drawn while it stays locked.
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true, screenLocked: true)
+        r.coordinator.tick()
+        #expect(r.presenter.removed > removed)
+        #expect(r.presenter.applied.count == applied, "nothing drawn at the lock screen")
+        r.coordinator.deliver(.clear(a), generation: g)
+        r.os.now += 1; r.coordinator.tick()
+        #expect(r.presenter.applied.count == applied, "still nothing while locked")
+        // Unlocked: every display is drawn again, covered whole until judged by restarted streams.
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true, screenLocked: false)
+        r.os.now += 1; r.coordinator.tick()
+        #expect(r.presenter.applied.count > applied)
+        #expect(r.presenter.whole(1) != nil && r.presenter.whole(2) != nil)
+        r.coordinator.deliver(.clear(a), generation: g)
+        #expect(r.presenter.whole(1) != nil, "a plan from before the lock never lowers the cover")
+    }
+
+    @Test func anotherSessionOnTheConsoleAlsoTakesEveryCoverOff() {
+        let (r, _) = judgedRig([a])
+        let applied = r.presenter.applied.count
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: false)
+        r.coordinator.willChange(.session)
+        #expect(r.presenter.applied.count == applied && r.presenter.removed > 0)
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true)
+        r.coordinator.didChange(.session)
+        r.os.now += 1; r.coordinator.tick()
+        #expect(r.presenter.whole(1) != nil)
     }
 }

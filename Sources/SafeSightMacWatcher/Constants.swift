@@ -29,4 +29,25 @@ public enum Register {
     /// How long judging may stall on one frame before the display is covered whole (step 3 of
     /// "slowness covers more"). Not in the register; a working value for step 1, tied to ST-038.
     public static let JUDGING_STALL: TimeInterval = 5
+    /// A cover whose window has gone from the window list stays where it last stood until that place is judged clean
+    /// `VIDEO_VOTE` times, or until the window has been gone this long and the place has been judged clean
+    /// `WINDOW_GONE_VOTE` times since it went (judgements from before it went never count). Not in the register;
+    /// working values.
+    public static let WINDOW_GONE: TimeInterval = 1
+    public static let WINDOW_GONE_VOTE = 2
+    /// How long one frame may be judged for (one `process` call). Parts of the frame not reached by then are blurred
+    /// and judged in the next call, so one busy frame cannot hold up the other display's frames or leave new pictures
+    /// sharp for long. Not in the register; a working value, tied to ST-038.
+    public static let JUDGE_CALL_WALL: TimeInterval = 0.25
+    /// A display's frame left waiting this long has its changed areas covered until it is judged (`TIME_TO_COVER`).
+    public static let WAITING_FRAME_COVER: TimeInterval = TIME_TO_COVER
+    /// How often the changed areas a frame reports are checked against its pixels (a comparison of every row outside
+    /// them with the last frame's). Not in the register; a working value.
+    public static let DIRTY_CHECK_EVERY: TimeInterval = 1
+    /// After this many frames in a row judged slower than `COVER_GOAL` (from the first), the pictures in each new frame's
+    /// changed parts are blurred before judging. Not in the register; a working value.
+    public static let OVERRUN_FRAMES = 1
+    /// A cover judged on its own and found flagged on a place that has not changed is judged again this often (a
+    /// borderline place is not covered for good). Not in the register; a working value.
+    public static let RECHECK_FLAGGED_EVERY: TimeInterval = 3
 }

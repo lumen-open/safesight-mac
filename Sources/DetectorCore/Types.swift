@@ -51,9 +51,14 @@ public struct FrameVerdict: Sendable {
     public var strike: Bool
     /// The window became (or stays) a hot context.
     public var hot: Bool
-    /// Model calls made and regions left for the cover-by-default path because the budget ran out.
+    /// Model calls made and regions left for the cover-by-default path because the budget ran out (or because
+    /// a model failed on them; those are judged again too).
     public var judgements: Int
     public var overloaded: Int
+    /// Model failures in this call (a model threw or gave a score that is not usable). Never clear: an entry a
+    /// family model failed on is in `overloaded`, and a dispute the tie-breaker failed on is unanswered, so it
+    /// is covered. A count only.
+    public var modelFaults = 0
 }
 
 /// Size bands in detail pixels (short side), as in the small-picture policy.

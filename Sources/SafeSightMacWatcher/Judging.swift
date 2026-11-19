@@ -12,9 +12,13 @@ public protocol Judging: AnyObject {
     func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
                    progress: ((JudgeProgress) -> Void)?) -> FrameVerdict
     func setRule(_ rule: DetectorRule)
+    /// The pictures the finder sees in an area (no model runs), or nil when this judge cannot say.
+    func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]?
 }
 
 extension Judging {
+    public func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { nil }
+
     public func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict {
         judgeArea(frame, context: context, within: area, budget: budget, progress: nil)
     }
@@ -25,6 +29,8 @@ extension Detector: Judging {
                           progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
         judge(frame, context: context, within: area, budget: budget, progress: progress)
     }
+
+    public func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { pictures(frame, within: area) }
 }
 
 /// A token bucket per display: filled at `JUDGEMENT_BUDGET` divided by the number of active displays,
@@ -66,6 +72,8 @@ public struct PipelineTimings: Sendable, Equatable {
     public var calls = 0
     public var judgements = 0
     public var overloaded = 0
+    /// Model failures reported by the judge calls (counts only; their entries are covered or blurred).
+    public var modelFaults = 0
     /// Plans handed out before the final one (moved covers, cover-first blurs, fast-model blurs), with the
     /// time each was ready, from the start of the call.
     public var provisionalMs: [Double] = []
@@ -73,6 +81,12 @@ public struct PipelineTimings: Sendable, Equatable {
     public var coveredFirst = 0
     /// Pictures the fastest model flagged, shown blurred before the full rule decided.
     public var fastFlags = 0
+    /// Changed parts blurred at once, before judging, because recent frames took longer than `COVER_GOAL` to judge.
+    public var blurredAtOnce = 0
+    /// Parts of the frame left for the next call because this one reached `JUDGE_CALL_WALL` (blurred meanwhile).
+    public var leftForLater = 0
+    /// Covers judged on their own, over their whole rectangle (not all on show as their window's).
+    public var rechecks = 0
     public init() {}
 
     static func now() -> UInt64 { DispatchTime.now().uptimeNanoseconds }

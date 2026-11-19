@@ -14,7 +14,7 @@ import Testing
     var window: WindowSnapshot { Fixtures.oneWindow(CGRect(x: 1440, y: 0, width: 400, height: 300)) }
 
     func pipeline(_ rule: DetectorRule = .balanced) -> DisplayPipeline {
-        DisplayPipeline(display: display, judger: Fixtures.detector(rule: rule), budgetShare: 40, ignoredPIDs: [1])
+        DisplayPipeline(display: display, judger: Fixtures.detector(rule: rule), budgetShare: 40, ignoredPIDs: [1], callWallMs: .infinity)
     }
 
     @Test func aFlaggedRegionProducesACoverWindowFrame() throws {
@@ -53,7 +53,7 @@ import Testing
     @Test func aWindowFilledByAFlaggedPictureIsCoveredWhole() {
         // The whole pass over the whole window flags: the window is covered whole.
         let d = DisplayDescriptor(id: 4, bounds: CGRect(x: 0, y: 0, width: 300, height: 200))
-        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         var img = Fixtures.blank(300, 200)
         Fixtures.paintFlagged(&img, PixelRect(x: 0, y: 0, w: 300, h: 200))
         let w = Fixtures.oneWindow(CGRect(x: 0, y: 0, width: 300, height: 200))
@@ -164,7 +164,7 @@ import Testing
     @Test func aCoverMovesWithItsWindowAndCoversTheOldPlaceOnce() {
         // A 1x display; the window holds a flagged picture and then moves 100 points right.
         let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
-        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         var img = Fixtures.blank(600, 400)
         Fixtures.paintFlagged(&img, PixelRect(x: 60, y: 60, w: 100, h: 100))
         let before = Fixtures.oneWindow(CGRect(x: 40, y: 40, width: 300, height: 300))
@@ -180,7 +180,7 @@ import Testing
 
     @Test func coversAreClippedToTheVisiblePartOfTheirWindow() {
         let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
-        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         var img = Fixtures.blank(600, 400)
         Fixtures.paintFlagged(&img, PixelRect(x: 60, y: 60, w: 120, h: 120))
         // A front window hides the right half of the picture's window, and the picture's right part.
@@ -204,7 +204,7 @@ import Testing
     let display = DisplayDescriptor(id: 3, bounds: CGRect(x: 0, y: 0, width: 300, height: 200))
 
     func judgedPipeline() -> DisplayPipeline {
-        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         _ = p.process(Fixtures.frame(Fixtures.blank(300, 200), display: display, scale: 1, t: 0), snapshot: .empty, now: 0)
         return p
     }

@@ -47,15 +47,22 @@ public struct SystemState: Equatable, Sendable {
     public var displaysAsleep: Bool
     /// This login session is the one on the console (not switched away).
     public var sessionOnConsole: Bool
-    public init(displaysAsleep: Bool, sessionOnConsole: Bool) {
-        self.displaysAsleep = displaysAsleep; self.sessionOnConsole = sessionOnConsole
+    /// The screen is locked (the session dictionary's `CGSSessionScreenIsLocked`).
+    public var screenLocked: Bool
+    public init(displaysAsleep: Bool, sessionOnConsole: Bool, screenLocked: Bool = false) {
+        self.displaysAsleep = displaysAsleep; self.sessionOnConsole = sessionOnConsole; self.screenLocked = screenLocked
     }
+
+    /// The owner is at the lock screen or the login window, or another session has the console: covers must not be drawn.
+    public var away: Bool { screenLocked || !sessionOnConsole }
 
     /// Reads CoreGraphics: `CGDisplayIsAsleep` for the listed displays, and the session's on-console flag.
     public static func read(displays: [UInt32]) -> SystemState {
         let asleep = displays.contains { CGDisplayIsAsleep($0) != 0 }
-        let session = (CGSessionCopyCurrentDictionary() as? [String: Any])?[kCGSessionOnConsoleKey as String] as? Bool
-        return SystemState(displaysAsleep: asleep, sessionOnConsole: session ?? false)
+        let d = CGSessionCopyCurrentDictionary() as? [String: Any]
+        let session = d?[kCGSessionOnConsoleKey as String] as? Bool
+        let locked = d?["CGSSessionScreenIsLocked"] as? Bool
+        return SystemState(displaysAsleep: asleep, sessionOnConsole: session ?? false, screenLocked: locked ?? false)
     }
 }
 
@@ -121,7 +128,7 @@ public final class CoverCoordinator {
     public nonisolated static let topUpDelays: [TimeInterval] = [1, 2, 4]
     /// A sleep, display-sleep or session hold whose wake or return notification never came ends once the OS says it
     /// is over and the hold has lasted this long (awake time): displays awake, the session on the console.
-    public nonisolated static let holdCheckAfter: [HoldReason: TimeInterval] = [.displaysAsleep: 2, .session: 2, .sleep: 10]
+    public nonisolated static let holdCheckAfter: [HoldReason: TimeInterval] = [.displaysAsleep: 2, .session: 2, .sleep: 10, .locked: 0]
 
     private let presenter: CoverPresenter
     private let read: @MainActor ([UInt32]) -> DisplayList?
@@ -134,6 +141,7 @@ public final class CoverCoordinator {
     public private(set) var topUpDue: TimeInterval?
     private var topUps = 0
     private var stalled: Set<UInt32> = []
+    private var unjudged: [UInt32: [CGRect]] = [:]
     private var handedToJudging: (judged: [UInt32], required: [UInt32: Int])?
 
     public init(presenter: CoverPresenter, generations: GenerationCounter,
@@ -204,6 +212,10 @@ public final class CoverCoordinator {
         if holdSince[reason] == nil { holdSince[reason] = clock() }
         coverage.hold(reason, until: ends)
         if ends != nil { wake?(Self.unfinishedChange) }
+        if reason != .change, !coverage.holds.contains(.locked), state(coverage.list.ids).away {
+            holdSince[.locked] = clock()
+            coverage.hold(.locked)
+        }
         present(urgent: true)
     }
 
@@ -266,11 +278,20 @@ public final class CoverCoordinator {
 
     /// Runs what is due (a restart after a change has settled, a retry, the end of an announced change that never
     /// finished) and reads the OS's lists again. `stalled`: displays whose judging has fallen too far behind.
-    public func tick(stalled: Set<UInt32> = []) {
+    /// `unjudged`: changed areas left waiting too long to be judged, covered until they are.
+    public func tick(stalled: Set<UInt32> = [], unjudged: [UInt32: [CGRect]] = [:]) {
         guard running else { return }
         let now = clock()
-        var redraw = stalled != self.stalled
+        // Read from the OS itself (never from a notification any app could post): at the lock screen, or with another
+        // session on the console, no cover is drawn (`.locked`); it ends below once the OS says the owner is back.
+        if !coverage.holds.contains(.locked), state(coverage.list.ids).away {
+            holdSince[.locked] = now
+            coverage.hold(.locked)
+            draw(urgent: true)
+        }
+        var redraw = stalled != self.stalled || unjudged != self.unjudged
         self.stalled = stalled
+        self.unjudged = unjudged
         if let e = coverage.holdEnds, now >= e { didChange(); redraw = false }
         endHoldsThatAreOver(now)
         if coverage.hold == nil, let r = restartDue, now >= r {
@@ -311,8 +332,10 @@ public final class CoverCoordinator {
 
     private func draw(urgent: Bool) {
         guard running else { return }
-        shown = coverage.shown(stalled: stalled)
-        presenter.apply(shown)
+        shown = coverage.shown(stalled: stalled, unjudged: unjudged)
+        // At the lock screen nothing is drawn: every canvas is taken off the screen, so none can stand in front of the
+        // password field. Everything counts as covered whole meanwhile, and is drawn covered whole on the way back.
+        if coverage.holds.contains(.locked) { presenter.removeAll() } else { presenter.apply(shown) }
         if urgent { flush() }
         let judged = coverage.list.judged, required = coverage.required
         if handedToJudging.map({ $0.judged != judged || $0.required != required }) ?? true {
@@ -351,6 +374,7 @@ public final class CoverCoordinator {
             case .displaysAsleep: over = !s.displaysAsleep
             case .session: over = s.sessionOnConsole
             case .sleep: over = !s.displaysAsleep && s.sessionOnConsole
+            case .locked: over = !s.away
             case .change: over = false
             }
             if over { didChange(reason) }

@@ -28,6 +28,14 @@ public final class DisplayPipeline {
         var whole: Bool
         var kind: CoverKind
         var clean: Int
+        /// Where the cover last stood on screen (global points), for when its window is missing from the window list.
+        var lastGlobal: CGRect? = nil
+        /// Since when its window has been missing from the window list (a closed window, or a list read that left it out).
+        var missingSince: TimeInterval? = nil
+        /// Where and when its own judge call (step 3b) last found it flagged; judged there again once something changed,
+        /// or after `RECHECK_FLAGGED_EVERY` in any case.
+        var flaggedAt: CGRect? = nil
+        var flaggedWhen: TimeInterval? = nil
     }
     var held: [Held] = []
     var pending: [CGRect] = []
@@ -42,13 +50,34 @@ public final class DisplayPipeline {
     /// The last complete frame's row hashes per target, for finding motion (valid for the next frame only).
     var rowCache: [JudgeTarget: (serial: Int, area: PixelRect, rows: [UInt64?])] = [:]
     var frameSerial = 0
+    /// When the reported changed areas were last checked against the pixels (`DIRTY_CHECK_EVERY`), and how often they
+    /// were found wrong (a count only).
+    var lastDirtyCheck: TimeInterval?
+    /// The frame of the last check, and every changed area reported since (frame pixels). Holds one frame's pixels.
+    var checkBase: (image: RGBAImage, map: CaptureMap, generation: Int)?
+    var reportedSince: [PixelRect] = []
+    public private(set) var dirtyMismatches = 0
     var lastFrameTime: TimeInterval?
     /// Cover first when judging a window's new pictures would end later than this after the frame arrived
     /// (`COVER_GOAL`; tests that run unoptimised builds raise it).
     public var coverGoalMs = Register.COVER_GOAL * 1000
+    /// How long one `process` call may judge (`JUDGE_CALL_WALL`); what is left is blurred and judged next time. Tests
+    /// that run unoptimised builds pass a longer limit when they make the pipeline.
+    public var callWallMs: Double
+    /// About how long one model judgement takes here (fading average), to keep a call within `callWallMs`.
+    var msPerJudgement = 5.0
+    /// The covers' window level (`CoverLevel.canvas`). Another app's window at or above it that overlaps a cover would
+    /// show over that cover: the display is then covered whole, under that window, until it goes. Nil turns this off.
+    public var canvasLevel: Int? = CoverLevel.canvas
     /// How long a judging run takes (the recent longest, fading by a fifth a run): how far ahead a moving
     /// cover must reach.
     var runEstimateMs = 0.0
+    /// Where the covers judged on their own (step 3b) take their turn from.
+    var recheckTurn = 0
+    /// The judgements a cover judged on its own gets even when the frame's time is used up.
+    static let recheckFloor = 16
+    /// Frames in a row whose judging took longer than the goal.
+    var overrunFrames = 0
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
     public private(set) var judged = false
     /// Frames from streams older than this generation are never judged here: the display has changed since they
@@ -61,8 +90,9 @@ public final class DisplayPipeline {
     /// Stage timings of the last `process` call (durations and counts only; nothing is written anywhere).
     public private(set) var lastTimings = PipelineTimings()
 
-    public init(display: DisplayDescriptor, judger: Judging, budgetShare: Double, ignoredPIDs: Set<Int32>) {
-        self.display = display; self.judger = judger; self.ignoredPIDs = ignoredPIDs
+    public init(display: DisplayDescriptor, judger: Judging, budgetShare: Double, ignoredPIDs: Set<Int32>,
+                callWallMs: Double = Register.JUDGE_CALL_WALL * 1000) {
+        self.display = display; self.judger = judger; self.ignoredPIDs = ignoredPIDs; self.callWallMs = callWallMs
         self.bucket = TokenBucket(rate: budgetShare)
         // A display starts covered whole until its first judged frame.
         self.lastPlan = .covered(display, because: .notYetJudged)
@@ -84,7 +114,7 @@ public final class DisplayPipeline {
     public func reset() {
         held = []; pending = []; lastImage = nil; lastMap = nil; lastFullPass = nil
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
-        judgedGeneration = nil
+        judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []
         cover(because: .notYetJudged)
     }
 
@@ -104,6 +134,9 @@ public final class DisplayPipeline {
         // A frame captured before the last display change is never judged: the display stays as it was (covered).
         guard f.generation >= requiredGeneration else { return lastPlan }
         display = f.display
+        // A window list that cannot be read is a fault, never an empty screen: no cover may be placed or lifted on it.
+        // Every held cover is kept for when it can be read again.
+        guard snapshot.readable else { return cover(because: .windowListUnreadable) }
         switch f.status {
         case .blank, .suspended, .stopped:
             return cover(because: .frameNotJudgeable)
@@ -120,11 +153,27 @@ public final class DisplayPipeline {
             // The first frame of another stream is judged whole, with no motion carried over from the old stream.
             let sameStream = judgedGeneration == f.generation
             let previous = sameStream && lastMap.map { $0 == map } == true ? lastImage : nil
+            // The reported changed areas are checked against the pixels now and then: this frame is compared with the frame
+            // of the last check, outside every area reported since. A change anywhere else, in any frame between, means they
+            // cannot be trusted, and the whole frame is judged.
+            var dirty = sameStream ? f.dirty : nil
+            if let reported = dirty, let base = checkBase, base.map == map, base.generation == f.generation {
+                reportedSince += reported
+                if reportedSince.count > 256 { reportedSince = DirtyRegions.prepare(reportedSince, width: img.width, height: img.height) }
+                if f.time - (lastDirtyCheck ?? -.infinity) >= Register.DIRTY_CHECK_EVERY {
+                    if DirtyRegions.changedOutside(old: base.image, new: img, reported: reportedSince) { dirty = nil; dirtyMismatches += 1 }
+                    checkBase = (img, map, f.generation); reportedSince = []; lastDirtyCheck = f.time
+                }
+            } else {
+                // Judged whole (or the first frame of a stream or size): the next check starts from this frame.
+                checkBase = (img, map, f.generation); reportedSince = []
+                if lastDirtyCheck == nil { lastDirtyCheck = f.time }
+            }
             let dt = lastFrameTime.map { f.time - $0 } ?? 0
             lastImage = img; lastMap = map; lastFrameTime = f.time
             judgedGeneration = f.generation
             frameSerial += 1
-            return run(img, previous: previous, frameInterval: dt, map: map, dirty: sameStream ? f.dirty : nil, snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
+            return run(img, previous: previous, frameInterval: dt, map: map, dirty: dirty, snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
         }
     }
 
@@ -139,10 +188,21 @@ public final class DisplayPipeline {
         defer {
             timing.totalMs = PipelineTimings.ms(since: tRun); lastTimings = timing
             runEstimateMs = max(timing.totalMs, 0.8 * runEstimateMs)
+            overrunFrames = timing.totalMs > coverGoalMs ? overrunFrames + 1 : 0
         }
         var tStage = tRun
         let d = display.bounds
         let visible = visibleByTarget(snapshot)
+        // A cover whose window is missing from this list stays where it last stood (see `fullRect`).
+        for i in held.indices {
+            if present(held[i].target, snapshot) {
+                held[i].missingSince = nil
+            } else if held[i].missingSince == nil {
+                // Clean judgements made while the window was there say nothing about its place now: they start again.
+                held[i].missingSince = now
+                held[i].clean = 0
+            }
+        }
         // Windows that moved or changed size since the last snapshot.
         var moved: [(JudgeTarget, CGRect, CGRect)] = []
         for (t, old) in lastBounds { if let nb = snapshot.bounds(of: t), nb != old { moved.append((t, old, nb)) } }
@@ -150,14 +210,17 @@ public final class DisplayPipeline {
         // 1. What to judge: the changed areas; regions waiting to lift; overflow from earlier calls;
         //    old and new places of moved windows; and a full pass on the `FULL_REJUDGE` rhythm.
         var areas: [CGRect]
+        // What the frame itself reports as changed (global points), without the areas added for re-judging.
+        var reported: [CGRect] = [d]
         let fullDue = lastFullPass.map { now - $0 >= Register.FULL_REJUDGE_SHOW_FIRST } ?? true
         if dirty == nil || fullDue || !judged {
             areas = [d]
             lastFullPass = now
         } else {
             areas = DirtyRegions.prepare(dirty!, width: img.width, height: img.height).map(map.toGlobal)
+            reported = areas
             areas += pending
-            for h in held { if let g = globalRect(h, snapshot, visible) { areas.append(g) } }
+            for h in held { if let g = fullRect(h, snapshot, visible) { areas.append(g) } }
             for (_, old, new) in moved { areas += [old.intersection(d), new.intersection(d)].filter(\.hasArea) }
         }
         pending = []
@@ -179,13 +242,19 @@ public final class DisplayPipeline {
         }
         timing.changeMs = PipelineTimings.ms(since: tStage)
 
+        // 2a. A window moved: its covers are drawn at its new place (and its old one) now, before anything is judged.
+        if judged, !moved.isEmpty, let provisional {
+            provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: [])))
+            timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
+        }
+
         // 2b. Content that moved by a translation (scrolling): its covers move with it now, in this update,
         //     before the moved area is judged again. Each moved cover is also drawn reaching ahead along the
         //     motion, for this update, as far as the content will go before the next plan.
         var lead: [Held] = []
         if judged, let prev = previous, dirty != nil {
             tStage = PipelineTimings.now()
-            lead = followMotion(prev, img, parts: parts, map: map, snapshot: snapshot, frameInterval: frameInterval)
+            lead = followMotion(prev, img, parts: parts, map: map, snapshot: snapshot, frameInterval: frameInterval, reported: reported)
             timing.translateMs = PipelineTimings.ms(since: tStage)
             if !lead.isEmpty, let provisional {
                 provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead)))
@@ -203,12 +272,71 @@ public final class DisplayPipeline {
             provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead + fresh) + early))
             timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
         }
+        // Cover first, for the whole frame, on pictures only. When recent frames took longer than the goal, a large changed
+        // part (a quarter of the display or more, where the picture finder itself takes a while) is blurred whole at once,
+        // and only until the finder has looked at it: then only the pictures it found stay blurred, until judged, and text
+        // and other areas without pictures are sharp again. When judging has overrun the goal `OVERRUN_FRAMES` frames in a
+        // row, the pictures in every changed part are found and blurred before any judging. (Each judge call's own cover
+        // first still blurs its pictures when it runs.)
+        if judged, provisional != nil {
+            func px(_ p: TargetArea) -> PixelRect? {
+                guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox else { return nil }
+                return map.toPixels(changedBox.intersection(visBox))
+            }
+            func blurItems(_ r: PixelRect, _ vis: [CGRect]) -> [CoverItem] {
+                let kind: CoverKind = ContainBlur.make(img, r).map { .blur($0) } ?? .plain
+                return vis.clipped(to: map.toGlobal(r)).map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: kind) }
+            }
+            let quarter = img.width * img.height / 4
+            let large = runEstimateMs > coverGoalMs ? parts.filter { (px($0)?.area ?? 0) >= quarter } : []
+            let look = overrunFrames >= Register.OVERRUN_FRAMES ? parts : large
+            if !large.isEmpty {
+                early = large.flatMap { p in px(p).map { blurItems($0, p.visible) } ?? [] }
+                timing.blurredAtOnce += large.count
+                publishEarly()
+            }
+            if !look.isEmpty {
+                var found: [CoverItem] = [], unknown: [CoverItem] = []
+                for p in look {
+                    guard let a = px(p) else { continue }
+                    if let pics = judger.pictureRegions(img, within: a) {
+                        for r in pics { found += blurItems(r, p.visible) }
+                    } else if large.contains(where: { $0.target == p.target }) {
+                        unknown += blurItems(a, p.visible)   // this judge cannot say where its pictures are: stays blurred
+                    }
+                }
+                timing.blurredAtOnce += found.count
+                early = found + unknown
+                publishEarly()
+            }
+        }
+        // Parts this call had no time for: blurred in this plan, and judged in the next call.
+        var leftOver: [CoverItem] = []
+        // The first frame after the display was covered whole is judged within one call's worth in all.
+        let firstFrame = !judged
+        var firstLeft = Register.DETECTOR_CALL_CAP
+        // A fifth of the time is kept for covers judged on their own (step 3b), when there are any.
+        let partsWallMs = held.contains(where: { !shownWhole($0, snapshot, visible) }) ? 0.8 * callWallMs : callWallMs
         for p in parts {
             guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
                   let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
+            let spentMs = PipelineTimings.ms(since: tRun)
+            if spentMs >= partsWallMs {
+                pending += p.changed
+                leftOver += p.changed.compactMap { r in
+                    map.toPixels(r).map { px in
+                        CoverItem(rect: CoordinateSpace.snapOutward(r, pointsPerPixel: map.pointsPerPixel),
+                                  kind: ContainBlur.make(img, px).map { .blur($0) } ?? .plain)
+                    }
+                }
+                timing.leftForLater += 1
+                continue
+            }
             bucket.refill(now: now)
-            // The first judgement after the display was covered whole is not limited by the budget (SD-120).
-            let budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
+            // The first judgement after the display was covered whole is not limited by the budget (SD-120), but by one
+            // call's worth over the whole frame; every call is kept within the time left.
+            var budget = firstFrame ? firstLeft : min(bucket.available, Register.DETECTOR_CALL_CAP)
+            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (partsWallMs - spentMs) / msPerJudgement))))
             let focus = pointer.flatMap { q in map.toPixels(CGRect(x: q.x - 1, y: q.y - 1, width: 2, height: 2)) }
             let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
                                    sliceAnchor: sliceAnchor(p.target, snapshot, map), focus: focus)
@@ -223,7 +351,7 @@ public final class DisplayPipeline {
                     // A cached cover is shown at once if it is not on screen already (a flagged picture seen
                     // before, back in view). Cover first: if judging the new pictures would overrun the goal,
                     // blur them until judged.
-                    let shown = (self.held + lead + fresh).filter { $0.target == p.target }.compactMap { self.globalRect($0, snapshot, visible) }
+                    let shown = (self.held + lead + fresh).filter { $0.target == p.target }.compactMap { self.fullRect($0, snapshot, visible) }
                     var added = coveredByCache.filter { r in
                         let gr = map.toGlobal(r).insetBy(dx: map.pointsPerPixel, dy: map.pointsPerPixel)
                         return !shown.contains { $0.contains(gr) }
@@ -242,17 +370,25 @@ public final class DisplayPipeline {
             }
             tStage = PipelineTimings.now()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: progress)
-            timing.judgeMs += PipelineTimings.ms(since: tStage)
+            let callMs = PipelineTimings.ms(since: tStage)
+            timing.judgeMs += callMs
+            if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
+            if firstFrame { firstLeft = max(0, firstLeft - v.judgements) }
             timing.calls += 1
             timing.judgements += v.judgements
             timing.overloaded += v.overloaded
+            timing.modelFaults += v.modelFaults
             tStage = PipelineTimings.now()
             defer { timing.planMs += PipelineTimings.ms(since: tStage) }
             if judged { bucket.spend(v.judgements) }
+            let wasHot = hot.contains(p.target)
             if v.hot { hot.insert(p.target) } else { hot.remove(p.target) }
+            // A window that has just turned hot is judged again wherever it shows, so pictures judged before it turned
+            // hot are held to the hot rule too.
+            if v.hot && !wasHot { pending += p.visible }
 
             let o = origin(of: p.target, snapshot)
-            countCleanJudgements(p.target, judgedArea: map.toGlobal(area).intersection(visBox), verdict: v, map: map, snapshot, visible)
+            countCleanJudgements(p.target, judgedArea: map.toGlobal(area).intersection(visBox), verdict: v, map: map, img: img, snapshot, visible)
             fresh += covers(from: v, target: p.target, origin: o, img: img, map: map,
                             callArea: map.toGlobal(area), visibleBox: visBox)
 
@@ -269,28 +405,79 @@ public final class DisplayPipeline {
                 overloadSince[p.target] = nil
             }
         }
+        // 3b. A cover whose full rectangle is not all on show as its own window (a window in front of it, or its window
+        //     missing from the list) is judged on its own, over that whole rectangle where it stands on screen: only
+        //     clean judgements of every pixel it hides count towards lifting it.
+        //     They take turns (from where the last frame stopped), within the time left; one already judged flagged on the
+        //     same place is judged again only once something there has changed.
+        let waiting = held.indices.filter { !shownWhole(held[$0], snapshot, visible) }
+        var checked = 0
+        for k in waiting.indices {
+            let i = waiting[(k + recheckTurn) % waiting.count]
+            // At least one takes its turn every frame, however long the rest took, so none waits for ever.
+            let spent = PipelineTimings.ms(since: tRun)
+            guard spent < callWallMs || checked == 0 else { break }
+            guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
+            if held[i].flaggedAt == g, !reported.contains(where: { $0.intersects(g) }), !moved.contains(where: { $0.0 == held[i].target }),
+               now - (held[i].flaggedWhen ?? now) < Register.RECHECK_FLAGGED_EVERY { continue }
+            bucket.refill(now: now)
+            var budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
+            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(Double(Self.recheckFloor), (callWallMs - spent) / msPerJudgement))))
+            let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
+            tStage = PipelineTimings.now()
+            let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: nil)
+            let callMs = PipelineTimings.ms(since: tStage)
+            timing.judgeMs += callMs
+            if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
+            timing.calls += 1; timing.judgements += v.judgements; timing.overloaded += v.overloaded
+            timing.rechecks += 1
+            checked += 1
+            if judged { bucket.spend(v.judgements) }
+            if v.coverWindow || v.regions.contains(where: { $0.display != .clear && $0.reason != .overload }) {
+                held[i].clean = 0
+                if held[i].flaggedAt != g || now - (held[i].flaggedWhen ?? now) >= Register.RECHECK_FLAGGED_EVERY { held[i].flaggedWhen = now }
+                held[i].flaggedAt = g
+            } else if !v.regions.isEmpty && v.overloaded == 0, !OwnCoverColours.shown(in: img, area) {
+                held[i].clean += 1
+                held[i].flaggedAt = nil
+            } else {
+                held[i].flaggedAt = nil
+            }
+        }
+        if !waiting.isEmpty { recheckTurn = (recheckTurn + max(1, checked)) % max(1, waiting.count) }
         judged = true
         tStage = PipelineTimings.now()
         defer { timing.planMs += PipelineTimings.ms(since: tStage) }
 
-        // 4. Lifted regions are gone; add the new covers, merging with any they overlap.
-        held.removeAll { $0.clean >= Register.VIDEO_VOTE }
+        // 4. Lifted regions are gone; add the new covers, merging with any they overlap. A cover whose window has gone
+        //    from the list stays where it stood until that place has been judged clean `VIDEO_VOTE` times, or the window
+        //    has been gone `WINDOW_GONE` and the place has been judged clean `WINDOW_GONE_VOTE` times since it went.
+        held.removeAll { h in
+            h.clean >= Register.VIDEO_VOTE || (h.missingSince.map { now - $0 >= Register.WINDOW_GONE } ?? false && h.clean >= Register.WINDOW_GONE_VOTE)
+        }
         for n in fresh { merge(n) }
-        // A window that closed takes its covers with it; nothing of it is on screen any more.
-        held.removeAll { visible[$0.target] == nil }
+        clipToTargets(snapshot)
+        held.removeAll { fullRect($0, snapshot, visible) == nil }
+        for i in held.indices where held[i].missingSince == nil { held[i].lastGlobal = fullRect(held[i], snapshot, visible) }
         contentOffset = contentOffset.filter { visible[$0.key] != nil }
 
         // 5. Draw.
-        let items = drawItems(snapshot, visible, map, moved: moved, lead: lead)
+        let items = drawItems(snapshot, visible, map, moved: moved, lead: lead) + leftOver
         lastBounds = [:]
         for w in snapshot.windows where w.bounds.intersects(d) { lastBounds[.window(number: w.number, ownerPID: w.ownerPID)] = w.bounds }
         lastPlan = CoverPlan(display: display, items: items)
+        if let level = canvasLevel, snapshot.windows.contains(where: { w in
+            w.layer >= level && w.shows && !ignoredPIDs.contains(w.ownerPID) && items.contains { $0.rect.intersects(w.bounds) }
+        }) {
+            // Drawn only: what is held and judged carries on as before.
+            lastPlan = .covered(display, because: .windowAboveCovers)
+        }
         return lastPlan
     }
 
-    /// Every held region, clipped to where its target is visible; for a window that just moved, its old place
-    /// too, for this update (old and new frames are both covered); and the lead of covers that moved with
-    /// scrolled content.
+    /// Every held region, in full, wherever it stands: a window in front of it never trims it (that window may be see-through,
+    /// and drawing over it only covers more); for a window that just moved, its old place too, for this update (old and
+    /// new frames are both covered); and the lead of covers that moved with scrolled content.
     ///
     /// A whole-window cover leaves the window's control band (`WayOut.controlBand`) uncovered, so the owner
     /// can see how to leave. Every other cover is drawn in full, inside the band too.
@@ -299,16 +486,11 @@ public final class DisplayPipeline {
         let d = display.bounds
         var items: [CoverItem] = []
         for h in held + lead {
-            guard let vis = visible[h.target] else { continue }
-            let o = origin(of: h.target, snapshot)
-            var rects: [CGRect]
+            guard let full = fullRect(h, snapshot, visible) else { continue }
+            var rects = [full]
             let w = h.whole ? snapshot.info(of: h.target) : nil
-            if h.whole {
-                rects = vis
-                if let w, let band = WayOut.controlBand(of: w, display: d) { rects = rects.subtracting(band) }
-            } else {
-                rects = vis.clipped(to: h.rel.offsetBy(dx: o.x, dy: o.y))
-            }
+            if case .surface = h.target, h.whole { rects = visible[h.target] ?? [] }
+            if let w, let band = WayOut.controlBand(of: w, display: d) { rects = rects.subtracting(band) }
             var its = rects.map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: h.kind) }
             // The way-out line goes on the largest visible piece of a whole-window cover.
             if let w, WayOut.carriesLine(w), let i = its.indices.max(by: { its[$0].rect.width * its[$0].rect.height < its[$1].rect.width * its[$1].rect.height }) {
@@ -337,8 +519,12 @@ public final class DisplayPipeline {
     /// is covered as well as its old one. Returns each moved cover stretched along the motion as far as the
     /// content will go before the next plan can be drawn (drawn for this update only). Nothing is lifted here.
     func followMotion(_ prev: RGBAImage, _ img: RGBAImage, parts: [TargetArea], map: CaptureMap, snapshot: WindowSnapshot,
-                      frameInterval: TimeInterval) -> [Held] {
-        var lead: [Held] = [], copies: [Held] = []
+                      frameInterval: TimeInterval, reported: [CGRect]) -> [Held] {
+        // True when all of a pixel rectangle lies in what the frame reported as changed.
+        func inChanged(_ r: PixelRect) -> Bool {
+            reported.reduce([map.toGlobal(r)]) { $0.subtracting($1) }.allSatisfy { $0.width < 0.5 || $0.height < 0.5 }
+        }
+        var lead: [Held] = [], copies: [Held] = [], split: [Held] = []
         let ppx = map.pointsPerPixel
         for p in parts {
             guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
@@ -357,20 +543,33 @@ public final class DisplayPipeline {
             let ahead = frameInterval > 0 ? min(2, (max(runEstimateMs, 250) + 50) / 1000) / frameInterval : 1
             let reach = (dx: step.dx * max(1, CGFloat(ahead)), dy: step.dy * max(1, CGFloat(ahead)))
             for i in held.indices where held[i].target == p.target && !held[i].whole {
-                guard let px = map.toPixels(held[i].rel.offsetBy(dx: o.x, dy: o.y)), px.intersects(area) else { continue }
-                let movedRel = held[i].rel.offsetBy(dx: step.dx, dy: step.dy)
-                let dest = PixelRect(x: px.x + t.dx, y: px.y + t.dy, w: px.w, h: px.h).intersection(area)
-                if let dest, MotionFinder.matches(old: prev, new: img, r: dest, t: t) {
-                    held[i].rel = movedRel
+                let g = held[i].rel.offsetBy(dx: o.x, dy: o.y)
+                guard let px = map.toPixels(g), px.intersects(area) else { continue }
+                // Only the part of a cover inside what the frame reports as changed can have moved; the rest stays put.
+                guard let inside = reported.map({ $0.intersection(g) }).filter(\.hasArea).boundingBox,
+                      let insidePx = map.toPixels(inside) else { continue }
+                let dest = PixelRect(x: insidePx.x + t.dx, y: insidePx.y + t.dy, w: insidePx.w, h: insidePx.h)
+                let movedInside = inside.offsetBy(dx: step.dx - o.x, dy: step.dy - o.y)
+                if insidePx.intersection(area) == insidePx, dest.intersection(area) == dest, inChanged(insidePx), inChanged(dest),
+                   MotionFinder.matches(old: prev, new: img, r: dest, t: t) {
+                    // The part that moved goes with its content; each part that did not stays, as a cover of its own.
+                    for rest in [g].subtracting(inside) where rest.width >= 0.5 && rest.height >= 0.5 {
+                        var c = held[i]; c.rel = rest.offsetBy(dx: -o.x, dy: -o.y); c.clean = 0; split.append(c)
+                    }
+                    held[i].rel = movedInside
                 } else {
-                    var c = held[i]; c.rel = movedRel; copies.append(c)
+                    // The content did not simply move: its new place is covered too (at most one copy per cover per frame,
+                    // merged with what it overlaps, starting with no clean judgements).
+                    var c = held[i]; c.rel = movedInside; c.clean = 0; copies.append(c)
                 }
                 var l = held[i]
-                l.rel = movedRel.union(movedRel.offsetBy(dx: reach.dx, dy: reach.dy))
+                l.rel = movedInside.union(movedInside.offsetBy(dx: reach.dx, dy: reach.dy))
                 lead.append(l)
             }
         }
-        held += copies
+        held += split
+        for c in copies { merge(c) }
+        clipToTargets(snapshot)
         return lead
     }
 
@@ -385,10 +584,37 @@ public final class DisplayPipeline {
         return out
     }
 
-    func globalRect(_ h: Held, _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) -> CGRect? {
-        if h.whole { return visible[h.target]?.boundingBox }
-        let o = origin(of: h.target, snapshot)
-        return h.rel.offsetBy(dx: o.x, dy: o.y)
+    /// True when the target is in the window list and on this display (the display surface always is).
+    func present(_ t: JudgeTarget, _ snapshot: WindowSnapshot) -> Bool {
+        guard case .window = t else { return true }
+        return snapshot.info(of: t).map { $0.shows && $0.bounds.intersects(display.bounds) } ?? false
+    }
+
+    /// The whole of what a held cover hides, in global points, cut to the display: a whole-window cover is the window's
+    /// bounds; a region is its rectangle on its window. Nothing in front of the window trims it. A cover whose window is
+    /// missing from the list stands where it last stood. A whole cover of the display surface is the surface's visible
+    /// part (every window is in front of the desktop by definition).
+    func fullRect(_ h: Held, _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) -> CGRect? {
+        let r: CGRect?
+        if !present(h.target, snapshot) {
+            r = h.lastGlobal
+        } else if case .surface = h.target {
+            r = h.whole ? visible[h.target]?.boundingBox : h.rel.offsetBy(dx: display.bounds.minX, dy: display.bounds.minY)
+        } else if let b = snapshot.bounds(of: h.target) {
+            r = h.whole ? b : h.rel.offsetBy(dx: b.minX, dy: b.minY)
+        } else {
+            r = nil
+        }
+        guard let c = r?.intersection(display.bounds), c.hasArea else { return nil }
+        return c
+    }
+
+    /// True when every point a held cover hides is on show as its own target's, so the target's own judge calls see all
+    /// of it (no window in front of it, and the window is in the list).
+    func shownWhole(_ h: Held, _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) -> Bool {
+        guard present(h.target, snapshot), let g = fullRect(h, snapshot, visible), let vis = visible[h.target] else { return false }
+        if case .surface = h.target, h.whole { return true }
+        return vis.reduce([g]) { $0.subtracting($1) }.allSatisfy { $0.width < 0.5 || $0.height < 0.5 }
     }
 
     /// The contract's duties (SD-133): a region-pass `cover` covers that picture whole; a slice-pass
@@ -398,16 +624,14 @@ public final class DisplayPipeline {
     /// entry left unjudged (`overload`) keeps the detector's class and is judged again.
     ///
     /// The whole pass is over the call's area. When the call spanned the window's visible area, a flagged
-    /// whole pass covers the whole window. When the call covered only changed parts of the window, the
-    /// flag is explained by any region cover in the same call; with none, the judged area is covered.
+    /// whole pass covers the whole window. When the call covered only changed parts of the window, the judged
+    /// area is covered, whatever region covers the same call made: a region cover does not explain the flag away.
     func covers(from v: FrameVerdict, target: JudgeTarget, origin o: CGPoint, img: RGBAImage, map: CaptureMap,
                 callArea: CGRect, visibleBox: CGRect) -> [Held] {
         func rel(_ r: PixelRect) -> CGRect { map.toGlobal(r).offsetBy(dx: -o.x, dy: -o.y) }
         let spansWindow = callArea.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel).contains(visibleBox)
-        let regionCover = v.regions.contains { $0.pass == .region && $0.display == .cover && $0.reason != .overload }
         func wholeOrArea() -> [Held] {
             if spansWindow { return [Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0)] }
-            if regionCover { return [] }
             return [Held(target: target, rel: callArea.offsetBy(dx: -o.x, dy: -o.y), whole: false, kind: .plain, clean: 0)]
         }
         var out: [Held] = []
@@ -443,20 +667,36 @@ public final class DisplayPipeline {
     /// SD-230: a held region counts one clean judgement when a call that includes it returns only
     /// `clear` entries over it. Any `cover` or `contain` over it resets the count. Calls that do not
     /// include the region, and entries left unjudged, do not count.
-    func countCleanJudgements(_ t: JudgeTarget, judgedArea: CGRect, verdict v: FrameVerdict, map: CaptureMap,
+    func countCleanJudgements(_ t: JudgeTarget, judgedArea: CGRect, verdict v: FrameVerdict, map: CaptureMap, img: RGBAImage,
                               _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) {
         let slack = judgedArea.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel)
-        for i in held.indices where held[i].target == t {
-            guard var g = globalRect(held[i], snapshot, visible) else { continue }
-            if let vb = visible[t]?.boundingBox { g = g.intersection(vb) }
-            guard g.hasArea, slack.contains(g) else { continue }
+        // Covers not all on show as this target's are counted by their own judge call (step 3b).
+        for i in held.indices where held[i].target == t && shownWhole(held[i], snapshot, visible) {
+            guard let g = fullRect(held[i], snapshot, visible), slack.contains(g) else { continue }
             if v.coverWindow { held[i].clean = 0; continue }
             let over = v.regions.filter { map.toGlobal($0.rect).intersects(g) }
             if over.contains(where: { $0.display != .clear && $0.reason != .overload }) {
                 held[i].clean = 0
-            } else if !over.isEmpty && !over.contains(where: { $0.reason == .overload }) {
+            } else if !over.isEmpty && !over.contains(where: { $0.reason == .overload }),
+                      !(map.toPixels(g).map { OwnCoverColours.shown(in: img, $0) } ?? true) {
                 held[i].clean += 1
             }
+        }
+    }
+
+    /// Cuts every region cover to its window's bounds (or the display, for the display surface), so merging and moving
+    /// with content never grow one past where its window can show anything. One left with nothing is dropped: no part of
+    /// its window is there.
+    func clipToTargets(_ snapshot: WindowSnapshot) {
+        for i in held.indices.reversed() where !held[i].whole && present(held[i].target, snapshot) {
+            let frame: CGRect
+            if let b = snapshot.bounds(of: held[i].target) {
+                frame = CGRect(origin: .zero, size: b.size).intersection(display.bounds.offsetBy(dx: -b.minX, dy: -b.minY))
+            } else {
+                frame = CGRect(origin: .zero, size: display.bounds.size)
+            }
+            let r = held[i].rel.intersection(frame)
+            if r.hasArea { held[i].rel = r } else { held.remove(at: i) }
         }
     }
 
