@@ -29,6 +29,9 @@ pub const TYPE_WAIT_RECORD: u16 = 4;
 pub const TYPE_CLOCK_RECORD: u16 = 5;
 pub const TYPE_ROUND_RECORD: u16 = 6;
 pub const TYPE_INSTANT_LEAVE_MARKER: u16 = 19;
+// OPEN: register 8a has no row for the journal's header (store: compaction). Working value
+// 0x0101, outside the rows of 8a.
+pub const TYPE_JOURNAL_HEADER: u16 = 0x0101;
 
 /// The first format version of every record here.
 pub const VERSION_1: u16 = 1;
@@ -158,11 +161,15 @@ impl RequestState {
 /// Fields, in order: request ID (16); kind (1); state (1); wait in rounds at request (8);
 /// boot-counter value at request, in milliseconds (8); start round or none (9); target
 /// round or none (9); matured round or none (9); claim deadline or none (9); approval
-/// used (1).
+/// used (1); challenge nonce (32).
 // OPEN: register 8a (request journal entry) - the entry has no field for the wait a
 // lowering asks for, for the setting a loosening names, or for whether an accepted
 // approval is still waiting for its new start round. A journal of these entries alone
-// cannot be replayed for those cases. No field is added here; replay is not written.
+// cannot be replayed for those cases. No field is added for them; replay is not written.
+// OPEN: register 8a (request journal entry) - chapter 03 section 8 keeps the keeper's 32
+// random bytes for the keyholder challenge "with the request", and SD-306 builds the
+// challenge from them; 8a lists no such field. It is added here as the last field, so that
+// the challenge, and with it "an approval is used once", survives a restart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JournalEntry {
     pub request_id: [u8; 16],
@@ -175,10 +182,12 @@ pub struct JournalEntry {
     pub matured_round: Option<u64>,
     pub claim_deadline: Option<u64>,
     pub approval_used: bool,
+    /// The keeper's random bytes for this request's keyholder challenge (SD-306).
+    pub challenge_nonce: [u8; 32],
 }
 
 impl JournalEntry {
-    pub const LEN: usize = FRAME_OVERHEAD + 16 + 1 + 1 + 8 + 8 + 9 + 9 + 9 + 9 + 1;
+    pub const LEN: usize = FRAME_OVERHEAD + 16 + 1 + 1 + 8 + 8 + 9 + 9 + 9 + 9 + 1 + 32;
 
     fn validate(&self) -> Result<(), RecordError> {
         if self.wait_rounds == 0 || self.wait_rounds > EXIT_WAIT_MAX_ROUNDS {
@@ -235,6 +244,7 @@ impl JournalEntry {
         w.put_opt_u64(self.matured_round);
         w.put_opt_u64(self.claim_deadline);
         w.put_flag(self.approval_used);
+        w.put_bytes(&self.challenge_nonce);
         w.finish()
     }
 
@@ -251,6 +261,8 @@ impl JournalEntry {
         let matured_round = r.read_opt_u64()?;
         let claim_deadline = r.read_opt_u64()?;
         let approval_used = r.read_flag()?;
+        let mut challenge_nonce = [0u8; 32];
+        challenge_nonce.copy_from_slice(r.take(32)?);
         r.close()?;
         let entry = JournalEntry {
             request_id,
@@ -263,9 +275,52 @@ impl JournalEntry {
             matured_round,
             claim_deadline,
             approval_used,
+            challenge_nonce,
         };
         entry.validate()?;
         Ok(entry)
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Journal header
+// ---------------------------------------------------------------------------------------
+
+/// The first slot of each copy of a request journal (store: compaction). The epoch says
+/// which of the two pairs of journal files is current: the pair with the higher epoch.
+/// One pair only ever holds even epochs and the other odd ones, so two pairs never tie.
+// OPEN: SD-225 / C02-18 - what happens when the journal is full is not specified. This
+// record exists for the compaction the store builds. Not in register 8a.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JournalHeader {
+    pub epoch: u64,
+}
+
+impl JournalHeader {
+    pub const LEN: usize = FRAME_OVERHEAD + 8;
+
+    fn validate(&self) -> Result<(), RecordError> {
+        // Epoch 0 is the empty header of a journal that was never compacted: never written.
+        if self.epoch == 0 {
+            return Err(RecordError::InvalidField);
+        }
+        Ok(())
+    }
+
+    pub fn encode(&self) -> Result<Vec<u8>, RecordError> {
+        self.validate()?;
+        let mut w = Writer::begin(TYPE_JOURNAL_HEADER, VERSION_1, Self::LEN);
+        w.put_u64(self.epoch);
+        w.finish()
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<JournalHeader, RecordError> {
+        let mut r = Reader::open(bytes, TYPE_JOURNAL_HEADER, VERSION_1, Self::LEN)?;
+        let epoch = r.read_u64()?;
+        r.close()?;
+        let header = JournalHeader { epoch };
+        header.validate()?;
+        Ok(header)
     }
 }
 
@@ -866,6 +921,7 @@ mod tests {
             matured_round: Some(1_201_610),
             claim_deadline: Some(1_403_210),
             approval_used: false,
+            challenge_nonce: [0x3C; 32],
         }
     }
 
@@ -881,12 +937,13 @@ mod tests {
             matured_round: None,
             claim_deadline: None,
             approval_used: false,
+            challenge_nonce: [0; 32],
         }
     }
 
     #[test]
     fn journal_entry_round_trips_for_every_kind_and_state() {
-        assert_eq!(JournalEntry::LEN, 87);
+        assert_eq!(JournalEntry::LEN, 119);
         let kinds = [
             RequestKind::Exit,
             RequestKind::LowerWait,
@@ -1030,6 +1087,35 @@ mod tests {
         b[82] = 2;
         reseal(&mut b);
         assert_eq!(JournalEntry::decode(&b), Err(RecordError::InvalidField));
+        // The challenge nonce, 83..115, is any 32 bytes and is kept exactly.
+        let mut b = good.clone();
+        b[83] = 0xEE;
+        b[114] = 0x01;
+        reseal(&mut b);
+        let back = JournalEntry::decode(&b).unwrap();
+        assert_eq!(back.challenge_nonce[0], 0xEE);
+        assert_eq!(back.challenge_nonce[31], 0x01);
+        assert_eq!(back.encode().unwrap(), b);
+    }
+
+    // ----- Journal header -----
+
+    #[test]
+    fn journal_header_round_trips_matches_its_vector_and_is_strict() {
+        assert_eq!(JournalHeader::LEN, 24);
+        let header = JournalHeader { epoch: 3 };
+        let bytes = header.encode().unwrap();
+        assert_eq!(bytes, unhex(JOURNAL_HEADER_VECTOR));
+        assert_eq!(JournalHeader::decode(&bytes), Ok(header));
+        assert_strict(&bytes, &|b: &[u8]| JournalHeader::decode(b).err());
+        assert_eq!(JournalHeader { epoch: 0 }.encode(), Err(RecordError::InvalidField));
+        let mut zero = bytes.clone();
+        zero[12] = 0;
+        reseal(&mut zero);
+        assert_eq!(JournalHeader::decode(&zero), Err(RecordError::InvalidField));
+        // A journal entry is not a header, and a header is not an entry.
+        assert_eq!(JournalHeader::decode(&sample_entry().encode().unwrap()[..24]), Err(RecordError::WrongType));
+        assert!(JournalEntry::decode(&bytes).is_err());
     }
 
     // ----- Wait record -----
@@ -1427,5 +1513,6 @@ mod tests {
     }
 
     const ROUND_RECORD_VECTOR: &str = "53534d4b060001006800000052db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e97140420f0000000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f2e346e26";
-    const JOURNAL_ENTRY_VECTOR: &str = "53534d4b0300010057000000a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a50102801303000000000015cd5b0700000000014a420f000000000001ca5512000000000001ca55120000000000014a6915000000000000a20ca3e7";
+    const JOURNAL_ENTRY_VECTOR: &str = "53534d4b0300010077000000a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a50102801303000000000015cd5b0700000000014a420f000000000001ca5512000000000001ca55120000000000014a69150000000000003c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3cd02dffd9";
+    const JOURNAL_HEADER_VECTOR: &str = "53534d4b010101001800000003000000000000007475b327";
 }

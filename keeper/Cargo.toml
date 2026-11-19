@@ -24,6 +24,13 @@ hmac = "=0.12.1"
 x25519-dalek = "=2.0.1"
 # Wiping keys and the admin secret from memory.
 zeroize = "=1.8.1"
+# The keyholder's approval: ES256 (ECDSA on P-256 with SHA-256), verification only. The
+# RustCrypto crate of the same family as `sha2`, `hmac` and `hkdf` above; added with the
+# approval check (SD-196, SD-306). Needs a second reader.
+p256 = { version = "=0.13.2", default-features = false, features = ["ecdsa"] }
+# The `O_NOFOLLOW` and `O_NONBLOCK` flags the store opens its files with. Already in the
+# tree (through `cpufeatures`); constants only, no call.
+libc = { version = "=0.2.191", default-features = false }
 
 [features]
 # The opener's core (SD-066): opening a capsule. Never in the keeper, which only seals.

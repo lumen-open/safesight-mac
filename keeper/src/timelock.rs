@@ -124,28 +124,41 @@ fn xor_into(out: &mut [u8], a: &[u8; KEY_LEN], b: &[u8; KEY_LEN]) {
 
 /// Locks `key` to `round` of the pinned chain, with `sigma` the 16 random bytes of the
 /// scheme. None if the round is 0 or a curve step refuses.
+///
+/// Anyone who learns r, rQ, the pairing value or either mask can open the lock without
+/// the round's signature, so each is wiped as soon as it is used. The curve types are
+/// `Copy`, so a copy the arithmetic made on the stack may outlive this; the wipe is of
+/// every value this function holds.
 pub fn lock(round: u64, key: &[u8; KEY_LEN], sigma: &[u8; KEY_LEN]) -> Option<[u8; BODY_LEN]> {
     if round == 0 {
         return None;
     }
     let public_key = pinned_public_key()?;
     let identity = hash_to_g1(&round_message(round))?;
-    let r = h3(sigma, key)?;
+    let mut r = h3(sigma, key)?;
     let u = (G2Projective::generator() * r).into_affine();
-    let r_identity = (G1Projective::from(identity) * r).into_affine();
+    let mut r_identity = (G1Projective::from(identity) * r).into_affine();
+    r.zeroize();
     // e(Q, P)^r, computed as e(rQ, P).
-    let shared = Bls12_381::pairing(r_identity, public_key);
-    let mask = h2(&shared)?;
-    let key_mask = h4(sigma);
+    let mut shared = Bls12_381::pairing(r_identity, public_key);
+    r_identity.zeroize();
+    let mask = h2(&shared);
+    shared.zeroize();
+    let mut mask = mask?;
+    let mut key_mask = h4(sigma);
 
     let mut u_bytes: Vec<u8> = Vec::with_capacity(96);
     if u.serialize_compressed(&mut u_bytes).is_err() || u_bytes.len() != 96 {
+        mask.zeroize();
+        key_mask.zeroize();
         return None;
     }
     let mut body = [0u8; BODY_LEN];
     body[..96].copy_from_slice(&u_bytes);
     xor_into(&mut body[96..96 + KEY_LEN], sigma, &mask);
     xor_into(&mut body[96 + KEY_LEN..], key, &key_mask);
+    mask.zeroize();
+    key_mask.zeroize();
     Some(body)
 }
 
@@ -161,8 +174,10 @@ pub fn unlock(signature: &[u8; 48], body: &[u8; BODY_LEN]) -> Option<[u8; KEY_LE
     if u.is_zero() {
         return None;
     }
-    let shared = Bls12_381::pairing(private_key, u);
-    let mask = h2(&shared)?;
+    let mut shared = Bls12_381::pairing(private_key, u);
+    let mask = h2(&shared);
+    shared.zeroize();
+    let mut mask = mask?;
     let mut v = [0u8; KEY_LEN];
     v.copy_from_slice(&body[96..96 + KEY_LEN]);
     let mut w = [0u8; KEY_LEN];
@@ -170,9 +185,11 @@ pub fn unlock(signature: &[u8; 48], body: &[u8; BODY_LEN]) -> Option<[u8; KEY_LE
 
     let mut sigma = [0u8; KEY_LEN];
     xor_into(&mut sigma, &v, &mask);
-    let key_mask = h4(&sigma);
+    mask.zeroize();
+    let mut key_mask = h4(&sigma);
     let mut key = [0u8; KEY_LEN];
     xor_into(&mut key, &w, &key_mask);
+    key_mask.zeroize();
 
     let r = match h3(&sigma, &key) {
         Some(r) => r,
@@ -258,6 +275,23 @@ mod tests {
         sig_flipped[47] ^= 0x01;
         assert_eq!(unlock(&sig_flipped, &good), None);
         assert_eq!(unlock(&[0u8; 48], &good), None);
+    }
+
+    // A build check, in the style of the capsule's: `lock` wipes r, rQ, the pairing value
+    // and both masks. Each one opens the lock without the round's signature.
+    #[test]
+    fn lock_wipes_every_value_that_would_open_it() {
+        let source = include_str!("timelock.rs");
+        let start = source.find("pub fn lock(").unwrap();
+        let end = source.find("pub fn unlock(").unwrap();
+        let body = &source[start..end];
+        for wipe in ["r.zeroize();", "r_identity.zeroize();", "shared.zeroize();", "mask.zeroize();", "key_mask.zeroize();"].iter() {
+            assert!(body.contains(wipe), "lock does not call {}", wipe);
+        }
+        // Every early return after the masks exist wipes them first.
+        let after_masks = &body[body.find("let mut key_mask").unwrap()..];
+        assert_eq!(after_masks.matches("return None;").count(), 1);
+        assert_eq!(after_masks.matches("key_mask.zeroize();").count(), 2);
     }
 
     #[test]

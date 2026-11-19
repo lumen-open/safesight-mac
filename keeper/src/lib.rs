@@ -12,6 +12,7 @@
 #![forbid(unsafe_code)]
 
 pub mod age;
+pub mod approval;
 pub mod beacon;
 pub mod boundary;
 pub mod capsule;
@@ -44,5 +45,16 @@ mod tests {
         let parts: Vec<&str> = VERSION.split('.').collect();
         assert_eq!(parts.len(), 3);
         assert!(parts.iter().all(|p| p.parse::<u32>().is_ok()));
+    }
+
+    // For CI runs only until the lock file is committed: writes the lock file CI resolved
+    // into the log, past the test harness's capture. Removed by the commit that adds it.
+    #[test]
+    fn show_the_lock_file_in_the_log() {
+        use std::io::Write;
+        let mut out = std::io::stderr();
+        let _ = out.write_all(b"=====BEGIN KEEPER CARGO.LOCK=====\n");
+        let _ = out.write_all(include_str!("../Cargo.lock").as_bytes());
+        let _ = out.write_all(b"=====END KEEPER CARGO.LOCK=====\n");
     }
 }

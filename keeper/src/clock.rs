@@ -3,10 +3,19 @@
 //! rule and tighten-time (SD-037 to SD-041; chapter 03 sections 2 and 3).
 //!
 //! This is the only module that reads the Mac's wall clock (invariant I3). It uses it in
-//! two places and nowhere else: rule (b) of SD-039, where the wall clock may refuse a
-//! round as a start round, and `tighten_round`, for acts that only tighten (SD-041).
+//! three ways and no others: rule (b) of SD-039, where the wall clock may refuse a round
+//! as a start round; `tighten_round`, for acts that only tighten (SD-041), including a
+//! capsule's target, which it can only move later; and `date_untrusted`, which refuses.
 //! The wall clock never matures a request, never shortens anything and is never a tamper
 //! signal.
+//!
+//! A date before the chain began, or behind the keeper's own estimate (which is verified
+//! rounds plus the boot counter, and so never ahead of real time), is wrong for certain.
+//! Such a date cannot vouch for a round's freshness, so rule (b) fails while it lasts
+//! ("clock refusing rounds"), and acts that need the date to say a deadline has not
+//! passed are refused. The counter route never reads the date, so a date that stays wrong
+//! never keeps a request from maturing, and a right date, or the next round once the date
+//! is right, ends the state.
 //!
 //! `TimeSource` hands this module the carried totals; the carry across restarts and the
 //! detection of a new boot are in `counters`, and the clock record's two slots on disk
@@ -17,8 +26,8 @@ use crate::boundary::{RoundVerifier, TimeSource};
 use crate::counters::CounterState;
 use crate::records::ClockRecord;
 use crate::constants::{
-    ANCHOR_CLOCK_TOLERANCE_ROUNDS, BEACON_CHAIN_HASH, BEACON_GENESIS_UNIX_SECONDS, BEACON_PERIOD_SECONDS,
-    MS_PER_ROUND,
+    rotation_interval_rounds, wait_rounds, ANCHOR_CLOCK_TOLERANCE_ROUNDS, BAD_ROUND_BUDGET, BAD_ROUND_WINDOW_MS,
+    BEACON_CHAIN_HASH, BEACON_GENESIS_UNIX_SECONDS, BEACON_PERIOD_SECONDS, CAPSULE_FRESH_MAX_MS, MS_PER_ROUND,
 };
 use crate::frame::RecordError;
 use crate::records::RoundRecord;
@@ -44,6 +53,9 @@ pub enum DropReason {
     BelowHighWater,
     /// The signature does not verify (step 4).
     BadSignature,
+    /// Too many rounds whose signature failed in the last `BAD_ROUND_WINDOW` of boot-counter
+    /// time: this one was not checked. A good round is taken again once the window ends.
+    TooManyBadRounds,
 }
 
 /// A round the keeper verified and applied.
@@ -79,6 +91,13 @@ pub struct Clock {
     /// "Clock refusing rounds": the last round that could have been a start round was
     /// refused by rule (b). A fault with a fix, nothing more.
     clock_refuses_rounds: bool,
+    /// True if the high-water round passed rule (b) of SD-039 when it was verified: one of
+    /// the two tests of a fresh round for a capsule (SD-059).
+    high_water_passed_date_rule: bool,
+    /// Signature failures counted in the present window, and the boot-counter value the
+    /// window began at. Not saved: a restart begins a new window.
+    bad_rounds_in_window: u32,
+    bad_window_start_boot_ms: u64,
 }
 
 fn check_round(bytes: &[u8], verifier: &dyn RoundVerifier) -> Result<RoundRecord, DropReason> {
@@ -106,6 +125,9 @@ impl Clock {
     ) -> Result<Clock, DropReason> {
         let record = check_round(round_record, verifier)?;
         let boot_now = time.boot_total_ms();
+        let wall = wall_clock_round(time.wall_clock_unix_seconds());
+        let passed_date_rule = !Clock::date_is_wrong(wall, record.round)
+            && record.round.saturating_add(ANCHOR_CLOCK_TOLERANCE_ROUNDS) >= wall;
         Ok(Clock {
             high_water_round: record.round,
             high_water_signature: record.signature,
@@ -115,6 +137,9 @@ impl Clock {
             last_boot_ms: boot_now,
             last_awake_ms: time.awake_total_ms(),
             clock_refuses_rounds: false,
+            high_water_passed_date_rule: passed_date_rule,
+            bad_rounds_in_window: 0,
+            bad_window_start_boot_ms: boot_now,
         })
     }
 
@@ -135,6 +160,9 @@ impl Clock {
             last_boot_ms: record.boot_total_ms,
             last_awake_ms: record.awake_total_ms,
             clock_refuses_rounds: false,
+            high_water_passed_date_rule: false,
+            bad_rounds_in_window: 0,
+            bad_window_start_boot_ms: record.boot_total_ms,
         })
     }
 
@@ -223,6 +251,50 @@ impl Clock {
         }
     }
 
+    fn date_is_wrong(wall: u64, estimate: u64) -> bool {
+        wall == 0 || wall.saturating_add(ANCHOR_CLOCK_TOLERANCE_ROUNDS) < estimate
+    }
+
+    /// True while the Mac's date is wrong for certain: before the chain began, or more
+    /// than `ANCHOR_CLOCK_TOLERANCE` behind the keeper's estimate (which never runs ahead
+    /// of real time). Such a date cannot say that a deadline has not passed, nor that a
+    /// round is fresh. It can only refuse.
+    pub fn date_untrusted(&mut self, time: &dyn TimeSource) -> bool {
+        let estimate = self.estimate(time);
+        Clock::date_is_wrong(wall_clock_round(time.wall_clock_unix_seconds()), estimate)
+    }
+
+    /// SD-059: the high-water round may seal a capsule. It was verified within
+    /// `CAPSULE_FRESH_MAX` of boot-counter time, it passed rule (b) of SD-039 then, and the
+    /// date is not wrong for certain now.
+    // OPEN: SD-059 - the boot counter does not count time powered off, so "within
+    // CAPSULE_FRESH_MAX of boot-counter time" can span a power-off of any length. The
+    // target is computed from tighten-time (`capsule_schedule`), so a right date covers
+    // it; with a date that is wrong and not caught, it is covered only if the rotation also
+    // asks that the round was verified in this boot (the clock record carries the boot
+    // identifier). The rotation is not written.
+    pub fn capsule_round_is_fresh(&mut self, time: &dyn TimeSource) -> bool {
+        let boot_now = self.boot_now_ms(time);
+        let recent = boot_now.saturating_sub(self.high_water_boot_ms) <= CAPSULE_FRESH_MAX_MS;
+        recent && self.high_water_passed_date_rule && !self.date_untrusted(time)
+    }
+
+    /// A new generation's schedule, sealed now for `applied_wait_days` (SD-057, SD-058):
+    /// its scheduled end, one `ROTATION_INTERVAL` from now, and its capsules' target, the
+    /// scheduled end plus the applied wait. "Now" is tighten-time, the later of the
+    /// estimate and the date, so that a lagging estimate can never give a target already
+    /// in the past and a wrong date can only move the target later. None unless the round
+    /// is fresh: then no capsule is made (SD-059).
+    pub fn capsule_schedule(&mut self, time: &dyn TimeSource, applied_wait_days: u16) -> Option<(u64, u64)> {
+        if !self.capsule_round_is_fresh(time) {
+            return None;
+        }
+        let now = self.tighten_round(time);
+        let scheduled_end = now.saturating_add(rotation_interval_rounds(applied_wait_days));
+        let target = scheduled_end.saturating_add(wait_rounds(applied_wait_days));
+        Some((scheduled_end, target))
+    }
+
     /// The keeper's check of a round, in the order of chapter 03 section 2:
     /// (1) layout, length and checksum; (2) the pinned chain; (3) not below the
     /// high-water round; (4) the signature; (5) the new high-water round; (6) the
@@ -244,16 +316,35 @@ impl Clock {
         if record.round < self.high_water_round {
             return RoundOutcome::Dropped(DropReason::BelowHighWater);
         }
-        if !verifier.verify_round(record.round, &record.signature) {
-            return RoundOutcome::Dropped(DropReason::BadSignature);
+        let boot_now = self.boot_now_ms(time);
+        if record.round == self.high_water_round {
+            // The chain has one signature per round, and the high-water one is held. Any
+            // other is false, and the same one is already verified: no pairing either way.
+            if record.signature != self.high_water_signature {
+                return RoundOutcome::Dropped(DropReason::BadSignature);
+            }
+        } else {
+            // The pairing check is the costly step. A flood of false rounds is held to
+            // `BAD_ROUND_BUDGET` checks per window; the rest are dropped unchecked.
+            if boot_now.saturating_sub(self.bad_window_start_boot_ms) >= BAD_ROUND_WINDOW_MS {
+                self.bad_window_start_boot_ms = boot_now;
+                self.bad_rounds_in_window = 0;
+            }
+            if self.bad_rounds_in_window >= BAD_ROUND_BUDGET {
+                return RoundOutcome::Dropped(DropReason::TooManyBadRounds);
+            }
+            if !verifier.verify_round(record.round, &record.signature) {
+                self.bad_rounds_in_window += 1;
+                return RoundOutcome::Dropped(DropReason::BadSignature);
+            }
         }
 
-        let boot_now = self.boot_now_ms(time);
         let estimate_before = self.estimate_at(boot_now);
 
         // A round equal to the high-water round proves nothing new. It does not refresh
         // the moment the high-water round was verified.
-        if record.round > self.high_water_round {
+        let new_high = record.round > self.high_water_round;
+        if new_high {
             self.high_water_round = record.round;
             self.high_water_signature = record.signature;
             self.high_water_boot_ms = boot_now;
@@ -264,13 +355,23 @@ impl Clock {
         }
 
         // SD-039. Rule (a): not below the estimate at that moment. Rule (b): not more
-        // than the tolerance behind the round implied by the wall clock. Rule (b) can
-        // only refuse.
+        // than the tolerance behind the round implied by the wall clock, and the wall
+        // clock not wrong for certain: before the chain began, or behind the estimate as
+        // it stands with this round (a round verified now proves the present is at least
+        // that round). Rule (b) can only refuse.
         let rule_a = record.round >= estimate_before;
         let wall = wall_clock_round(time.wall_clock_unix_seconds());
-        let rule_b = record.round.saturating_add(ANCHOR_CLOCK_TOLERANCE_ROUNDS) >= wall;
+        let estimate_now = self.estimate_at(boot_now);
+        let rule_b = !Clock::date_is_wrong(wall, estimate_now)
+            && record.round.saturating_add(ANCHOR_CLOCK_TOLERANCE_ROUNDS) >= wall;
         if rule_a {
             self.clock_refuses_rounds = !rule_b;
+        }
+        if new_high {
+            self.high_water_passed_date_rule = rule_b;
+        } else if rule_b {
+            // The same round again, now under a date that is right.
+            self.high_water_passed_date_rule = true;
         }
 
         RoundOutcome::Accepted(AcceptedRound { round: record.round, estimate_before, may_start: rule_a && rule_b })
@@ -378,8 +479,179 @@ mod tests {
             clock.offer_round(&forged.encode().unwrap(), &FakeBeacon, &time),
             RoundOutcome::Dropped(DropReason::BadSignature)
         );
+        // The high-water round with any other signature: false, and refused unchecked.
+        let other = RoundRecord { chain_hash: BEACON_CHAIN_HASH, round: R0, signature: FakeBeacon::signature(R0 + 1) };
+        assert_eq!(
+            clock.offer_round(&other.encode().unwrap(), &FakeBeacon, &time),
+            RoundOutcome::Dropped(DropReason::BadSignature)
+        );
 
-        assert_eq!(clock, before);
+        // Nothing changed but the count of failed checks, which only refuses.
+        assert_eq!(clock.bad_rounds_in_window, 1);
+        let mut after = clock.clone();
+        after.bad_rounds_in_window = before.bad_rounds_in_window;
+        assert_eq!(after, before);
+    }
+
+    /// A beacon check that counts how often it is asked.
+    struct CountingBeacon {
+        calls: std::cell::Cell<u32>,
+    }
+
+    impl RoundVerifier for CountingBeacon {
+        fn verify_round(&self, round: u64, signature: &[u8; 48]) -> bool {
+            self.calls.set(self.calls.get() + 1);
+            FakeBeacon.verify_round(round, signature)
+        }
+    }
+
+    fn forged(round: u64) -> Vec<u8> {
+        RoundRecord { chain_hash: BEACON_CHAIN_HASH, round, signature: [0x11; 48] }.encode().unwrap()
+    }
+
+    #[test]
+    fn a_flood_of_false_rounds_costs_at_most_the_budget_of_checks() {
+        let mut time = FakeTime::at_round(R0);
+        let mut clock = clock_at(&time);
+        let counting = CountingBeacon { calls: std::cell::Cell::new(0) };
+        let mut i = 0;
+        while i < 1_000 {
+            let outcome = clock.offer_round(&forged(R0 + 1 + i), &counting, &time);
+            if i < BAD_ROUND_BUDGET as u64 {
+                assert_eq!(outcome, RoundOutcome::Dropped(DropReason::BadSignature));
+            } else {
+                assert_eq!(outcome, RoundOutcome::Dropped(DropReason::TooManyBadRounds));
+            }
+            i += 1;
+        }
+        assert_eq!(counting.calls.get(), BAD_ROUND_BUDGET);
+        // Inside the window a good round waits too: it changes nothing and is never
+        // counted against anyone.
+        time.pass_awake_ms(3_000);
+        let good = FakeBeacon::record_bytes(time.true_round());
+        assert_eq!(clock.offer_round(&good, &counting, &time), RoundOutcome::Dropped(DropReason::TooManyBadRounds));
+        assert_eq!(clock.high_water_round(), R0);
+        // The high-water round again costs no check, good or false.
+        assert!(matches!(clock.offer_round(&FakeBeacon::record_bytes(R0), &counting, &time), RoundOutcome::Accepted(_)));
+        assert_eq!(counting.calls.get(), BAD_ROUND_BUDGET);
+        // Once the window has passed on the boot counter, rounds are checked again.
+        time.pass_asleep_ms(BAD_ROUND_WINDOW_MS);
+        let good = FakeBeacon::record_bytes(time.true_round());
+        assert!(matches!(clock.offer_round(&good, &counting, &time), RoundOutcome::Accepted(_)));
+        assert_eq!(clock.high_water_round(), time.true_round());
+        // Good rounds never use up the budget.
+        let mut j = 0;
+        while j < 3 * BAD_ROUND_BUDGET {
+            time.pass_awake_ms(3_000);
+            let good = FakeBeacon::record_bytes(time.true_round());
+            assert!(matches!(clock.offer_round(&good, &counting, &time), RoundOutcome::Accepted(_)));
+            j += 1;
+        }
+    }
+
+    #[test]
+    fn a_date_wrong_for_certain_refuses_every_start_round_until_it_is_right() {
+        // Powered off for 30 days. The estimate stays at R0; real rounds from the month
+        // before now are still above it.
+        let cases: [u64; 3] = [0, 1, 2];
+        for case in cases.iter() {
+            let mut time = FakeTime::at_round(R0);
+            let mut clock = clock_at(&time);
+            time.pass_powered_off_ms(30 * 86_400_000);
+            time.wall_unix_ms = match *case {
+                // Before the chain began, as after a reset to the clock's first day.
+                0 => 0,
+                1 => (BEACON_GENESIS_UNIX_SECONDS - 1) * 1_000,
+                // Behind the estimate by more than the tolerance.
+                _ => (BEACON_GENESIS_UNIX_SECONDS + BEACON_PERIOD_SECONDS * (R0 - 1 - 201)) * 1_000,
+            };
+            assert!(clock.date_untrusted(&time));
+            let archived = accepted(clock.offer_round(&FakeBeacon::record_bytes(R0 + 7), &FakeBeacon, &time));
+            assert!(!archived.may_start);
+            assert!(clock.clock_refuses_rounds());
+            // Every newer round too, today's included, while the date stays wrong.
+            let today = accepted(clock.offer_round(&FakeBeacon::record_bytes(time.true_round()), &FakeBeacon, &time));
+            assert!(!today.may_start);
+            assert!(clock.clock_refuses_rounds());
+            // They still raise the high-water round and the estimate, which only lag.
+            assert_eq!(clock.high_water_round(), time.true_round());
+            // The date put right: the next round may start, and the state ends.
+            time.wall_unix_ms = time.true_unix_ms;
+            assert!(!clock.date_untrusted(&time));
+            time.pass_awake_ms(3_000);
+            let next = accepted(clock.offer_round(&FakeBeacon::record_bytes(time.true_round()), &FakeBeacon, &time));
+            assert!(next.may_start);
+            assert!(!clock.clock_refuses_rounds());
+        }
+
+        // A right date is never untrusted, whatever the Mac did; nor a date a few seconds
+        // slow, within the tolerance.
+        let mut time = FakeTime::at_round(R0);
+        let mut clock = clock_at(&time);
+        assert!(!clock.date_untrusted(&time));
+        time.pass_powered_off_ms(10 * 86_400_000);
+        time.pass_asleep_ms(86_400_000);
+        let _ = clock.offer_round(&FakeBeacon::record_bytes(time.true_round()), &FakeBeacon, &time);
+        assert!(!clock.date_untrusted(&time));
+        time.wall_unix_ms -= 9 * 60 * 1_000;
+        assert!(!clock.date_untrusted(&time));
+        time.pass_awake_ms(3_000);
+        assert!(accepted(clock.offer_round(&FakeBeacon::record_bytes(time.true_round()), &FakeBeacon, &time)).may_start);
+        time.wall_unix_ms -= 2 * 60 * 1_000;
+        assert!(clock.date_untrusted(&time));
+    }
+
+    #[test]
+    fn a_capsule_is_scheduled_only_on_a_fresh_round_and_from_tighten_time() {
+        use crate::constants::{rotation_interval_rounds, wait_rounds, CAPSULE_FRESH_MAX_MS};
+        let mut time = FakeTime::at_round(R0);
+        let mut clock = clock_at(&time);
+        // The Lock round, under a right date, is fresh.
+        assert!(clock.capsule_round_is_fresh(&time));
+        let (end, target) = clock.capsule_schedule(&time, 30).unwrap();
+        assert_eq!(end, R0 + rotation_interval_rounds(30));
+        assert_eq!(target, end + wait_rounds(30));
+        // Fresh for CAPSULE_FRESH_MAX of boot-counter time, and no longer.
+        time.pass_asleep_ms(CAPSULE_FRESH_MAX_MS);
+        assert!(clock.capsule_round_is_fresh(&time));
+        time.pass_asleep_ms(1);
+        assert!(!clock.capsule_round_is_fresh(&time));
+        assert_eq!(clock.capsule_schedule(&time, 30), None);
+
+        // A round refused by rule (b) when it came is not fresh, even under a right date
+        // later.
+        let mut time = FakeTime::at_round(R0);
+        let mut clock = clock_at(&time);
+        time.pass_powered_off_ms(3_600_000);
+        let _ = clock.offer_round(&FakeBeacon::record_bytes(R0 + 1), &FakeBeacon, &time);
+        assert!(!clock.capsule_round_is_fresh(&time));
+        // Today's round is.
+        let _ = clock.offer_round(&FakeBeacon::record_bytes(time.true_round()), &FakeBeacon, &time);
+        assert!(clock.capsule_round_is_fresh(&time));
+        // A date wrong for certain makes nothing fresh.
+        let right = time.wall_unix_ms;
+        time.wall_unix_ms = 0;
+        assert!(!clock.capsule_round_is_fresh(&time));
+        time.wall_unix_ms = right;
+
+        // The target is counted from the later of the estimate and the date: a date set
+        // ahead moves it later, and nothing moves it earlier than the estimate.
+        let mut time = FakeTime::at_round(R0);
+        let mut clock = clock_at(&time);
+        let (_, at_estimate) = clock.capsule_schedule(&time, 7).unwrap();
+        time.wall_unix_ms += 2 * 86_400_000;
+        let (_, ahead) = clock.capsule_schedule(&time, 7).unwrap();
+        assert_eq!(ahead, at_estimate + 2 * 28_800);
+        time.wall_unix_ms = time.true_unix_ms - 5 * 60 * 1_000;
+        let (_, behind) = clock.capsule_schedule(&time, 7).unwrap();
+        assert_eq!(behind, at_estimate);
+        // After time powered off with a right date, the target follows the date, not the
+        // lagging estimate: it is never already in the past.
+        let mut time = FakeTime::at_round(R0);
+        let mut clock = clock_at(&time);
+        time.pass_powered_off_ms(10 * 86_400_000);
+        let (_, target) = clock.capsule_schedule(&time, 7).unwrap();
+        assert!(target > time.true_round() + wait_rounds(7));
     }
 
     #[test]
@@ -598,6 +870,7 @@ mod tests {
         assert!(!include_str!("capsule.rs").contains(call));
         assert!(!include_str!("store.rs").contains(call));
         assert!(!include_str!("timelock.rs").contains(call));
+        assert!(!include_str!("approval.rs").contains(call));
         assert!(include_str!("clock.rs").contains(call));
         // `counters` implements `TimeSource` and so names the call: once to define it,
         // once to pass the raw reading on unchanged, once in the test that checks that.

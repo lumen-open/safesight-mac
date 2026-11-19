@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn the_counters_and_the_clock_come_back_from_the_store() {
         let dir = TestDir::new("counters");
-        let store = Store::open(&dir.path).unwrap();
+        let store = Store::open_for_tests(&dir.path, crate::store::JOURNAL_SLOTS).unwrap();
         store.reserve().unwrap();
         let mac = FakeMac::booted_at_round(R0, 600_000);
         let mut carried = CarriedClock::at_lock(mac);
