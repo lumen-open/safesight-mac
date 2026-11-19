@@ -23,17 +23,17 @@ final class TestingEditionApp {
     private var stallWatchdog: StallWatchdog?
     private weak var watcher: WatcherController?
     private var layoutObserver: NSObjectProtocol?
+    private var layoutTimer: Timer?
 
     var shortcutWorks: Bool { emergency?.state.works ?? false }
 
     /// At launch. False only when another copy is already running: this one has then said so and is ending.
     func launch(watcher: WatcherController) -> Bool {
         if SingleCopy.anotherCopyRunning() {
-            NSApp.activate()
             let a = NSAlert()
             a.messageText = AppText.testingAlreadyRunning
             a.addButton(withTitle: AppText.testingRemovedDone)
-            a.runModal()
+            Self.showAboveCovers(a)   // the first copy's covers may be up
             exit(0)
         }
         self.watcher = watcher
@@ -41,11 +41,16 @@ final class TestingEditionApp {
         let e = EmergencyQuit { [weak self] in MainActor.assumeIsolated { self?.quitNow() } }
         e.register()
         emergency = e
-        // The Q key moves with the keyboard layout (AZERTY, Dvorak): register again when the layout changes.
+        // The Q key moves with the keyboard layout (AZERTY, Dvorak): register again when the layout changes. macOS
+        // holds back distributed notifications from an app that is not in front, and this one almost never is, so a
+        // timer also looks every two seconds (a cheap comparison of the layout's name).
         layoutObserver = DistributedNotificationCenter.default().addObserver(
             forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.followLayout() }
         }
+        let t = Timer(timeInterval: 2, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.followLayout() } }
+        RunLoop.main.add(t, forMode: .common)
+        layoutTimer = t
         let dog = StallWatchdog { _exit(0) }
         dog.start()
         stallWatchdog = dog
@@ -103,23 +108,33 @@ final class TestingEditionApp {
         _ = watcher.waitForJudging(timeout: 3)
         watcher.removeCompiledModels()
         stallWatchdog?.stop()
-        if let id = Bundle.main.bundleIdentifier, !id.isEmpty {
-            Removal.run(bundleID: id)
-        }
-        NSApp.activate()
+        layoutTimer?.invalidate()
+        let id = Bundle.main.bundleIdentifier ?? ""
+        if !id.isEmpty { Removal.run(bundleID: id) }
         let a = NSAlert()
         a.messageText = AppText.testingRemovedTitle
         a.informativeText = AppText.testingRemovedDetail
         a.addButton(withTitle: AppText.testingRemovedOpenSettings)
         a.addButton(withTitle: AppText.testingRemovedShowApp)
         a.addButton(withTitle: AppText.testingRemovedDone)
-        switch a.runModal() {
+        switch Self.showAboveCovers(a) {
         case .alertFirstButtonReturn: AppDelegate.openScreenRecordingSettings()
         case .alertSecondButtonReturn: NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
         default: break
         }
-        // Ends without AppKit's own quitting steps, so nothing is written again after the removal.
+        // Once more, for anything written while the message was up (judging that had not finished, AppKit's own
+        // settings), then end without AppKit's quitting steps, so nothing is written after it.
+        if !id.isEmpty { Removal.run(bundleID: id) }
         exit(0)
+    }
+
+    /// Shows an alert in front, above every cover (covers sit at the screen-saver level, above ordinary alerts).
+    @discardableResult
+    static func showAboveCovers(_ a: NSAlert) -> NSApplication.ModalResponse {
+        NSApp.activate()
+        a.layout()
+        a.window.level = CoverLevels.appAbove
+        return a.runModal()
     }
 }
 #endif

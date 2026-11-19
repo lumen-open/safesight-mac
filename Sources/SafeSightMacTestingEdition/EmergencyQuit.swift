@@ -4,9 +4,10 @@
 //
 // It is a Carbon hot key (RegisterEventHotKey). macOS's window server matches the key press and tells this app
 // that its own shortcut was pressed; the app never reads the keyboard, so it needs no Accessibility or Input
-// Monitoring permission, and the call is allowed inside the App Sandbox. It is registered exclusively, so pressing
-// it does nothing else in any other app; if another app already holds it, registration fails and the app says so
-// instead of naming a shortcut that does not work.
+// Monitoring permission, and the call is allowed inside the App Sandbox. It is registered exclusively: if another
+// app already holds it exclusively, macOS refuses (checked with two processes on macOS 26), and the app then names
+// no shortcut anywhere. An app that registered it without exclusivity gets it too, and a shortcut set in System
+// Settings or a key remapper can take it first; neither can be seen from here, so the menu always offers Quit.
 //
 // The key is found by what is printed on it, in the keyboard layout in use (KeyLayout): on an AZERTY keyboard
 // the Q key sits where QWERTY has A, and a fixed key code would miss it.
