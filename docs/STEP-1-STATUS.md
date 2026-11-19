@@ -290,6 +290,7 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **No lock and no shield.** This build can be paused or quit, and if it crashes or is quit, the screen is uncovered. At start, and when a display appears or wakes, the display is covered whole until its first judged frame (a few seconds when the models load).
 - **Display changes cover every display.** Plugging or unplugging a display, mirroring, a new resolution, and sleep and wake (of the Mac, or of its displays alone) cover every display whole until each has a judged frame from a restarted stream: 0.2 s of quiet, then one full judgement per display. Not measured on hardware. A new display can show what macOS puts on it for a moment before its canvas exists (SL-023): a canvas can only be made for a display that exists. A monitor usually takes a moment to show a picture after it is plugged in; whether the canvas is always there first is what ST-034 measures.
 - **Not judged:** the cursor, the brighter-than-white range of HDR displays, protected video (captured as black), sound and text, anything before login. Accessibility Zoom is not detected.
+- **Other screens.** Media sent from the Mac straight to a TV, and a window capture sent to another device, never pass through the cover. See "Other displays and other screens" below.
 - **Load.** A busy screen judged from scratch exceeds the budget. Its new pictures are blurred first; unjudged 512-pixel slices are covered; after 0.5 s of unjudged entries the window is covered whole. A busy Retina page stays blurred or covered for 13 to 21 s at `JUDGEMENT_BUDGET` (6 to 8 s with no budget limit). A third display and beyond are covered whole.
 - **Choices made where the register is silent or open.** Each is a working value tied to its test:
   - canvas window level: screen-saver level (ST-032);
@@ -314,3 +315,27 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - the crash-loop breaker;
   - the heartbeat and the plain shield, which are not part of the practice state.
 - **Models are compiled by Core ML at load,** into a temporary folder. Correction C06-14 forbids a compile fallback once models ship compiled; that is build work for the release bundle.
+
+## Other displays and other screens (written down, not built)
+
+The display rule covers every display the Mac draws on: built-in, wired, DisplayLink, AirPlay or Sidecar used as a display, mirrors, and displays apps create. Whatever reaches those displays was composited by the Mac, so it passes through capture, judging and the canvas. Some routes put pictures on another screen without the Mac drawing them, or copy the Mac's screen without its covers. Each is listed here with its planned fix. None of these fixes is built.
+
+| Route | Where the pictures go | Covered by the cover? | What closes it |
+|---|---|---|---|
+| AirPlay or Cast of a media stream from a browser (Safari, Chrome, Edge) | A TV or streaming box, which plays the stream itself | **No.** The Mac never draws those frames | The browser layer |
+| AirPlay from QuickTime Player or the Apple TV app | The same | **No** | No switch known; a setting or a published limit |
+| An app capturing one window, or the screen without SafeSight Mac's windows (OBS, QuickTime recording, window sharing in Zoom, Discord, Teams or Meet, screen-sharing tools) | The far side of a call or stream, or a recording | **No**, for the copy: window capture leaves overlays out | The Screen Recording permission |
+| AirPlay to this Mac, iPhone Mirroring, a virtual machine or remote desktop in a window | This Mac | **Yes**, like any window | Already covered |
+| A phone, a tablet's own apps (Universal Control included), a TV's own apps, another computer, a phone casting to a TV | Another screen | **No** | Outside SafeSight Mac's reach (SL-025) |
+
+**Media streams sent to a TV.** Not to be confused with AirPlay used as a display, extended or mirrored, which the display rule covers: there the Mac draws every pixel, covers included.
+- Chrome and Edge (the optional browser profile): `EnableMediaRouter` set to false turns off Cast, its toolbar button, and Cast started by a page through the Remote Playback API. Neither browser has its own AirPlay; Firefox has neither.
+- Every browser the extension runs in: the extension sets `disableRemotePlayback` on every video and audio element, including ones added later, and sets it again if a page clears it. In Safari it also adds `x-webkit-airplay="deny"` and refuses the playback-target picker. Safari takes no policy (the owner switches the extension on, and Safari is never forced), so with the extension off, Safari's AirPlay button still works: a published limit.
+- QuickTime Player and the Apple TV app: no per-app switch is known. Candidates: an AirPlay allow-list in a device-management profile where the Mac is enrolled (the Hardcore lock), or a published limit.
+- Protected streams are already black to capture on the Mac (SL-024), and the protected-streaming research is about the Mac's own screen. Sent to a TV, they play there, outside every check.
+
+**Apps that capture a window.** ScreenCaptureKit can capture one window, or a display minus chosen windows, so the copy can leave the covers out and send unjudged frames to another device. On this Mac, any preview the capturing app draws is judged and covered like any other window; the far side is another screen. The covers keep the default sharing type, so an app capturing a whole display without excluding them receives the covers (ST-037 records this per app).
+- The gate is the Screen Recording permission: no app captures without it. In this build (the practice state) nothing limits who holds it.
+- Planned: at Lock, record which apps hold Screen Recording; a new grant is a loosening that waits, unless the admin-tasks design finds a safe fast path for it. That design is not written yet. It has to keep window sharing in a meeting easy, since that is ordinary work, without letting a capture app become a way around the cover.
+
+**Plainly:** the cover reaches every display the Mac draws and every window on them, AirPlay and iPhone Mirroring into this Mac included. A browser sending media to a TV needs the browser layer. QuickTime Player and the TV app sending media to a TV, and window capture sent to another device, need settings and the lock's permission rules, none built. A phone, a TV's own apps and other computers are other screens, outside SafeSight Mac's reach.
