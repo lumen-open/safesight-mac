@@ -6,7 +6,7 @@
 
 public enum AppText {
     /// The only promise the project may make (README, blueprint chapter 01).
-    public static let honestPromise = "SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup."
+    public static let honestPromise = "SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. If you choose to add a friend, they can shorten that wait, but never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup."
 
     // MARK: Practice state (SD-223)
 
