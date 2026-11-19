@@ -20,6 +20,10 @@
 //   safesightmac-harness jitter --models DIR --list FILE [--root DIR] [--draws N] [--per-band K] [--background B]
 //            [--every K] [--seed S] [--json FILE]
 //            (lab build only) how far jitter moves each model's score on harmless screens; see JitterSpread.swift
+//   safesightmac-harness static FILE --models DIR [--slow-ms MS] [--seconds S] [--fps F] [--frames idle|empty|none]
+//            [--windows FILE]
+//            (lab build only) one harmless screenshot as a still screen on a slowed-down judge: does the cover settle to
+//            nothing and stay so? See StaticScreen.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
 //            --models DIR (real models, checked against the sealed hash list)  --null-models (lab build only)
@@ -56,6 +60,16 @@ struct Options {
     var root: String?
     var jsonl: String?
     var theme = CoverTheme.light
+    var still = StillOptions()
+}
+
+/// `static` options, parsed in every build so that a release build can refuse `static` plainly.
+struct StillOptions {
+    var slowMs = 25.0
+    var seconds = 60.0
+    var fps = 4.0
+    var frames = "idle"
+    var windows: String?
 }
 
 /// Bench options, parsed in every build so that a release build can refuse `bench` plainly.
@@ -114,6 +128,11 @@ func parse() -> Options {
         case "--background": o.jitter.background = max(0, Int(v()) ?? 400)
         case "--every": o.jitter.every = max(1, Int(v()) ?? 1)
         case "--seed": o.jitter.seed = UInt64(v()) ?? 7
+        case "--slow-ms": o.still.slowMs = Double(v()) ?? 25
+        case "--seconds": o.still.seconds = Double(v()) ?? 60
+        case "--fps": o.still.fps = max(0.5, Double(v()) ?? 4)
+        case "--frames": o.still.frames = v(); if !["idle", "empty", "none"].contains(o.still.frames) { fail("--frames idle|empty|none") }
+        case "--windows": o.still.windows = v()
         case "--help", "-h": print("see the header of Sources/SafeSightMacHarness/main.swift"); exit(0)
         default:
             if k.hasPrefix("--") { fail("unknown option \(k)") }
@@ -249,6 +268,17 @@ if o.command == "jitter" {
     exit(0)
     #else
     fail("jitter needs a lab build (it reads scores, which release builds never expose): SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter")
+    #endif
+}
+
+if o.command == "static" {
+    #if SAFESIGHTMAC_LAB
+    guard let f = o.files.first, o.models != nil else { fail("static needs FILE and --models DIR") }
+    StaticScreen.run(detector: detector, file: f, scale: o.scale,
+                     s: .init(slowMs: o.still.slowMs, seconds: o.still.seconds, fps: o.still.fps, frames: o.still.frames, windows: o.still.windows))
+    exit(0)
+    #else
+    fail("static needs a lab build: SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness static")
     #endif
 }
 

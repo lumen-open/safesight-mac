@@ -6,6 +6,7 @@ keeper/target/
 .DS_Store
 .build-lab/
 .build-testing/
+.build-testing-lab/
 # Model weights never go in git; their hashes do (models/cards, tools/models/pins.json).
 models/upstream/
 models/converted/
