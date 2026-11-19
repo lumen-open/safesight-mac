@@ -45,6 +45,8 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 - It can miss an image, and it sometimes covers a harmless one.
 - It only protects this Mac, not your phone, a TV or another computer.
 
+**Looking for something for your phone?** We recommend [SHIFT](https://shiftyourphone.com/content-filter/). Its Content Filter is free, works on iPhone and Android, and is set up from your computer so it can't simply be deleted from the phone. We're not affiliated with SHIFT; we just think it's good.
+
 ## Where things stand
 
 This is an early preview, and there's no download yet. The screen cover is built and tested in the lab; the lock is being built now. For the details, see [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md).
