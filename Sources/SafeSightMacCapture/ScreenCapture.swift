@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// The watcher's capture layer (chapter 05, section 5.1): one ScreenCaptureKit display stream per
-// active display, always at full capture resolution, 8-bit BGRA in sRGB, no cursor, no audio, with
-// the watcher's own windows left out so the detector keeps seeing what lies under a cover.
+// The watcher's capture layer (chapter 05, section 5.1): ScreenCaptureKit display streams at full capture
+// resolution, 8-bit BGRA in sRGB, no cursor, no audio, with the watcher's own windows left out so the detector
+// keeps seeing what lies under a cover. Which streams run, and when, is decided by the stream scheduler
+// (SafeSightMacWatcher/Streams.swift); this file is its ScreenCaptureKit backend.
 //
 // This file opens no network connection and links no networking API: no part both reads the screen
 // and has network access. `tools/check-no-network.sh` enforces it.
@@ -13,13 +14,11 @@ import Foundation
 import Preprocess
 import ScreenCaptureKit
 
-/// Receives frames and faults. Called on each stream's own serial queue.
+/// Receives frames, on each stream's own serial queue.
 public protocol CaptureSink: AnyObject, Sendable {
+    /// A frame, tagged with its stream's generation. A frame that could not be read arrives as a complete frame
+    /// with no pixels, in order with the others, and covers its display whole until a later frame is judged.
     func capture(_ frame: CapturedFrame)
-    /// A display that cannot be captured. The cover layer covers it whole.
-    func captureFault(display: UInt32, cause: FaultCause)
-    /// The full list of active displays after discovery or a change.
-    func captureDisplays(_ displays: [DisplayDescriptor])
 }
 
 public enum ScreenRecordingPermission {
@@ -29,80 +28,64 @@ public enum ScreenRecordingPermission {
     @discardableResult public static func request() -> Bool { CGRequestScreenCaptureAccess() }
 }
 
-/// Owns the display streams. Start, stop and rebuild are serialised on one actor.
-public actor ScreenCapture {
-    private let sink: CaptureSink
-    private let ownPID: pid_t
-    private var streams: [UInt32: DisplayStream] = [:]
+/// ScreenCaptureKit, as the stream scheduler sees it.
+public struct ScreenCaptureBackend: CaptureBackend {
+    let sink: CaptureSink
+    let ownPID: pid_t
 
-    public init(sink: CaptureSink, ownPID: pid_t = getpid()) {
-        self.sink = sink; self.ownPID = ownPID
+    public init(sink: CaptureSink, ownPID: pid_t = getpid()) { self.sink = sink; self.ownPID = ownPID }
+
+    public func list() async throws -> any CaptureListing {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        return ScreenCaptureListing(content: content, sink: sink, ownPID: ownPID)
     }
+}
 
-    public var runningDisplays: [UInt32] { Array(streams.keys) }
+enum ScreenCaptureFailure: Error { case notListed }
 
-    /// Discovers every active display and starts one stream for each. Any display that cannot be
-    /// streamed is reported as a fault, so it is covered whole.
-    public func start() async {
-        await stop()
-        let content: SCShareableContent
-        do {
-            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        } catch {
-            for id in Self.activeDisplayIDs() { sink.captureFault(display: id, cause: .noPermissionOrNoContent) }
-            sink.captureDisplays(Self.activeDisplayIDs().map { DisplayDescriptor(id: $0, bounds: CGDisplayBounds($0)) })
-            return
-        }
-        // The active set: ScreenCaptureKit's list, cross-checked with CoreGraphics. A display in either list counts.
-        let scIDs = Set(content.displays.map(\.displayID))
-        let allIDs = scIDs.union(Self.activeDisplayIDs()).sorted()
-        sink.captureDisplays(allIDs.map { DisplayDescriptor(id: $0, bounds: CGDisplayBounds($0)) })
+/// One ScreenCaptureKit content list: its displays, and the app's own windows to leave out of every stream.
+struct ScreenCaptureListing: CaptureListing, @unchecked Sendable {
+    let content: SCShareableContent
+    let sink: CaptureSink
+    let ownPID: pid_t
+
+    var displays: [UInt32] { content.displays.map(\.displayID) }
+
+    func open(_ id: UInt32, generation: Int, stoppedByItself: @escaping @Sendable () -> Void) async throws -> any CaptureStream {
+        guard let display = content.displays.first(where: { $0.displayID == id }) else { throw ScreenCaptureFailure.notListed }
         let own = content.applications.filter { $0.processID == ownPID }
-        for id in allIDs {
-            guard let display = content.displays.first(where: { $0.displayID == id }) else {
-                sink.captureFault(display: id, cause: .noStream); continue
-            }
-            let s = DisplayStream(display: display, excluding: own, sink: sink)
-            do {
-                try await s.start()
-                streams[id] = s
-            } catch {
-                sink.captureFault(display: id, cause: .noStream)
-            }
-        }
-    }
-
-    public func stop() async {
-        let old = streams
-        streams = [:]
-        for s in old.values { await s.stop() }
-    }
-
-    /// The displays CoreGraphics reports as active.
-    public static func activeDisplayIDs() -> [UInt32] {
-        var count: UInt32 = 0
-        guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return [] }
-        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetActiveDisplayList(count, &ids, &count) == .success else { return [] }
-        return Array(ids.prefix(Int(count)))
+        let s = DisplayStream(display: display, excluding: own, sink: sink, generation: generation, stoppedByItself: stoppedByItself)
+        try await s.start()
+        return s
     }
 }
 
 /// One running display stream.
-final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureStream, @unchecked Sendable {
     let display: SCDisplay
     let filter: SCContentFilter
     let sink: CaptureSink
     let queue: DispatchQueue
+    /// Every frame of this stream carries it.
+    let generation: Int
+    private let stoppedByItself: @Sendable () -> Void
+    private let lock = NSLock()
+    private var ended = false
     private var stream: SCStream?
 
-    init(display: SCDisplay, excluding own: [SCRunningApplication], sink: CaptureSink) {
+    init(display: SCDisplay, excluding own: [SCRunningApplication], sink: CaptureSink, generation: Int,
+         stoppedByItself: @escaping @Sendable () -> Void) {
         self.display = display
         // Excluded: the watcher itself (its cover windows). Nothing else is excluded.
         self.filter = SCContentFilter(display: display, excludingApplications: own, exceptingWindows: [])
         self.sink = sink
+        self.generation = generation
+        self.stoppedByItself = stoppedByItself
         self.queue = DispatchQueue(label: "safesightmac.capture.\(display.displayID)", qos: .userInitiated)
     }
+
+    /// True the first time: the stream ends once, by `close` or by itself.
+    private func end() -> Bool { lock.withLock { defer { ended = true }; return !ended } }
 
     static func configuration(for filter: SCContentFilter, displayID: CGDirectDisplayID) -> SCStreamConfiguration {
         let c = SCStreamConfiguration()
@@ -130,7 +113,8 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         stream = s
     }
 
-    func stop() async {
+    func close() async {
+        _ = end()
         guard let s = stream else { return }
         stream = nil
         try? await s.stopCapture()
@@ -144,36 +128,40 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         let bounds = CGDisplayBounds(id)
         let desc = DisplayDescriptor(id: id, bounds: bounds)
         let now = ProcessInfo.processInfo.systemUptime
+        // A frame that cannot be read goes through the same mailbox as the others, so it is acted on in order: the
+        // display is covered whole until a later frame is judged.
+        let unreadable = CapturedFrame(display: desc, status: .complete, image: nil, map: nil, dirty: nil, time: now, generation: generation)
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sb, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let info = attachments.first else {
-            sink.captureFault(display: id, cause: .badFrameMetadata); return
+            sink.capture(unreadable); return
         }
         let meta = FrameMetadata(info)
         guard meta.status == .complete else {
-            sink.capture(CapturedFrame(display: desc, status: meta.status, image: nil, map: nil, dirty: [], time: now))
+            sink.capture(CapturedFrame(display: desc, status: meta.status, image: nil, map: nil, dirty: [], time: now, generation: generation))
             return
         }
-        guard let pb = CMSampleBufferGetImageBuffer(sb) else { sink.captureFault(display: id, cause: .badFrameMetadata); return }
+        guard let pb = CMSampleBufferGetImageBuffer(sb) else { sink.capture(unreadable); return }
         CVPixelBufferLockBaseAddress(pb, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pb, .readOnly) }
         let w = CVPixelBufferGetWidth(pb), h = CVPixelBufferGetHeight(pb)
         guard CVPixelBufferGetPixelFormatType(pb) == kCVPixelFormatType_32BGRA,
               let base = CVPixelBufferGetBaseAddress(pb)?.assumingMemoryBound(to: UInt8.self) else {
-            sink.captureFault(display: id, cause: .badFrameMetadata); return
+            sink.capture(unreadable); return
         }
         // The map is rebuilt from this frame's own metadata (never cached).
         let map = meta.map(displayBounds: bounds, pixelWidth: w, pixelHeight: h)
         // The detector copies the pixels it needs; the buffer is released as soon as this returns.
         let img = RGBAImage.fromBGRA(width: w, height: h, bytesPerRow: CVPixelBufferGetBytesPerRow(pb), base: base)
         sink.capture(CapturedFrame(display: desc, status: .complete, image: img, map: map,
-                                   dirty: meta.dirtyPixels(width: w, height: h), time: now))
+                                   dirty: meta.dirtyPixels(width: w, height: h), time: now, generation: generation))
     }
 
     // MARK: SCStreamDelegate
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        // Any stop is "capture not ok" for this display: it is covered whole until judged again.
-        sink.captureFault(display: display.displayID, cause: .streamStopped)
+        // Any stop is "capture not ok" for this display: it is covered whole until a new stream's frame is judged.
+        // Frames of this stream still waiting to be judged never lower that cover (the generation is retired).
+        if end() { stoppedByItself() }
     }
 }
 

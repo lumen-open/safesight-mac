@@ -58,10 +58,10 @@ enum Fixtures {
     }
 
     static func frame(_ img: RGBAImage, display: DisplayDescriptor, scale: CGFloat, dirty: [PixelRect]? = nil,
-                      status: FrameStatus = .complete, t: TimeInterval) -> CapturedFrame {
+                      status: FrameStatus = .complete, t: TimeInterval, generation: Int = 0) -> CapturedFrame {
         let map = CaptureMap(displayBounds: display.bounds, contentRect: CGRect(origin: .zero, size: display.bounds.size),
                              contentScale: 1, scaleFactor: scale, pixelWidth: img.width, pixelHeight: img.height)
-        return CapturedFrame(display: display, status: status, image: img, map: map, dirty: dirty, time: t)
+        return CapturedFrame(display: display, status: status, image: img, map: map, dirty: dirty, time: t, generation: generation)
     }
 
     static func oneWindow(_ bounds: CGRect, number: UInt32 = 10, pid: Int32 = 500) -> WindowSnapshot {

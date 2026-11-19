@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// The watcher, glued together: capture streams feed one mailbox per display; one serial judging queue
-// runs the detector and the cover layer; the main thread draws. In the practice state there is no
-// keeper, no shield, no heartbeat and no fault ladder (SD-223 (d)). Faults cover more; nothing here
-// can lock the screen, log anyone out or send anything.
+// The watcher, glued together. Capture streams feed a frame queue; one serial judging queue runs the detector and
+// the cover layer, one frame at a time with every display in turn; the main thread decides what every display shows
+// and draws it (CoverCoordinator: a canvas for every display the OS lists, covered whole until judged, and every
+// display covered the moment macOS announces a change). In the practice state there is no keeper, no shield, no
+// heartbeat and no fault ladder (SD-223 (d)). Faults cover more; nothing here can lock the screen, log anyone out
+// or send anything.
 import AppKit
 import DetectorCore
 import SafeSightMacCapture
@@ -11,36 +13,48 @@ import SafeSightMacWatcher
 import Foundation
 
 final class WatcherController: CaptureSink, @unchecked Sendable {
-    // Guarded by `lock` (touched from the capture queues).
-    private let lock = NSLock()
-    private var mailboxes: [UInt32: FrameMailbox] = [:]
-    private var scheduled: Set<UInt32> = []
-    private var accepting = false
+    // Capture queues, the judging queue and the main thread.
+    private let frames = FrameQueue()
 
     // Judging queue only.
     private let judgeQueue = DispatchQueue(label: "safesightmac.judge", qos: .userInitiated)
     private var detector: Detector?
     private var pipelines: [UInt32: DisplayPipeline] = [:]
-    private var order: [UInt32] = []
+    /// The judged displays, counted on the main thread from the OS's display lists.
+    private var judgedIDs: [UInt32] = []
+    /// Per display: the stream generation its frames must have (raised by every display change).
+    private var required: [UInt32: Int] = [:]
 
     // Main thread only.
-    private(set) var plans: [UInt32: CoverPlan] = [:]
+    private let coordinator: CoverCoordinator
+    /// Capture requests and reports between the coordinator and the stream scheduler (ready once the detector is).
+    private let link: CaptureLink
     private var busySince: [UInt32: TimeInterval] = [:]
     private var wholeSince: TimeInterval?
     private(set) var detectorFailed = false
     private(set) var running = false
-    private let presenter: CoverPresenter
     private let repairCard: RepairCard
-    private var capture: ScreenCapture?
-    private var watchdog: Timer?
+    private var timer: Timer?
     var onChange: (() -> Void)?
     var repairActions: RepairCard.Actions?
+    /// What every display shows now: one plan per display the OS lists.
+    @MainActor var plans: [CoverPlan] { coordinator.shown }
 
     let ownPID = getpid()
 
     @MainActor init(presenter: CoverPresenter) {
-        self.presenter = presenter
         self.repairCard = RepairCard()
+        let c = CoverCoordinator(presenter: presenter, generations: GenerationCounter())
+        self.coordinator = c
+        // The link sets the coordinator's capture requests: every request carries a generation taken on this thread.
+        self.link = CaptureLink(coordinator: c)
+        coordinator.judging = { [weak self] judged, required in
+            self?.judgeQueue.async { self?.setJudging(judged, required) }
+        }
+        coordinator.onShown = { [weak self] _ in self?.shownChanged() }
+        coordinator.wake = { [weak self] delay in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.01) { MainActor.assumeIsolated { self?.tick() } }
+        }
     }
 
     /// The models folder: `SAFESIGHTMAC_MODELS`, else the app's own Resources/models (the shipped place in
@@ -53,178 +67,180 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     // MARK: Start, stop
 
+    /// Covers every display whole at once, before any stream exists; loads the detector; then starts capture.
     @MainActor func start(rule: DetectorRule) {
         guard !running else { return }
         running = true
         detectorFailed = false
-        let cap = ScreenCapture(sink: self, ownPID: ownPID)
-        capture = cap
-        lock.withLock { accepting = true }
-        startWatchdog()
-        judgeQueue.async { [weak self] in
-            guard let self else { return }
-            if self.detector == nil {
-                do { self.detector = try WatcherModels.loadDetector(folder: Self.modelsFolder(), rule: rule) }
-                catch { self.reportDetectorFailure(); return }
-            } else {
-                self.detector?.setRule(rule)
-            }
-            Task { await cap.start() }
-        }
+        frames.open()
+        coordinator.start()
+        link.attach(ScreenCaptureBackend(sink: self, ownPID: ownPID))
+        startTimer()
+        loadDetector(rule: rule)
         onChange?()
     }
 
     /// Stops capture and removes every cover. Used for Pause (practice state only) and Quit.
     @MainActor func stop() {
         running = false
-        lock.withLock { accepting = false; mailboxes = [:] }
-        let cap = capture
-        capture = nil
-        Task { await cap?.stop() }
+        frames.close()
+        // Not waited for: anything the old streams still send carries a generation outranked when covering starts again.
+        link.detach()
         judgeQueue.async { [weak self] in
             self?.pipelines.values.forEach { $0.reset() }
             self?.pipelines = [:]
-            DispatchQueue.main.async { self?.plans = [:]; self?.present() }
         }
-        watchdog?.invalidate(); watchdog = nil
-        presenter.removeAll()
+        timer?.invalidate(); timer = nil
+        coordinator.stop()
+        busySince = [:]; wholeSince = nil
         repairCard.hide()
         onChange?()
     }
 
-    /// Covers every display whole, then rebuilds the streams (display change, wake, session return).
-    @MainActor func rebuild(because cause: FaultCause) {
-        guard running else { return }
-        judgeQueue.async { [weak self] in
-            guard let self else { return }
-            let covered = self.pipelines.mapValues { $0.cover(because: cause) }
-            DispatchQueue.main.async { self.plans.merge(covered) { $1 }; self.present() }
-            let cap = self.capture
-            Task { await cap?.start() }
-        }
+    /// Try again: every display stays covered whole while capture (and the detector, if it failed) starts again.
+    /// Unlike stopping and starting, no cover comes down in between.
+    @MainActor func restart(rule: DetectorRule) {
+        guard running else { start(rule: rule); return }
+        detectorFailed = false
+        busySince = [:]
+        coordinator.restart()
+        loadDetector(rule: rule)
+        onChange?()
     }
 
-    /// Covers every display whole without rebuilding (sleep, session switched away).
-    @MainActor func coverAll(because cause: FaultCause) {
-        judgeQueue.async { [weak self] in
-            guard let self else { return }
-            let covered = self.pipelines.mapValues { $0.cover(because: cause) }
-            DispatchQueue.main.async { self.plans.merge(covered) { $1 }; self.present() }
-        }
-    }
+    /// macOS announced a display change: every display is covered whole now, before the change is applied.
+    @MainActor func displaysWillChange() { coordinator.willChange(.change) }
+
+    /// A display change has been applied: the displays are read again, each is covered whole until judged, and capture
+    /// restarts once the change has settled.
+    @MainActor func displaysDidChange() { coordinator.didChange(.change) }
+
+    /// The Mac or its displays are going to sleep, or the session is going away: every display is covered whole until
+    /// `resume` with the same reason.
+    @MainActor func suspend(_ reason: HoldReason) { coordinator.willChange(reason) }
+
+    /// The Mac or its displays woke, or the session came back: as a display change, for that reason.
+    @MainActor func resume(_ reason: HoldReason) { coordinator.didChange(reason) }
 
     func setRule(_ rule: DetectorRule) { judgeQueue.async { [weak self] in self?.detector?.setRule(rule) } }
 
-    private func reportDetectorFailure() {
-        let ids = ScreenCapture.activeDisplayIDs()
-        DispatchQueue.main.async {
-            self.detectorFailed = true
-            for id in ids { self.plans[id] = .covered(DisplayDescriptor(id: id, bounds: CGDisplayBounds(id)), because: .detectorUnavailable) }
-            self.present()
+    @MainActor private func loadDetector(rule: DetectorRule) {
+        link.ready = false
+        judgeQueue.async { [weak self] in
+            guard let self else { return }
+            if self.detector == nil {
+                do { self.detector = try WatcherModels.loadDetector(folder: Self.modelsFolder(), rule: rule) }
+                catch { DispatchQueue.main.async { self.reportDetectorFailure() }; return }
+            } else {
+                self.detector?.setRule(rule)
+            }
+            DispatchQueue.main.async {
+                guard self.running else { return }
+                self.link.ready = true
+                self.coordinator.restartNow()
+            }
         }
+    }
+
+    @MainActor private func reportDetectorFailure() {
+        guard running else { return }
+        detectorFailed = true
+        coordinator.detectorFailed()
+        onChange?()
     }
 
     // MARK: CaptureSink (capture queues)
 
     func capture(_ frame: CapturedFrame) {
-        let id = frame.display.id
-        let schedule: Bool = lock.withLock {
-            guard accepting else { return false }
-            mailboxes[id, default: FrameMailbox()].offer(frame)
-            return scheduled.insert(id).inserted
-        }
-        if schedule { judgeQueue.async { [weak self] in self?.drain(id) } }
-    }
-
-    func captureFault(display id: UInt32, cause: FaultCause) {
-        judgeQueue.async { [weak self] in
-            guard let self else { return }
-            let d = DisplayDescriptor(id: id, bounds: CGDisplayBounds(id))
-            let plan = self.pipelines[id]?.cover(because: cause) ?? .covered(d, because: cause)
-            DispatchQueue.main.async { self.plans[id] = plan; self.present() }
-        }
-    }
-
-    func captureDisplays(_ displays: [DisplayDescriptor]) {
-        judgeQueue.async { [weak self] in
-            guard let self, let det = self.detector else { return }
-            // The built-in (main) display first; displays beyond DISPLAYS_MAX are covered whole.
-            let main = CGMainDisplayID()
-            let sorted = displays.sorted { ($0.id == main ? 0 : 1, $0.id) < ($1.id == main ? 0 : 1, $1.id) }
-            self.order = sorted.map(\.id)
-            let judgedCount = min(sorted.count, Register.DISPLAYS_MAX)
-            let share = Register.JUDGEMENT_BUDGET / Double(max(1, judgedCount))
-            var fresh: [UInt32: DisplayPipeline] = [:]
-            var out: [UInt32: CoverPlan] = [:]
-            for (i, d) in sorted.enumerated() {
-                let p = self.pipelines[d.id] ?? DisplayPipeline(display: d, judger: det, budgetShare: share, ignoredPIDs: [self.ownPID])
-                p.setBudgetShare(share)
-                fresh[d.id] = p
-                out[d.id] = i < Register.DISPLAYS_MAX ? p.lastPlan : p.cover(because: .tooManyDisplays)
-            }
-            self.pipelines = fresh
-            DispatchQueue.main.async { self.plans = out; self.present() }
+        if frames.offer(frame, now: ProcessInfo.processInfo.systemUptime) {
+            judgeQueue.async { [weak self] in self?.judgeNext() }
         }
     }
 
     // MARK: Judging queue
 
-    private func drain(_ id: UInt32) {
-        while true {
-            let next: CapturedFrame? = lock.withLock {
-                let f = mailboxes[id]?.take()
-                if f == nil { scheduled.remove(id) }
-                return f
-            }
-            guard let f = next else { return }
-            guard let p = pipelines[id], let idx = order.firstIndex(of: id), idx < Register.DISPLAYS_MAX else { continue }
-            let start = ProcessInfo.processInfo.systemUptime
-            DispatchQueue.main.async { self.busySince[id] = start }
-            // Plans handed out before judging ends (moved covers, cover-first blurs, fast flags) are drawn at once.
-            // The pointer, in global points: the window under it and the pictures nearest it go first.
-            let pointer = CGEvent(source: nil)?.location
-            let plan = p.process(f, snapshot: WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
-                DispatchQueue.main.async {
-                    guard let self, self.running else { return }
-                    self.plans[id] = early
-                    self.present()
-                }
-            }
-            DispatchQueue.main.async {
-                self.busySince[id] = nil
-                guard self.running else { return }
-                self.plans[id] = plan
-                self.present()
-            }
+    /// The judged displays and each display's required generation, from the main thread. A display whose generation
+    /// was raised is covered whole until a frame of a new stream is judged; displays no longer judged are dropped.
+    private func setJudging(_ judged: [UInt32], _ required: [UInt32: Int]) {
+        judgedIDs = judged
+        self.required = required
+        let share = Register.JUDGEMENT_BUDGET / Double(max(1, judged.count))
+        pipelines = pipelines.filter { judged.contains($0.key) }
+        for (id, p) in pipelines {
+            p.setBudgetShare(share)
+            if let r = required[id], r > p.requiredGeneration { p.cover(because: .displayChanging, until: r) }
+        }
+    }
+
+    /// Judges one frame, then lets every other display, and any other work waiting, have its turn.
+    private func judgeNext() {
+        guard let f = frames.next() else { return }
+        judge(f)
+        judgeQueue.async { [weak self] in self?.judgeNext() }
+    }
+
+    private func judge(_ f: CapturedFrame) {
+        let id = f.display.id
+        // Only judged displays, and only frames of a stream started since the display's last change.
+        guard let det = detector, judgedIDs.contains(id), let need = required[id], f.generation >= need else { return }
+        let p: DisplayPipeline
+        if let existing = pipelines[id] {
+            p = existing
+        } else {
+            p = DisplayPipeline(display: f.display, judger: det, budgetShare: Register.JUDGEMENT_BUDGET / Double(max(1, judgedIDs.count)),
+                                ignoredPIDs: [ownPID])
+            p.cover(because: .notYetJudged, until: need)
+            pipelines[id] = p
+        }
+        let start = ProcessInfo.processInfo.systemUptime
+        DispatchQueue.main.async { self.busySince[id] = start }
+        // Plans handed out before judging ends (moved covers, cover-first blurs, fast flags) are drawn at once.
+        // The pointer, in global points: the window under it and the pictures nearest it go first.
+        let pointer = CGEvent(source: nil)?.location
+        let generation = f.generation
+        let plan = p.process(f, snapshot: WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
+            DispatchQueue.main.async { self?.coordinator.deliver(early, generation: generation) }
+        }
+        DispatchQueue.main.async {
+            self.busySince[id] = nil
+            self.coordinator.deliver(plan, generation: generation)
         }
     }
 
     // MARK: Main thread
 
-    /// Judging that stalls on one frame covers that display whole until it catches up (step 3 of
-    /// "slowness covers more"). The judging queue cannot do this itself while it is stuck.
-    private func startWatchdog() {
-        watchdog?.invalidate()
-        watchdog = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.present() }
+    /// Four times a second: judging that stalls on one frame, or frames left waiting, cover that display whole until
+    /// it catches up (step 3 of "slowness covers more"); what is due runs; and the OS's display lists are read again,
+    /// so a display change nobody announced is covered too.
+    @MainActor private func startTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
         }
     }
 
-    @MainActor func present() {
+    @MainActor private func tick() {
+        guard running else { return }
         let now = ProcessInfo.processInfo.systemUptime
-        var shown = plans
-        for (id, t) in busySince where now - t > Register.JUDGING_STALL {
-            if let d = shown[id]?.display { shown[id] = .covered(d, because: .judgingBehind) }
-        }
-        presenter.apply(Array(shown.values))
-        // The repair card: whenever a display has been covered whole for two seconds or more.
-        let causes = shown.values.compactMap(\.wholeDisplay)
+        var stalled = Set(busySince.filter { now - $0.value > Register.JUDGING_STALL }.keys)
+        for (id, waited) in frames.waiting(now: now) where waited > Register.JUDGING_STALL { stalled.insert(id) }
+        coordinator.tick(stalled: stalled)
+        updateRepairCard(now: now)
+    }
+
+    @MainActor private func shownChanged() {
+        updateRepairCard(now: ProcessInfo.processInfo.systemUptime)
+        onChange?()
+    }
+
+    /// The repair card: whenever a display has been covered whole for two seconds or more.
+    @MainActor private func updateRepairCard(now: TimeInterval) {
+        let causes = coordinator.shown.compactMap(\.wholeDisplay)
         if causes.isEmpty { wholeSince = nil } else if wholeSince == nil { wholeSince = now }
-        if let s = wholeSince, now - s >= 2, let actions = repairActions {
+        if running, let s = wholeSince, now - s >= 2, let actions = repairActions {
             repairCard.show(causes: causes.sorted { $0 == .notYetJudged ? false : $1 == .notYetJudged }, actions: actions)
         } else {
             repairCard.hide()
         }
-        onChange?()
     }
 }
