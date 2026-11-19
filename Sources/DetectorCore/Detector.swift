@@ -41,6 +41,7 @@ public final class Detector {
     public private(set) var config: DetectorConfig
     let finder: RegionFinder
     let cache = VerdictCache()
+    let finderCache = FinderCache()
     let voter = VideoVoter()
     let hot = HotContexts()
     /// Referee judgements made so far (for budgets and benchmarks).
@@ -80,7 +81,7 @@ public final class Detector {
 
     /// Empties the verdict cache (lab benches measure from scratch with it; pausing may use it). Emptying
     /// only ever means judging again.
-    public func removeCachedVerdicts() { cache.removeAll() }
+    public func removeCachedVerdicts() { cache.removeAll(); finderCache.removeAll() }
 
     /// Runs every model once on a blank tensor, so that the first real judgement does not pay for loading
     /// (the tie-breaker on the GPU costs about 0.2 s the first time). Used by the lab bench.
@@ -108,7 +109,7 @@ public final class Detector {
         var pieces: [PixelRect]  // aspect-limited pieces actually judged
         var pass: Pass
         var gridMember: Bool
-        var key: Data
+        var key: ExactKey
         var outcome: TileOutcome?
         var judged = false
     }
@@ -149,7 +150,18 @@ public final class Detector {
         defer { timings.totalMs += msSince(tCall) }
         let A = area?.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
         var t0 = nowNs()
-        let found = finder.find(frame, within: A)
+        // The finder's proposals are reused only when every pixel it reads is exactly as before.
+        let finderKey = FinderCache.key(frame, A)
+        timings.cacheMs += msSince(t0)
+        t0 = nowNs()
+        let found: RegionFinder.Output
+        if let hit = finderCache.get(finderKey, for: A) {
+            found = hit
+            timings.finderCacheHits += 1
+        } else {
+            found = finder.find(frame, within: A)
+            finderCache.put(finderKey, A, found)
+        }
         timings.finderMs += msSince(t0)
         t0 = nowNs()
         let gridMembers = Set(found.grids.flatMap(\.members))
