@@ -8,9 +8,13 @@ What makes it different is the off switch. When you set it up, you choose how lo
 
 ## Why it exists
 
-There's a dark power that takes freedom from men and women, one late night at a time. It's free, it never runs out, and it's built to keep you coming back.
+Pornography is the most patient thing ever built. It's free, it never closes, it never runs out, and every inch of it was designed by people who get paid when you stay. It doesn't have to win the argument. It only has to wait until you're tired, until it's late, until the house is quiet and the part of you that knows better has gone to sleep. Then it takes a little more of the person you were trying to become.
 
-SafeSight Mac is how you fight back. You decide who you want to be on a good day, and it holds that line for you on the bad ones. Nobody is watching, nobody gets told, and there's nothing to be ashamed of. This is about taking your freedom back.
+Willpower alone rarely beats that, because willpower is the first thing to leave at two in the morning. So SafeSight Mac moves the decision. You make it in daylight, clear-eyed, knowing what you want your life to look like, and it keeps that promise on the nights you can't. The person you are on your best day gets the final word. The worst hour of your week doesn't get a vote.
+
+Nobody is watching over your shoulder, nothing is reported to anyone, and there's no lecture. Wanting this isn't a confession. It's the same instinct that makes someone leave their card at home before a night out, or pour the bottle down the sink while they still can. You're locking a door from the inside. The key is still yours; you've just made the walk to it long enough to remember why you locked it.
+
+This is about freedom. Not the thin kind, where you do whatever the next five minutes want, but the real kind: being the same person at midnight that you were at noon.
 
 ## Hard to get around, by design
 
@@ -23,7 +27,7 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 | Find it on a "safe" site: social media, image search, a chat app | Blocklists can't see it | Covered wherever it shows up |
 | Use an app instead of a browser | Usually not filtered | Covered in every app |
 | Delete the extension or quit the app | Done in seconds | You're not an admin any more, and leaving takes the wait you chose |
-| Ask whoever holds the password | One weak moment, one text | Nobody holds a password. Nobody can shorten your wait, not even us |
+| Ask whoever holds the password | One weak moment, one text | Nobody holds a password. Only the friend you chose can shorten your wait, and only to a day. Not even we can |
 | Change your Mac's clock | Fools some timers | The wait is checked against a public time signal |
 | Wipe the Mac | Works | Works here too. That's an evening of work, not a click |
 
@@ -47,7 +51,7 @@ This is an early preview, and there's no download yet. The screen cover is built
 
 ## Our promise
 
-> SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and turning it off takes a waiting period you choose ahead of time. Nobody can cut that wait short, including us. It isn't perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
+> SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and turning it off takes a waiting period you choose ahead of time. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
 
 ## Found a weakness?
 
