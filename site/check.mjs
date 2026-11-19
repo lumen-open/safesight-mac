@@ -3,6 +3,7 @@
 //
 //   node site/check.mjs               check every page, exit 1 on any failure
 //   node site/check.mjs --print-csp   print the style hashes each page's CSP needs
+//   node site/check.mjs --self-test   check that the check itself fails on made-up bad pages
 //
 // It fails on:
 //   - any external URL in src/href (or similar attributes, or CSS url()) other than
@@ -13,7 +14,8 @@
 //     (and, when ../README.md is present, any of its "Why it exists" paragraphs or its
 //     promise not appearing word for word);
 //   - a missing or loose Content-Security-Policy, or one whose style hashes don't match;
-//   - a missing SPDX line, lang, title or viewport.
+//   - a missing SPDX line, lang, title or viewport;
+//   - any <meta http-equiv="refresh">, which could send a visitor somewhere else.
 
 import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -224,6 +226,31 @@ function checkBasics(page, html) {
   if (!/<meta\s+name="viewport"/i.test(html)) fail(page, 'needs a viewport meta tag');
   const h1s = (html.match(/<h1\b/gi) || []).length;
   if (h1s !== 1) fail(page, `needs exactly one <h1> (found ${h1s})`);
+  if (/<meta\b[^>]*\bhttp-equiv\s*=\s*["']?\s*refresh\b/i.test(html.replace(/<!--[\s\S]*?-->/g, ''))) {
+    fail(page, 'a <meta http-equiv="refresh"> is not allowed (it reloads or sends the visitor elsewhere)');
+  }
+}
+
+if (process.argv.includes('--self-test')) {
+  const good = '<!-- SPDX-License-Identifier: Apache-2.0 -->\n<html lang="en"><head><title>T</title>' +
+    '<meta name="viewport" content="width=device-width"></head><body><h1>T</h1></body></html>';
+  const cases = [
+    ['a plain page', good, null],
+    ['a refresh', good.replace('<title>', '<meta http-equiv="refresh" content="0; url=https://example.com/"><title>'), 'refresh'],
+    ['a refresh in capitals, unquoted', good.replace('<title>', '<META HTTP-EQUIV=Refresh CONTENT="5"><title>'), 'refresh'],
+    ['a refresh after other attributes', good.replace('<title>', '<meta content="0" http-equiv=\'refresh\'><title>'), 'refresh'],
+    ['no SPDX line', good.replace(/^<!--[^>]*-->/, ''), 'SPDX'],
+  ];
+  let wrong = 0;
+  for (const [name, html, expect] of cases) {
+    failures.length = 0;
+    checkBasics('self-test', html);
+    const hit = expect === null ? failures.length === 0 : failures.some((f) => f.includes(expect));
+    if (!hit) { wrong++; console.error(`Self-test: ${name} gave ${JSON.stringify(failures)}`); }
+  }
+  if (wrong) { console.error(`Site check self-test failed (${wrong}).`); process.exit(1); }
+  console.log(`Site check self-test passed: ${cases.length} made-up pages judged as expected.`);
+  process.exit(0);
 }
 
 if (process.argv.includes('--print-csp')) {
