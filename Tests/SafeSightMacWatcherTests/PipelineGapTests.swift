@@ -386,6 +386,61 @@ final class VerdictScript: Judging {
         #expect(j.calls > 0)
     }
 
+    /// A judge that records every call and flags any call reaching into `flagged`.
+    final class Recorder: Judging {
+        var flagged: CGRect?, ms = 0.0
+        var calls: [(area: PixelRect, budget: Int)] = []
+        func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                       progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+            calls.append((area, budget))
+            if ms > 0 { usleep(useconds_t(ms * 1000)) }
+            if let f = flagged, CGRect(x: area.x, y: area.y, width: area.w, height: area.h).intersects(f) {
+                return FrameVerdict(regions: [RegionVerdict(rect: area, display: .cover, reason: .bothFamilies, pass: .whole)],
+                                    coverWindow: false, strike: false, hot: false, judgements: 2, overloaded: 0)
+            }
+            return FrameVerdict(regions: [RegionVerdict(rect: area, display: .clear, reason: .judgedClean, pass: .whole)],
+                                coverWindow: false, strike: false, hot: false, judgements: 2, overloaded: 0)
+        }
+        func setRule(_ rule: DetectorRule) {}
+    }
+
+    /// A cover on window 1 under window 9 in front of it, so it is judged on its own.
+    func coveredUnderAWindow(_ j: Recorder, wall: Double) -> (DisplayPipeline, WindowSnapshot, PixelRect) {
+        let back = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 0, y: 0, width: 300, height: 400))
+        let front = WindowInfo(number: 9, ownerPID: 900, layer: 0, bounds: CGRect(x: 100, y: 0, width: 500, height: 400))
+        let list = WindowSnapshot(windows: [front, back], time: 0)
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [], callWallMs: wall)
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: list, now: 0)
+        p.held = [DisplayPipeline.Held(target: .window(number: 1, ownerPID: 500), rel: CGRect(x: 50, y: 50, width: 120, height: 80),
+                                       whole: false, kind: .plain, clean: 0)]
+        return (p, list, PixelRect(x: 50, y: 50, w: 120, h: 80))
+    }
+
+    @Test func aCoverJudgedOnItsOwnStillGetsItsTurnOnABusyScreen() {
+        let j = Recorder(); j.ms = 40
+        let (p, list, own) = coveredUnderAWindow(j, wall: 100)
+        j.calls = []
+        // The whole screen keeps changing: the windows' own calls would use all the time.
+        let plan = p.process(Fixtures.frame(touched(Fixtures.blank(600, 400), 1), display: d, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 600, h: 400)], t: 0.1),
+                             snapshot: list, now: 0.1)
+        #expect(j.calls.contains { $0.area == own }, "\(j.calls.map(\.area))")
+        #expect(p.lastTimings.rechecks == 1)
+        #expect(plan.covers(CGRect(x: 50, y: 50, width: 120, height: 80)))
+        // Its budget is held to the time left.
+        #expect(j.calls.first { $0.area == own }.map { $0.budget < Register.DETECTOR_CALL_CAP } == true)
+    }
+
+    @Test func aFlaggedCoverJudgedOnItsOwnIsNotJudgedAgainUntilItsPlaceChanges() {
+        let j = Recorder(); j.flagged = CGRect(x: 60, y: 60, width: 20, height: 20)
+        let (p, list, own) = coveredUnderAWindow(j, wall: .infinity)
+        j.calls = []
+        for k in 1...4 { _ = p.process(idle(0.1 * Double(k)), snapshot: list, now: 0.1 * Double(k)) }
+        #expect(j.calls.filter { $0.area == own }.count == 1, "judged once; nothing changed since")
+        _ = p.process(Fixtures.frame(touched(Fixtures.blank(600, 400), 1), display: d, scale: 1, dirty: [PixelRect(x: 40, y: 40, w: 16, h: 16)], t: 0.6),
+                      snapshot: list, now: 0.6)
+        #expect(j.calls.filter { $0.area == own }.count == 2, "its place changed: judged again")
+    }
+
     @Test func theFirstFrameIsJudgedWithinOneCallsWorthInAll() {
         let j = SlowJudge(ms: 0, spendAll: true)
         let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)

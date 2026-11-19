@@ -85,6 +85,8 @@ public struct PipelineTimings: Sendable, Equatable {
     public var blurredAtOnce = 0
     /// Parts of the frame left for the next call because this one reached `JUDGE_CALL_WALL` (blurred meanwhile).
     public var leftForLater = 0
+    /// Covers judged on their own, over their whole rectangle (not all on show as their window's).
+    public var rechecks = 0
     public init() {}
 
     static func now() -> UInt64 { DispatchTime.now().uptimeNanoseconds }

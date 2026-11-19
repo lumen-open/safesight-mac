@@ -32,6 +32,8 @@ public final class DisplayPipeline {
         var lastGlobal: CGRect? = nil
         /// Since when its window has been missing from the window list (a closed window, or a list read that left it out).
         var missingSince: TimeInterval? = nil
+        /// Where its own judge call (step 3b) last found it flagged; judged there again only once something changed.
+        var flaggedAt: CGRect? = nil
     }
     var held: [Held] = []
     var pending: [CGRect] = []
@@ -68,6 +70,8 @@ public final class DisplayPipeline {
     /// How long a judging run takes (the recent longest, fading by a fifth a run): how far ahead a moving
     /// cover must reach.
     var runEstimateMs = 0.0
+    /// Where the covers judged on their own (step 3b) take their turn from.
+    var recheckTurn = 0
     /// Frames in a row whose judging took longer than the goal.
     var overrunFrames = 0
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
@@ -307,11 +311,13 @@ public final class DisplayPipeline {
         // The first frame after the display was covered whole is judged within one call's worth in all.
         let firstFrame = !judged
         var firstLeft = Register.DETECTOR_CALL_CAP
+        // A fifth of the time is kept for covers judged on their own (step 3b), when there are any.
+        let partsWallMs = held.contains(where: { !shownWhole($0, snapshot, visible) }) ? 0.8 * callWallMs : callWallMs
         for p in parts {
             guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
                   let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
             let spentMs = PipelineTimings.ms(since: tRun)
-            if spentMs >= callWallMs {
+            if spentMs >= partsWallMs {
                 pending += p.changed
                 leftOver += p.changed.compactMap { r in
                     map.toPixels(r).map { px in
@@ -326,7 +332,7 @@ public final class DisplayPipeline {
             // The first judgement after the display was covered whole is not limited by the budget (SD-120), but by one
             // call's worth over the whole frame; every call is kept within the time left.
             var budget = firstFrame ? firstLeft : min(bucket.available, Register.DETECTOR_CALL_CAP)
-            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (callWallMs - spentMs) / msPerJudgement))))
+            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (partsWallMs - spentMs) / msPerJudgement))))
             let focus = pointer.flatMap { q in map.toPixels(CGRect(x: q.x - 1, y: q.y - 1, width: 2, height: 2)) }
             let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
                                    sliceAnchor: sliceAnchor(p.target, snapshot, map), focus: focus)
@@ -398,24 +404,40 @@ public final class DisplayPipeline {
         // 3b. A cover whose full rectangle is not all on show as its own window (a window in front of it, or its window
         //     missing from the list) is judged on its own, over that whole rectangle where it stands on screen: only
         //     clean judgements of every pixel it hides count towards lifting it.
-        for i in held.indices where !shownWhole(held[i], snapshot, visible) {
-            // Only within the call's time: a cover not judged now simply stays.
-            guard PipelineTimings.ms(since: tRun) < callWallMs,
-                  let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
+        //     They take turns (from where the last frame stopped), within the time left; one already judged flagged on the
+        //     same place is judged again only once something there has changed.
+        let waiting = held.indices.filter { !shownWhole(held[$0], snapshot, visible) }
+        var checked = 0
+        for k in waiting.indices {
+            let i = waiting[(k + recheckTurn) % waiting.count]
+            let spent = PipelineTimings.ms(since: tRun)
+            guard spent < callWallMs else { break }
+            guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
+            if held[i].flaggedAt == g && !reported.contains(where: { $0.intersects(g) }) && !moved.contains(where: { $0.0 == held[i].target }) { continue }
             bucket.refill(now: now)
-            let budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
+            var budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
+            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (callWallMs - spent) / msPerJudgement))))
             let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
             tStage = PipelineTimings.now()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: nil)
-            timing.judgeMs += PipelineTimings.ms(since: tStage)
+            let callMs = PipelineTimings.ms(since: tStage)
+            timing.judgeMs += callMs
+            if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
             timing.calls += 1; timing.judgements += v.judgements; timing.overloaded += v.overloaded
+            timing.rechecks += 1
+            checked += 1
             if judged { bucket.spend(v.judgements) }
             if v.coverWindow || v.regions.contains(where: { $0.display != .clear && $0.reason != .overload }) {
                 held[i].clean = 0
+                held[i].flaggedAt = g
             } else if !v.regions.isEmpty && v.overloaded == 0, !OwnCoverColours.shown(in: img, area) {
                 held[i].clean += 1
+                held[i].flaggedAt = nil
+            } else {
+                held[i].flaggedAt = nil
             }
         }
+        if !waiting.isEmpty { recheckTurn = (recheckTurn + max(1, checked)) % max(1, waiting.count) }
         judged = true
         tStage = PipelineTimings.now()
         defer { timing.planMs += PipelineTimings.ms(since: tStage) }
