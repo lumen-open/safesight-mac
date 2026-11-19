@@ -239,7 +239,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             switch status {
             case .needsScreenRecording:
                 menu.addItem(note(AppText.needsPermissionDetail))
-                menu.addItem(item(AppText.grantPermission) { ScreenRecordingPermission.request(); Self.openScreenRecordingSettings() })
+                menu.addItem(item(AppText.grantPermission) { Self.askForScreenRecording() })
+                menu.addItem(note(AppText.permissionSteps))
             case let .displayCovered(cause):
                 menu.addItem(note(cause.plainWords))
             case .paused(let until):
@@ -308,6 +309,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         testing.removeEverything(watcher: watcher)
     }
     #endif
+
+    /// The first time, only macOS's own question is asked: it has its own Open System Settings button. Opening System
+    /// Settings at the same moment put Settings in front of that question, where it stayed unanswered behind the window
+    /// (and later under the covers). After that, macOS asks no more, so System Settings is opened directly.
+    static func askForScreenRecording() {
+        let key = "askedForScreenRecording"
+        if UserDefaults.standard.bool(forKey: key) {
+            openScreenRecordingSettings()
+        } else {
+            UserDefaults.standard.set(true, forKey: key)
+            ScreenRecordingPermission.request()
+        }
+    }
 
     static func openScreenRecordingSettings() {
         if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(u) }

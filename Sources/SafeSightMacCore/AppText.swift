@@ -28,6 +28,8 @@ public enum AppText {
     public static let statusNeedsPermission = "Needs Screen Recording"
     public static let needsPermissionDetail = "\(productName) needs the Screen Recording permission to check what your displays show. Until you grant it, nothing is checked or covered."
     public static let grantPermission = "Open Screen Recording settings…"
+    /// Under the button, the two questions macOS itself asks, so neither is left waiting behind a window or a cover.
+    public static let permissionSteps = "macOS asks first: choose Open System Settings in its message, turn \(productName) on, and let macOS quit and reopen it. When it reopens, macOS may ask once more whether it may record the screen directly: choose Allow."
     public static let statusPaused = "Paused: nothing is checked or covered"
     public static let statusStarting = "Starting…"
     public static let statusFault = "A display is covered whole"
@@ -179,7 +181,7 @@ public enum AppText {
     /// Every string above, for checks.
     public static var all: [String] {
         [honestPromise, practiceTitle, practiceDetail, notPracticeTitle, keeperFoundDetail, practiceUnknownDetail, statusOn,
-         statusNeedsPermission, needsPermissionDetail, grantPermission, statusPaused, statusStarting, statusFault, statusModelsMissing,
+         statusNeedsPermission, needsPermissionDetail, grantPermission, permissionSteps, statusPaused, statusStarting, statusFault, statusModelsMissing,
          modeHeader, modeBalanced, modeEither, modeSentence, strictCoverMode, pauseFor15, pauseFor60, resume, howItWorks, quit,
          howItWorksTitle, wayOutLine, repairHeading, repairDetail, repairTryAgain, repairPause, repairQuit]
             + howItWorksBody + testingAll
