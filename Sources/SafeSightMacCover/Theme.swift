@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Every colour and typeface the covers, the way-out line, the repair card and the app's windows use, in one place.
-// The identity is the "desert" study (DESIGN-desert.md on the website branch): lime plaster and lamp-black by day,
+// The identity is the "desert" study (DESIGN-desert.md): lime plaster and lamp-black by day,
 // lapis night by night, malachite for the one accent, and gold leaf only as a rare hairline. Headings are in the
 // system serif (New York); everything else stays in the system sans.
 //

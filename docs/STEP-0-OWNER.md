@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-# Step 0: what the founder does
+# Step 0: the accounts and set-up a maintainer does
 
-Step 0 ends with a signed, notarized "hello" build whose hashes match the public CI build (test ST-028). The repository, rules and checks already exist. These steps need you, because they involve accounts, payments or publishing.
+Step 0 ends with a signed, notarized "hello" build whose hashes match the public CI build (test ST-028). The repository, rules and checks already exist. These steps need a person, because they involve accounts, payments or publishing. A team taking the project on does them under its own accounts ([HANDOVER.md](HANDOVER.md), section 4).
 
 ## 1. Apple Developer Program (individual), about $99 a year
 
@@ -14,7 +14,7 @@ You type every password and payment detail yourself.
 
 ## 2. The public GitHub repository
 
-1. Create a free GitHub organization named `lumen-open` from your own account, and set your membership in it to private. Then create a **public** repository `lumen-open/safesight-mac` and push this folder's `main` branch to it. Claude can do the pushing.
+1. Create a free GitHub organization (today `lumen-open`) and a **public** repository in it (today `lumen-open/safesight-mac`), and push this folder's `main` branch to it.
 2. In the repository's settings:
    - **Code security:** turn on **Private vulnerability reporting**.
    - **Rules:** protect `main` (no force pushes; require the `check` workflow to pass), and protect tags matching `v*` so only you can push them.
@@ -31,7 +31,7 @@ After the first push, open the **Actions** tab. The `check` workflow should pass
 - dependency licences;
 - the Swift and keeper builds and tests.
 
-The keeper is in Rust, which is not installed on this Mac, so the keeper is built and tested only on CI for now.
+The keeper is in Rust. CI builds and tests it on every push; building it locally needs a Rust toolchain.
 
 ## 4. Signing and notarizing "hello" (after Apple approves)
 
@@ -39,7 +39,7 @@ The keeper is in Rust, which is not installed on this Mac, so the keeper is buil
 2. Push a version tag, for example `v0.0.1`. The `build-release` workflow builds both parts unsigned, lists their hashes and publishes a provenance statement for each.
 3. Sign the CI-built files with your certificate. Notarize them with Apple's notary tool. Check that the signed files match CI's unsigned output plus the signature.
 
-Claude can prepare exact commands for step 4 when you get there. You enter your own credentials.
+Whoever signs enters their own credentials; no tool or agent ever handles them.
 
 ## 5. Two quotes for the outside review
 

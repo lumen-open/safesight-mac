@@ -89,7 +89,7 @@ What this doesn't hide: someone who can see your network traffic can tell that y
 
 ## The website
 
-**Built, not yet published.** Two static pages with no scripts, no cookies, no analytics and no trackers, and nothing loaded from any other site. Its content security policy enforces that. Where it will be hosted isn't decided; the host will see visits like any website, and on GitHub Pages the project gets no visitor logs.
+**Live at [lumen-open.github.io/safesight-mac](https://lumen-open.github.io/safesight-mac/).** Two static pages with no scripts, no cookies, no analytics and no trackers, and nothing loaded from any other site. Its content security policy enforces that. It's hosted on GitHub Pages: GitHub sees visits like any web host does, and the project gets no visitor logs from it.
 
 ## Camera, microphone and location
 
