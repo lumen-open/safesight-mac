@@ -1,0 +1,809 @@
+{
+ "S21": {
+  "balanced": {
+   "falseCoverEntries": 13,
+   "judgedEntries": 108773,
+   "screensWithFalseCover": 8
+  },
+  "balancedShowsFewerFalseCovers": true,
+  "either": {
+   "falseCoverEntries": 683,
+   "judgedEntries": 110044,
+   "screensWithFalseCover": 194
+  },
+  "pairedScreens": {
+   "balancedFewer": 192,
+   "balancedMore": 1,
+   "same": 739,
+   "signTestTwoSidedP": 3.0905983075969574e-56
+  },
+  "screensCompared": 932
+ },
+ "balancedScreens": 932,
+ "bundle": "Marqo (family A), NSFWJS (family B) and the Bumble tie-breaker, the lab build's converted Core ML models, checked against the sealed hash list models/watcher-models.sha256",
+ "cutoffTable": "models/thresholds.json as sealed in the build (schema kestrel-thresholds/1, agreement+referee/1), unedited",
+ "date": "2026-11-18",
+ "eitherScreens": 932,
+ "falseCover": "an entry the models covered: both families agreed, the tie-breaker confirmed, or a dispute nobody could settle (Balanced); any family's flag (Either). Covers for load (unjudged entries) are not counted; every entry was judged before counting",
+ "machine": "Apple M1 Max, macOS 26.3, release build (no lab hook)",
+ "marks": {
+  "SCREEN_FALSE_COVERS (at most 1 screen in 100)": {
+   "balanced": {
+    "rate95": [
+     0.004356,
+     0.016846
+    ],
+    "screens": 932,
+    "withFalseCover": 8
+   },
+   "either": {
+    "rate95": [
+     0.183314,
+     0.235391
+    ],
+    "screens": 932,
+    "withFalseCover": 194
+   }
+  },
+  "per judged entry (LASTING_FALSE_COVERS is per ordinary picture, 1 in 10,000; entries are tiles, not pictures)": {
+   "balanced": {
+    "entries": 108773,
+    "falseCovers": 13,
+    "rate95": [
+     7e-05,
+     0.000204
+    ]
+   },
+   "either": {
+    "entries": 110044,
+    "falseCovers": 683,
+    "rate95": [
+     0.00576,
+     0.006688
+    ]
+   }
+  }
+ },
+ "notes": [
+  "Balanced: all 13 false covers are tiles under 32 detail pixels (11 to 28) that one family flagged and the tie-breaker confirmed. Before the rule 'a flagged picture under 32 detail pixels is covered' they would have been blurred, not covered. 3 of the 13 are whole-pass entries of small areas the cover layer judged again after the first call",
+  "Either: 493 of 683 false covers are under 32 detail pixels. Under Either a cover by one family is labelled 'referee' in the detector's reasons although no tie-breaker is asked (a naming quirk of the reason field, not a behaviour)",
+  "Either run: one tile of a harmless developer screenshot was flagged by both families (a both-family false cover). It made that window hot, which blurred 308 small pictures on that screen. The Balanced run judged the same screen with no false cover (fresh jitter each judgement). FALSE_BOTH_FAMILY (mark: zero) was therefore not met in one of the two runs: 1 in about 219,000 judged entries over both runs. No strike in either run",
+  "Lasting: every screen with a false cover still had it in its final plan after the cover layer had judged everything and allowed four more clean judgements",
+  "First call only (the lab's method, one call of at most 400 judgements per screen): Balanced 7 screens, Either 183; continuing until every entry was judged found 1 and 11 more",
+  "Sample sizes are screens and judged entries (tiles: region, whole and slice entries), not pictures. LASTING_FALSE_COVERS is defined per ordinary picture; this run does not measure pictures one by one",
+  "The cut-off table that ships here is models/thresholds.json (agreement+referee/1, tuned on screen tiles, lab report section 11). The register's COVER_CUTOFFS_* constants list the earlier lab section 6 values; the two differ and this run used the sealed table only. The table was not edited"
+ ],
+ "rules": "the build's rules including the three changes of 18 November (a flagged picture under 32 detail pixels is covered; an unanswered dispute is covered; a window turns hot only after a both-family hit)",
+ "rules_compared": {
+  "balanced": {
+   "all": {
+    "calls": 1650,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 13,
+    "falseCoverEntriesFirstCallOnly": 8,
+    "falseCoverPerEntry95": [
+     7e-05,
+     0.000204
+    ],
+    "falseCoverRegionsByBand": {
+     "16-31": 7,
+     "under16": 3
+    },
+    "falseCoversByPass": {
+     "region": 10,
+     "whole": 3
+    },
+    "falseCoversByReason": {
+     "referee": 13
+    },
+    "falseCoversUnder32px": 13,
+    "firstCallOverloadedEntries": 19077,
+    "judgedEntries": 108773,
+    "judgedRegionEntries": 98263,
+    "judgedRegionsByBand": {
+     "128+": 2542,
+     "16-31": 27894,
+     "32-63": 10200,
+     "64-127": 11694,
+     "under16": 45933
+    },
+    "meanCoveredShareOfFinalPlan": 0.00537,
+    "msPerScreen": 1967,
+    "screens": 932,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 8,
+    "screensWithFalseCover95": [
+     0.004356,
+     0.016846
+    ],
+    "screensWithFalseCoverFirstCallOnly": 7,
+    "screensWithLastingCoverInFinalPlan": 8,
+    "strikes": 0,
+    "wholeWindowCovers": 3
+   },
+   "composed-generated-pages-with-photos": {
+    "calls": 208,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 2,
+    "falseCoverEntriesFirstCallOnly": 1,
+    "falseCoverPerEntry95": [
+     2.6e-05,
+     0.000345
+    ],
+    "falseCoverRegionsByBand": {
+     "under16": 1
+    },
+    "falseCoversByPass": {
+     "region": 1,
+     "whole": 1
+    },
+    "falseCoversByReason": {
+     "referee": 2
+    },
+    "falseCoversUnder32px": 2,
+    "firstCallOverloadedEntries": 3979,
+    "judgedEntries": 21137,
+    "judgedRegionEntries": 19394,
+    "judgedRegionsByBand": {
+     "128+": 90,
+     "16-31": 5920,
+     "32-63": 1339,
+     "64-127": 994,
+     "under16": 11051
+    },
+    "meanCoveredShareOfFinalPlan": 0,
+    "msPerScreen": 3644,
+    "screens": 80,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 1,
+    "screensWithFalseCover95": [
+     0.00221,
+     0.067463
+    ],
+    "screensWithFalseCoverFirstCallOnly": 1,
+    "screensWithLastingCoverInFinalPlan": 1,
+    "strikes": 0,
+    "wholeWindowCovers": 1
+   },
+   "composed-photo-free-pages": {
+    "calls": 78,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 2,
+    "falseCoverEntriesFirstCallOnly": 1,
+    "falseCoverPerEntry95": [
+     7.3e-05,
+     0.000977
+    ],
+    "falseCoverRegionsByBand": {
+     "16-31": 1
+    },
+    "falseCoversByPass": {
+     "region": 1,
+     "whole": 1
+    },
+    "falseCoversByReason": {
+     "referee": 2
+    },
+    "falseCoversUnder32px": 2,
+    "firstCallOverloadedEntries": 1083,
+    "judgedEntries": 7463,
+    "judgedRegionEntries": 6686,
+    "judgedRegionsByBand": {
+     "16-31": 1775,
+     "32-63": 92,
+     "under16": 4819
+    },
+    "meanCoveredShareOfFinalPlan": 1e-05,
+    "msPerScreen": 2525,
+    "screens": 40,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 1,
+    "screensWithFalseCover95": [
+     0.004427,
+     0.128814
+    ],
+    "screensWithFalseCoverFirstCallOnly": 1,
+    "screensWithLastingCoverInFinalPlan": 1,
+    "strikes": 0,
+    "wholeWindowCovers": 1
+   },
+   "composed-photos-on-screenshots": {
+    "calls": 193,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 2,
+    "falseCoverEntriesFirstCallOnly": 0,
+    "falseCoverPerEntry95": [
+     4.6e-05,
+     0.000615
+    ],
+    "falseCoverRegionsByBand": {
+     "16-31": 2
+    },
+    "falseCoversByPass": {
+     "region": 2
+    },
+    "falseCoversByReason": {
+     "referee": 2
+    },
+    "falseCoversUnder32px": 2,
+    "firstCallOverloadedEntries": 3700,
+    "judgedEntries": 11854,
+    "judgedRegionEntries": 11061,
+    "judgedRegionsByBand": {
+     "128+": 478,
+     "16-31": 4272,
+     "32-63": 2447,
+     "64-127": 2098,
+     "under16": 1766
+    },
+    "meanCoveredShareOfFinalPlan": 0.01667,
+    "msPerScreen": 4404,
+    "screens": 60,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 1,
+    "screensWithFalseCover95": [
+     0.002948,
+     0.088551
+    ],
+    "screensWithFalseCoverFirstCallOnly": 0,
+    "screensWithLastingCoverInFinalPlan": 1,
+    "strikes": 0,
+    "wholeWindowCovers": 0
+   },
+   "console-screenshots": {
+    "calls": 24,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 0,
+    "falseCoverEntriesFirstCallOnly": 0,
+    "falseCoverPerEntry95": [
+     0,
+     0.003061
+    ],
+    "falseCoverRegionsByBand": {},
+    "falseCoversByPass": {},
+    "falseCoversByReason": {},
+    "falseCoversUnder32px": 0,
+    "firstCallOverloadedEntries": 52,
+    "judgedEntries": 1251,
+    "judgedRegionEntries": 1133,
+    "judgedRegionsByBand": {
+     "128+": 66,
+     "16-31": 328,
+     "32-63": 207,
+     "64-127": 295,
+     "under16": 237
+    },
+    "meanCoveredShareOfFinalPlan": 0,
+    "msPerScreen": 2386,
+    "screens": 12,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 0,
+    "screensWithFalseCover95": [
+     0,
+     0.242494
+    ],
+    "screensWithFalseCoverFirstCallOnly": 0,
+    "screensWithLastingCoverInFinalPlan": 0,
+    "strikes": 0,
+    "wholeWindowCovers": 0
+   },
+   "developer-screenshots": {
+    "calls": 392,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 0,
+    "falseCoverEntriesFirstCallOnly": 0,
+    "falseCoverPerEntry95": [
+     0,
+     0.000519
+    ],
+    "falseCoverRegionsByBand": {},
+    "falseCoversByPass": {},
+    "falseCoversByReason": {},
+    "falseCoversUnder32px": 0,
+    "firstCallOverloadedEntries": 452,
+    "judgedEntries": 7392,
+    "judgedRegionEntries": 6685,
+    "judgedRegionsByBand": {
+     "128+": 676,
+     "16-31": 1667,
+     "32-63": 1252,
+     "64-127": 1857,
+     "under16": 1233
+    },
+    "meanCoveredShareOfFinalPlan": 0,
+    "msPerScreen": 408,
+    "screens": 364,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 0,
+    "screensWithFalseCover95": [
+     0,
+     0.010443
+    ],
+    "screensWithFalseCoverFirstCallOnly": 0,
+    "screensWithLastingCoverInFinalPlan": 0,
+    "strikes": 0,
+    "wholeWindowCovers": 0
+   },
+   "game-screenshots": {
+    "calls": 501,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 7,
+    "falseCoverEntriesFirstCallOnly": 6,
+    "falseCoverPerEntry95": [
+     0.000122,
+     0.000518
+    ],
+    "falseCoverRegionsByBand": {
+     "16-31": 4,
+     "under16": 2
+    },
+    "falseCoversByPass": {
+     "region": 6,
+     "whole": 1
+    },
+    "falseCoversByReason": {
+     "referee": 7
+    },
+    "falseCoversUnder32px": 7,
+    "firstCallOverloadedEntries": 8128,
+    "judgedEntries": 27902,
+    "judgedRegionEntries": 25325,
+    "judgedRegionsByBand": {
+     "128+": 1232,
+     "16-31": 7080,
+     "32-63": 4290,
+     "64-127": 6447,
+     "under16": 6276
+    },
+    "meanCoveredShareOfFinalPlan": 0.0177,
+    "msPerScreen": 2816,
+    "screens": 226,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 5,
+    "screensWithFalseCover95": [
+     0.009486,
+     0.050736
+    ],
+    "screensWithFalseCoverFirstCallOnly": 5,
+    "screensWithLastingCoverInFinalPlan": 5,
+    "strikes": 0,
+    "wholeWindowCovers": 1
+   },
+   "generated-pages": {
+    "calls": 254,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 0,
+    "falseCoverEntriesFirstCallOnly": 0,
+    "falseCoverPerEntry95": [
+     0,
+     0.000121
+    ],
+    "falseCoverRegionsByBand": {},
+    "falseCoversByPass": {},
+    "falseCoversByReason": {},
+    "falseCoversUnder32px": 0,
+    "firstCallOverloadedEntries": 1683,
+    "judgedEntries": 31774,
+    "judgedRegionEntries": 27979,
+    "judgedRegionsByBand": {
+     "16-31": 6852,
+     "32-63": 573,
+     "64-127": 3,
+     "under16": 20551
+    },
+    "meanCoveredShareOfFinalPlan": 0,
+    "msPerScreen": 2420,
+    "screens": 150,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 0,
+    "screensWithFalseCover95": [
+     0,
+     0.02497
+    ],
+    "screensWithFalseCoverFirstCallOnly": 0,
+    "screensWithLastingCoverInFinalPlan": 0,
+    "strikes": 0,
+    "wholeWindowCovers": 0
+   }
+  },
+  "either": {
+   "all": {
+    "calls": 2365,
+    "falseBlurEntries": 308,
+    "falseCoverEntries": 683,
+    "falseCoverEntriesFirstCallOnly": 472,
+    "falseCoverPerEntry95": [
+     0.00576,
+     0.006688
+    ],
+    "falseCoverRegionsByBand": {
+     "128+": 28,
+     "16-31": 165,
+     "32-63": 46,
+     "64-127": 57,
+     "under16": 273
+    },
+    "falseCoversByPass": {
+     "region": 569,
+     "slice": 31,
+     "whole": 83
+    },
+    "falseCoversByReason": {
+     "bothFamilies": 1,
+     "referee": 682
+    },
+    "falseCoversUnder32px": 493,
+    "firstCallOverloadedEntries": 19081,
+    "judgedEntries": 110044,
+    "judgedRegionEntries": 99194,
+    "judgedRegionsByBand": {
+     "128+": 2595,
+     "16-31": 28088,
+     "32-63": 10298,
+     "64-127": 11930,
+     "under16": 46283
+    },
+    "meanCoveredShareOfFinalPlan": 0.09043,
+    "msPerScreen": 1979,
+    "screens": 932,
+    "screensMadeHot": 1,
+    "screensWithFalseBlur": 1,
+    "screensWithFalseCover": 194,
+    "screensWithFalseCover95": [
+     0.183314,
+     0.235391
+    ],
+    "screensWithFalseCoverFirstCallOnly": 183,
+    "screensWithLastingCoverInFinalPlan": 192,
+    "strikes": 0,
+    "wholeWindowCovers": 75
+   },
+   "composed-generated-pages-with-photos": {
+    "calls": 320,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 123,
+    "falseCoverEntriesFirstCallOnly": 89,
+    "falseCoverPerEntry95": [
+     0.004847,
+     0.006892
+    ],
+    "falseCoverRegionsByBand": {
+     "16-31": 30,
+     "32-63": 1,
+     "under16": 74
+    },
+    "falseCoversByPass": {
+     "region": 105,
+     "slice": 7,
+     "whole": 11
+    },
+    "falseCoversByReason": {
+     "referee": 123
+    },
+    "falseCoversUnder32px": 114,
+    "firstCallOverloadedEntries": 3978,
+    "judgedEntries": 21279,
+    "judgedRegionEntries": 19473,
+    "judgedRegionsByBand": {
+     "128+": 90,
+     "16-31": 5926,
+     "32-63": 1343,
+     "64-127": 996,
+     "under16": 11118
+    },
+    "meanCoveredShareOfFinalPlan": 0.19179,
+    "msPerScreen": 3687,
+    "screens": 80,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 33,
+    "screensWithFalseCover95": [
+     0.311059,
+     0.52196
+    ],
+    "screensWithFalseCoverFirstCallOnly": 30,
+    "screensWithLastingCoverInFinalPlan": 33,
+    "strikes": 0,
+    "wholeWindowCovers": 10
+   },
+   "composed-photo-free-pages": {
+    "calls": 127,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 42,
+    "falseCoverEntriesFirstCallOnly": 31,
+    "falseCoverPerEntry95": [
+     0.004155,
+     0.007577
+    ],
+    "falseCoverRegionsByBand": {
+     "16-31": 3,
+     "32-63": 1,
+     "under16": 29
+    },
+    "falseCoversByPass": {
+     "region": 33,
+     "whole": 9
+    },
+    "falseCoversByReason": {
+     "referee": 42
+    },
+    "falseCoversUnder32px": 41,
+    "firstCallOverloadedEntries": 1083,
+    "judgedEntries": 7484,
+    "judgedRegionEntries": 6693,
+    "judgedRegionsByBand": {
+     "16-31": 1778,
+     "32-63": 92,
+     "under16": 4823
+    },
+    "meanCoveredShareOfFinalPlan": 0.0501,
+    "msPerScreen": 2491,
+    "screens": 40,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 12,
+    "screensWithFalseCover95": [
+     0.180748,
+     0.4543
+    ],
+    "screensWithFalseCoverFirstCallOnly": 12,
+    "screensWithLastingCoverInFinalPlan": 12,
+    "strikes": 0,
+    "wholeWindowCovers": 9
+   },
+   "composed-photos-on-screenshots": {
+    "calls": 226,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 24,
+    "falseCoverEntriesFirstCallOnly": 13,
+    "falseCoverPerEntry95": [
+     0.001357,
+     0.003001
+    ],
+    "falseCoverRegionsByBand": {
+     "16-31": 12,
+     "32-63": 2,
+     "64-127": 3,
+     "under16": 2
+    },
+    "falseCoversByPass": {
+     "region": 19,
+     "slice": 1,
+     "whole": 4
+    },
+    "falseCoversByReason": {
+     "referee": 24
+    },
+    "falseCoversUnder32px": 14,
+    "firstCallOverloadedEntries": 3700,
+    "judgedEntries": 11893,
+    "judgedRegionEntries": 11091,
+    "judgedRegionsByBand": {
+     "128+": 482,
+     "16-31": 4275,
+     "32-63": 2450,
+     "64-127": 2112,
+     "under16": 1772
+    },
+    "meanCoveredShareOfFinalPlan": 0.13347,
+    "msPerScreen": 4402,
+    "screens": 60,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 12,
+    "screensWithFalseCover95": [
+     0.118285,
+     0.317818
+    ],
+    "screensWithFalseCoverFirstCallOnly": 10,
+    "screensWithLastingCoverInFinalPlan": 11,
+    "strikes": 0,
+    "wholeWindowCovers": 2
+   },
+   "console-screenshots": {
+    "calls": 38,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 14,
+    "falseCoverEntriesFirstCallOnly": 10,
+    "falseCoverPerEntry95": [
+     0.006471,
+     0.01812
+    ],
+    "falseCoverRegionsByBand": {
+     "128+": 4,
+     "32-63": 3,
+     "64-127": 6
+    },
+    "falseCoversByPass": {
+     "region": 13,
+     "whole": 1
+    },
+    "falseCoversByReason": {
+     "referee": 14
+    },
+    "falseCoversUnder32px": 0,
+    "firstCallOverloadedEntries": 52,
+    "judgedEntries": 1291,
+    "judgedRegionEntries": 1165,
+    "judgedRegionsByBand": {
+     "128+": 67,
+     "16-31": 331,
+     "32-63": 209,
+     "64-127": 321,
+     "under16": 237
+    },
+    "meanCoveredShareOfFinalPlan": 0.12591,
+    "msPerScreen": 2420,
+    "screens": 12,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 4,
+    "screensWithFalseCover95": [
+     0.13812,
+     0.609378
+    ],
+    "screensWithFalseCoverFirstCallOnly": 4,
+    "screensWithLastingCoverInFinalPlan": 4,
+    "strikes": 0,
+    "wholeWindowCovers": 1
+   },
+   "developer-screenshots": {
+    "calls": 594,
+    "falseBlurEntries": 308,
+    "falseCoverEntries": 134,
+    "falseCoverEntriesFirstCallOnly": 79,
+    "falseCoverPerEntry95": [
+     0.014545,
+     0.020339
+    ],
+    "falseCoverRegionsByBand": {
+     "128+": 18,
+     "16-31": 15,
+     "32-63": 14,
+     "64-127": 33,
+     "under16": 11
+    },
+    "falseCoversByPass": {
+     "region": 91,
+     "slice": 15,
+     "whole": 28
+    },
+    "falseCoversByReason": {
+     "bothFamilies": 1,
+     "referee": 133
+    },
+    "falseCoversUnder32px": 33,
+    "firstCallOverloadedEntries": 452,
+    "judgedEntries": 7789,
+    "judgedRegionEntries": 7017,
+    "judgedRegionsByBand": {
+     "128+": 710,
+     "16-31": 1740,
+     "32-63": 1289,
+     "64-127": 2002,
+     "under16": 1276
+    },
+    "meanCoveredShareOfFinalPlan": 0.03945,
+    "msPerScreen": 421,
+    "screens": 364,
+    "screensMadeHot": 1,
+    "screensWithFalseBlur": 1,
+    "screensWithFalseCover": 43,
+    "screensWithFalseCover95": [
+     0.088896,
+     0.155344
+    ],
+    "screensWithFalseCoverFirstCallOnly": 43,
+    "screensWithLastingCoverInFinalPlan": 42,
+    "strikes": 0,
+    "wholeWindowCovers": 25
+   },
+   "game-screenshots": {
+    "calls": 642,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 152,
+    "falseCoverEntriesFirstCallOnly": 112,
+    "falseCoverPerEntry95": [
+     0.004621,
+     0.006343
+    ],
+    "falseCoverRegionsByBand": {
+     "128+": 6,
+     "16-31": 74,
+     "32-63": 17,
+     "64-127": 15,
+     "under16": 32
+    },
+    "falseCoversByPass": {
+     "region": 144,
+     "whole": 8
+    },
+    "falseCoversByReason": {
+     "referee": 152
+    },
+    "falseCoversUnder32px": 114,
+    "firstCallOverloadedEntries": 8128,
+    "judgedEntries": 28074,
+    "judgedRegionEntries": 25456,
+    "judgedRegionsByBand": {
+     "128+": 1246,
+     "16-31": 7111,
+     "32-63": 4314,
+     "64-127": 6496,
+     "under16": 6289
+    },
+    "meanCoveredShareOfFinalPlan": 0.14187,
+    "msPerScreen": 2818,
+    "screens": 226,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 50,
+    "screensWithFalseCover95": [
+     0.172034,
+     0.279762
+    ],
+    "screensWithFalseCoverFirstCallOnly": 45,
+    "screensWithLastingCoverInFinalPlan": 50,
+    "strikes": 0,
+    "wholeWindowCovers": 8
+   },
+   "generated-pages": {
+    "calls": 418,
+    "falseBlurEntries": 0,
+    "falseCoverEntries": 194,
+    "falseCoverEntriesFirstCallOnly": 138,
+    "falseCoverPerEntry95": [
+     0.005231,
+     0.006924
+    ],
+    "falseCoverRegionsByBand": {
+     "16-31": 31,
+     "32-63": 8,
+     "under16": 125
+    },
+    "falseCoversByPass": {
+     "region": 164,
+     "slice": 8,
+     "whole": 22
+    },
+    "falseCoversByReason": {
+     "referee": 194
+    },
+    "falseCoversUnder32px": 177,
+    "firstCallOverloadedEntries": 1688,
+    "judgedEntries": 32234,
+    "judgedRegionEntries": 28299,
+    "judgedRegionsByBand": {
+     "16-31": 6927,
+     "32-63": 601,
+     "64-127": 3,
+     "under16": 20768
+    },
+    "meanCoveredShareOfFinalPlan": 0.0733,
+    "msPerScreen": 2444,
+    "screens": 150,
+    "screensMadeHot": 0,
+    "screensWithFalseBlur": 0,
+    "screensWithFalseCover": 40,
+    "screensWithFalseCover95": [
+     0.202372,
+     0.342615
+    ],
+    "screensWithFalseCoverFirstCallOnly": 39,
+    "screensWithLastingCoverInFinalPlan": 40,
+    "strikes": 0,
+    "wholeWindowCovers": 20
+   }
+  }
+ },
+ "run": "ST-040 re-run through the whole pipeline (safesightmac-harness falsecovers), harmless held-out screens only",
+ "set": "the lab build's held-out harmless screens (the same 932 screens its screen-level cut-offs were checked on, never tuned on): 180 composed pages of harmless photos, 602 screenshots (364 developer, 226 game, 12 console) and 150 generated pages"
+}
