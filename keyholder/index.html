@@ -1,0 +1,1687 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FQWKMMtXVjwEb0Oc0fho1evAoZF1s62zq4eaQACyOYQ=' 'sha256-ARIcjR84fOhDPu2ozuCP64PDu6+nD0VA5ERnxbMLlso='; style-src 'sha256-GmHpd4jAoxurl42aJYBtZPvInLBf9qQc9mBt78468hM='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151311" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:,">
+<title>SafeSight Mac keyholder</title>
+<style>/* SPDX-License-Identifier: Apache-2.0 */
+/* Calm, phone-first, one column. System fonts only; nothing is loaded from anywhere. */
+:root {
+  --bg: #f6f1ea;
+  --bg-glow: #fbf7f1;
+  --card: #fffdfa;
+  --card-edge: rgba(73, 52, 33, 0.08);
+  --shadow: 0 1px 2px rgba(73, 52, 33, 0.05), 0 12px 32px -12px rgba(73, 52, 33, 0.18);
+  --text: #26211c;
+  --muted: #6c635a;
+  --line: #e4dcd1;
+  --soft: #f4ede4;
+  --accent: #b4491f;
+  --accent-press: #9c3d18;
+  --accent-text: #ffffff;
+  --accent-soft: #f8e6dc;
+  --tick: #b4491f;
+  --error: #a3261b;
+  --error-soft: #fbe9e6;
+  --radius: 22px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151311;
+    --bg-glow: #1c1916;
+    --card: #1f1c19;
+    --card-edge: rgba(255, 240, 225, 0.07);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.6);
+    --text: #f3eee8;
+    --muted: #b3aaa0;
+    --line: #3a342e;
+    --soft: #27231f;
+    --accent: #f0915f;
+    --accent-press: #e07d4a;
+    --accent-text: #1a0f0a;
+    --accent-soft: #3a2519;
+    --tick: #f0915f;
+    --error: #ff9b8c;
+    --error-soft: #3a1d19;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: radial-gradient(120% 60% at 50% 0%, var(--bg-glow), var(--bg) 70%) fixed, var(--bg);
+  color: var(--text);
+  font: 17px/1.55 -apple-system, "SF Pro Text", "SF Pro", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+main {
+  max-width: 30rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; margin: 4px 4px 18px; color: var(--muted); font-size: 15px; }
+.brand-mark {
+  display: inline-grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 10px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.brand-mark svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.brand-name { font-weight: 600; color: var(--text); letter-spacing: -0.005em; }
+.brand-role { font-weight: 500; color: var(--muted); margin-left: 4px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px 22px 24px;
+  animation: enter 280ms var(--ease) both;
+}
+@keyframes enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.995); }
+  to { opacity: 1; transform: none; }
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent);
+}
+h1 { font-size: 27px; line-height: 1.2; letter-spacing: -0.018em; font-weight: 700; margin: 0 0 12px; }
+h1:focus { outline: none; }
+p { margin: 0 0 14px; }
+.lead { color: var(--muted); font-size: 17.5px; }
+.lead strong { color: var(--text); }
+.quiet, .hint { color: var(--muted); }
+.ask { font-size: 20px; line-height: 1.4; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 16px; }
+
+.facts { list-style: none; margin: 20px 0 6px; padding: 0; }
+.facts li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); }
+.facts li:first-child { border-top: 0; padding-top: 4px; }
+.tick {
+  flex: none; display: inline-grid; place-items: center;
+  width: 24px; height: 24px; margin-top: 1px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--tick);
+}
+.tick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+.panel, .next { background: var(--soft); border-radius: 16px; padding: 16px 16px 2px; margin: 0 0 16px; }
+
+.field { margin: 22px 0 4px; }
+label { display: block; font-weight: 600; font-size: 15px; margin: 0 0 8px; }
+.optional { font-weight: 500; color: var(--muted); margin-left: 6px; }
+.hint { font-size: 14px; margin: 8px 2px 0; }
+input, textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--soft);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 13px 14px;
+  transition: border-color 160ms var(--ease), background-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
+input:focus, textarea:focus { outline: none; border-color: var(--accent); background: var(--card); box-shadow: 0 0 0 4px var(--accent-soft); }
+textarea.code {
+  font: 13.5px/1.5 ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+  resize: none;
+}
+
+.actions { display: flex; flex-direction: column; gap: 10px; margin: 22px 0 2px; }
+button {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; min-height: 52px; padding: 14px 20px;
+  font: inherit; font-weight: 600; letter-spacing: -0.005em;
+  border-radius: 14px; border: 1px solid transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms var(--ease), background-color 160ms var(--ease), border-color 160ms var(--ease), opacity 160ms var(--ease);
+}
+button:active { transform: scale(0.985); }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+button.primary { background: var(--accent); color: var(--accent-text); box-shadow: 0 6px 16px -8px var(--accent); }
+button.primary:active { background: var(--accent-press); }
+button.secondary { background: transparent; color: var(--text); border-color: var(--line); }
+button.ghost { width: auto; min-height: 40px; padding: 8px 14px; font-size: 15px; background: var(--card); color: var(--accent); border-color: var(--line); }
+button:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+.qr {
+  margin: 20px auto 16px; max-width: 18.5rem;
+  padding: 10px; background: #ffffff; border-radius: 18px;
+  border: 1px solid var(--line);
+}
+.qr svg { display: block; width: 100%; height: auto; border-radius: 10px; }
+.code-box { position: relative; }
+.code-box textarea { padding-bottom: 54px; }
+.code-box button { position: absolute; right: 8px; bottom: 8px; }
+
+.status { color: var(--muted); font-size: 14px; min-height: 1.5em; margin: 8px 2px 12px; }
+.error {
+  color: var(--error); background: var(--error-soft);
+  border-radius: 14px; padding: 12px 14px; margin: 16px 0 0;
+  font-size: 15px; font-weight: 500;
+}
+
+.foot { margin: 18px 4px 0; text-align: center; font-size: 13px; color: var(--muted); }
+
+@media (min-width: 560px) {
+  .card { padding: 36px 34px 30px; }
+  h1 { font-size: 30px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card { animation: none; }
+  * { transition: none !important; }
+}
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+
+<header class="brand">
+  <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.25"/><path d="M12.25 12H20.5M17.5 12v3.25M20.5 12v2.25"/></svg></span>
+  <span class="brand-name">SafeSight Mac <span class="brand-role">Keyholder</span></span>
+</header>
+
+<noscript>
+  <section class="card">
+    <p>This page needs JavaScript turned on to make and use your key. It still sends nothing to anyone.</p>
+  </section>
+</noscript>
+
+<section id="screen-home" class="card">
+  <p class="eyebrow">Welcome</p>
+  <h1>You've been asked to be a keyholder</h1>
+  <p class="lead">Someone you know has put a lock on their Mac that takes time to switch off. They chose how long.</p>
+  <ul class="facts">
+    <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>If they ever ask, you can approve one request. It then takes 24 hours instead of their full wait.</span></li>
+    <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>That's all a keyholder can do. You can't stop them leaving, and nobody can ask you to. Saying no, or not answering, is always fine.</span></li>
+    <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>You won't see anything about them or their Mac, and you won't be told anything.</span></li>
+    <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>This page sends nothing to anyone. Your key is kept by your phone, like a saved password.</span></li>
+  </ul>
+
+  <div class="field">
+    <label for="key-name">Name this key <span class="optional">optional</span></label>
+    <input id="key-name" type="text" maxlength="64" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="For example, Sam's Mac">
+    <p class="hint">Only you see this name, in your saved passwords.</p>
+  </div>
+  <div class="actions">
+    <button id="create-key" class="primary" type="button">Create my key</button>
+    <button id="go-paste" class="secondary" type="button">I have a request code</button>
+  </div>
+  <p id="home-error" class="error" role="alert" hidden></p>
+</section>
+
+<section id="screen-enrolled" class="card" hidden>
+  <p class="eyebrow">Your key</p>
+  <h1>Your key is ready</h1>
+  <p class="lead">Show this code to their Mac. It reads the code with its camera, or they can paste the text.</p>
+  <figure class="qr"><svg id="enrolled-qr" role="img" aria-label="QR code of your key's code" viewBox="0 0 29 29" shape-rendering="crispEdges"><rect id="enrolled-qr-bg" width="29" height="29" fill="#fff"/><path id="enrolled-qr-path" d="" fill="#000"/></svg></figure>
+  <div class="code-box">
+    <textarea id="enrolled-text" class="code" readonly rows="3" aria-label="Your key's code as text"></textarea>
+    <button id="enrolled-copy" class="ghost" type="button">Copy</button>
+  </div>
+  <p id="enrolled-status" class="status" role="status"></p>
+  <div class="next">
+    <p>Next, they'll show you a test request. Scan it with your phone's camera, or paste it here.</p>
+  </div>
+  <div class="actions">
+    <button id="enrolled-paste" class="primary" type="button">I have a request code</button>
+  </div>
+</section>
+
+<section id="screen-paste" class="card" hidden>
+  <p class="eyebrow">Request code</p>
+  <h1>Read a request code</h1>
+  <p class="lead">Scan their QR code with your phone's camera, or paste the code they sent you.</p>
+  <div class="field">
+    <label for="paste-text">Request code</label>
+    <textarea id="paste-text" class="code" rows="5" autocomplete="off" autocapitalize="characters" spellcheck="false"></textarea>
+  </div>
+  <div class="actions">
+    <button id="paste-read" class="primary" type="button">Read the code</button>
+    <button id="paste-back" class="secondary" type="button">Back</button>
+  </div>
+  <p id="paste-error" class="error" role="alert" hidden></p>
+</section>
+
+<section id="screen-request" class="card" hidden>
+  <p id="request-eyebrow" class="eyebrow">Request</p>
+  <h1 id="request-title"></h1>
+  <p id="request-ask" class="ask"></p>
+  <div id="request-real" class="panel">
+    <p>If you approve, it takes 24 hours instead of their full wait.</p>
+    <p>You can't stop this. Without your approval they can still do it, after their full wait. You can only make it sooner.</p>
+  </div>
+  <p class="quiet">Saying no, or not answering, is fine. This is all you'll see, and you won't be told what happens next.</p>
+  <div class="actions">
+    <button id="request-approve" class="primary" type="button">Approve with my key</button>
+    <button id="request-decline" class="secondary" type="button">Not now</button>
+  </div>
+  <p id="request-error" class="error" role="alert" hidden></p>
+</section>
+
+<section id="screen-approved" class="card" hidden>
+  <p class="eyebrow">Done on your side</p>
+  <h1 id="approved-title">Approved</h1>
+  <p class="lead">Give this code back to <strong id="approved-label"></strong>. Their Mac reads it with its camera, or they can paste the text.</p>
+  <figure class="qr"><svg id="approved-qr" role="img" aria-label="QR code of your approval" viewBox="0 0 29 29" shape-rendering="crispEdges"><rect id="approved-qr-bg" width="29" height="29" fill="#fff"/><path id="approved-qr-path" d="" fill="#000"/></svg></figure>
+  <div class="code-box">
+    <textarea id="approved-text" class="code" readonly rows="4" aria-label="Your approval as text"></textarea>
+    <button id="approved-copy" class="ghost" type="button">Copy</button>
+  </div>
+  <p id="approved-status" class="status" role="status"></p>
+  <div class="next">
+    <p id="approved-real">That's everything. You can close this page.</p>
+    <p id="approved-test" hidden>When their Mac says the test passed, you're done. You won't hear from SafeSight Mac again unless they ask you.</p>
+  </div>
+  <div class="actions">
+    <button id="approved-done" class="secondary" type="button">Done</button>
+  </div>
+</section>
+
+<section id="screen-declined" class="card" hidden>
+  <p class="eyebrow">Not now</p>
+  <h1>Nothing was approved</h1>
+  <p class="lead">That's fine. Nothing was sent and nothing changed. You can close this page.</p>
+  <div class="actions">
+    <button id="declined-home" class="secondary" type="button">Back to the start</button>
+  </div>
+</section>
+
+<section id="screen-stopped" class="card" hidden>
+  <p class="eyebrow">Keyholder</p>
+  <h1 id="stopped-title"></h1>
+  <p id="stopped-text" class="lead"></p>
+</section>
+
+<footer class="foot">This page sends nothing and keeps nothing.</footer>
+
+</main>
+<script>// SPDX-License-Identifier: Apache-2.0
+// The keyholder page's core: reading and writing the three codes (enrolment record, request code,
+// approval code), the passkey options, the checks made before a code is shown, and a small QR
+// encoder. Plain functions with no access to the page, so the tests load this file as it is.
+// build.mjs inlines it into index.html byte for byte. Register: section 8a, SD-155, SD-194 to
+// SD-196; chapter 03 section 8; chapter 09 section 14.
+'use strict';
+
+const KeyholderCore = (() => {
+  // ---------------------------------------------------------------------------------------------
+  // Constants
+  // ---------------------------------------------------------------------------------------------
+
+  const FORMAT_VERSION = 1;
+
+  // OPEN: the envelope sizes. Register 8a says every record starts with magic, record type,
+  // format version and length, and ends with a checksum, but gives no sizes. Here: magic "SM"
+  // (2 bytes), type (1), version (1), body length (2, big-endian), body, CRC-32 (4, big-endian)
+  // over everything before it. The envelope stays the same in every format version.
+  const MAGIC = [0x53, 0x4d];
+  const TYPE = Object.freeze({ ENROLMENT: 1, REQUEST: 2, APPROVAL: 3 });
+  const TYPE_NAMES = Object.freeze({ 1: 'enrolment', 2: 'request', 3: 'approval' });
+
+  // OPEN: kind codes. The register lists exit, lower wait, loosen setting and admin batch; it
+  // names no kind for the test approval at enrolment (SD-195), so the test gets kind 0.
+  const KIND = Object.freeze({ TEST: 0, EXIT: 1, LOWER_WAIT: 2, LOOSEN_SETTING: 3, ADMIN_BATCH: 4 });
+  const KIND_NAMES = Object.freeze(['test', 'exit', 'lower-wait', 'loosen-setting', 'admin-batch']);
+
+  // OPEN: field sizes. The page's codes are carried forms with hard caps; the app pads them into
+  // the keeper's fixed layouts (register 8a: "converted by the app to the fixed layout").
+  const LIMITS = Object.freeze({
+    text: 4096, // characters accepted in a pasted or linked code, separators included
+    body: 2048, // bytes in a record body
+    requestId: 16, // OPEN: the register gives no size for a request or batch ID
+    challenge: 32, // chapter 03 section 8: 32 random bytes
+    labelBytes: 32, // OPEN: "a short label"; UTF-8 bytes
+    batchItems: 16, // OPEN: no batch size is in the register
+    itemHash: 32, // SHA-256
+    credentialId: 128, // OPEN: the keeper pins a fixed-size, zero-padded field
+    publicKey: 65, // P-256, uncompressed (chapter 03 section 8)
+    authenticatorData: 37, // chapter 03 section 8: the fixed first 37 bytes
+    clientData: 1024, // OPEN: the keeper's fixed-size padded field
+    signatureMin: 8,
+    signatureMax: 72, // DER form of an ES256 signature
+  });
+
+  // OPEN (SQ-11): the pinned page origin is not chosen yet. While it is empty the page works on
+  // whatever origin serves it. Once set, the page refuses to make or use keys anywhere else.
+  const PINNED_ORIGIN = '';
+
+  const FLAG_UP = 0x01; // user present
+  const FLAG_UV = 0x04; // user verified
+  const FLAG_AT = 0x40; // attested credential data included
+  const FLAG_ED = 0x80; // extension data included
+
+  // ---------------------------------------------------------------------------------------------
+  // Errors
+  // ---------------------------------------------------------------------------------------------
+
+  // reason is one of: empty, too-long, characters, damaged, wrong-type, version, malformed,
+  // passkey. detail is for people debugging, never shown as the main message.
+  class CodeError extends Error {
+    constructor(reason, detail) {
+      super(detail ? `${reason}: ${detail}` : reason);
+      this.name = 'CodeError';
+      this.reason = reason;
+      this.detail = detail || '';
+    }
+  }
+  function fail(reason, detail) {
+    throw new CodeError(reason, detail);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Bytes
+  // ---------------------------------------------------------------------------------------------
+
+  function bytesOf(value, what) {
+    if (value instanceof Uint8Array) return value;
+    if (value instanceof ArrayBuffer) return new Uint8Array(value);
+    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    return fail('malformed', `${what} is not bytes`);
+  }
+  function concat(parts) {
+    let total = 0;
+    for (const p of parts) total += p.length;
+    const out = new Uint8Array(total);
+    let at = 0;
+    for (const p of parts) {
+      out.set(p, at);
+      at += p.length;
+    }
+    return out;
+  }
+  function equalBytes(a, b) {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+    return diff === 0;
+  }
+  function toHex(bytes) {
+    let s = '';
+    for (const b of bytes) s += b.toString(16).padStart(2, '0');
+    return s;
+  }
+  function utf8Encode(text) {
+    return new TextEncoder().encode(text);
+  }
+  function utf8Decode(bytes) {
+    try {
+      return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    } catch (e) {
+      return fail('malformed', 'text is not UTF-8');
+    }
+  }
+  async function sha256(bytes) {
+    return new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes));
+  }
+
+  // CRC-32 as in zlib and PNG (reflected, polynomial 0xEDB88320).
+  const CRC_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      table[n] = c >>> 0;
+    }
+    return table;
+  })();
+  function crc32(bytes) {
+    let c = 0xffffffff;
+    for (const b of bytes) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Text form
+  // ---------------------------------------------------------------------------------------------
+
+  // OPEN: the alphabet. Chapter 09 says "a base-32 alphabet with a checksum". Here: RFC 4648
+  // base32, upper case, no padding. Every character is in the QR code's alphanumeric set. When
+  // reading, case is ignored and spaces, line breaks and hyphens are skipped; anything else is
+  // refused, as are unused trailing bits that are not zero, so each code has one spelling.
+  const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+  function base32Encode(bytes) {
+    let out = '';
+    let acc = 0;
+    let bits = 0;
+    for (const b of bytes) {
+      acc = ((acc << 8) | b) & 0xfff;
+      bits += 8;
+      while (bits >= 5) {
+        bits -= 5;
+        out += B32[(acc >>> bits) & 31];
+      }
+    }
+    if (bits > 0) out += B32[(acc << (5 - bits)) & 31];
+    return out;
+  }
+
+  function base32Decode(text) {
+    if (typeof text !== 'string') fail('empty');
+    if (text.length > LIMITS.text) fail('too-long');
+    if (/[^A-Za-z2-7\s-]/.test(text)) fail('characters');
+    const clean = text.replace(/[\s-]+/g, '').toUpperCase();
+    if (!clean) fail('empty');
+    const out = new Uint8Array(Math.floor((clean.length * 5) / 8));
+    let acc = 0;
+    let bits = 0;
+    let n = 0;
+    for (let i = 0; i < clean.length; i++) {
+      acc = ((acc << 5) | B32.indexOf(clean[i])) & 0xfff;
+      bits += 5;
+      if (bits >= 8) {
+        bits -= 8;
+        out[n++] = (acc >>> bits) & 0xff;
+      }
+    }
+    if (bits >= 5 || (acc & ((1 << bits) - 1)) !== 0) fail('characters', 'the code ends wrongly');
+    return out;
+  }
+
+  function base64url(bytes) {
+    const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let out = '';
+    let i = 0;
+    for (; i + 2 < bytes.length; i += 3) {
+      const v = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+      out += abc[v >>> 18] + abc[(v >>> 12) & 63] + abc[(v >>> 6) & 63] + abc[v & 63];
+    }
+    if (i < bytes.length) {
+      const v = (bytes[i] << 16) | ((i + 1 < bytes.length ? bytes[i + 1] : 0) << 8);
+      out += abc[v >>> 18] + abc[(v >>> 12) & 63];
+      if (i + 1 < bytes.length) out += abc[(v >>> 6) & 63];
+    }
+    return out;
+  }
+
+  // A request code may arrive as the whole page address (from the owner's QR code) or as the
+  // code alone. Only the part after "#" is ever read (SD-195: the host never receives it).
+  function extractCode(input) {
+    const text = String(input == null ? '' : input).trim();
+    const hash = text.lastIndexOf('#');
+    return hash >= 0 ? text.slice(hash + 1) : text;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // The envelope
+  // ---------------------------------------------------------------------------------------------
+
+  function encodeRecord(type, body) {
+    if (body.length > LIMITS.body) fail('malformed', 'body too long');
+    const out = new Uint8Array(6 + body.length + 4);
+    out[0] = MAGIC[0];
+    out[1] = MAGIC[1];
+    out[2] = type;
+    out[3] = FORMAT_VERSION;
+    out[4] = body.length >>> 8;
+    out[5] = body.length & 0xff;
+    out.set(body, 6);
+    const c = crc32(out.subarray(0, 6 + body.length));
+    out[6 + body.length] = c >>> 24;
+    out[7 + body.length] = (c >>> 16) & 0xff;
+    out[8 + body.length] = (c >>> 8) & 0xff;
+    out[9 + body.length] = c & 0xff;
+    return out;
+  }
+
+  // Checks run in this order: magic, length, checksum, type, version. A damaged code is reported
+  // as damaged before anything inside it is believed.
+  function decodeRecord(bytes, type) {
+    if (bytes.length < 10 || bytes[0] !== MAGIC[0] || bytes[1] !== MAGIC[1]) fail('damaged', 'not a keyholder code');
+    const len = (bytes[4] << 8) | bytes[5];
+    if (len > LIMITS.body) fail('damaged', 'length field too large');
+    if (bytes.length !== 10 + len) fail('damaged', 'length does not match');
+    const stored = ((bytes[6 + len] << 24) | (bytes[7 + len] << 16) | (bytes[8 + len] << 8) | bytes[9 + len]) >>> 0;
+    if (stored !== crc32(bytes.subarray(0, 6 + len))) fail('damaged', 'checksum does not match');
+    if (bytes[2] !== type) fail('wrong-type', TYPE_NAMES[bytes[2]] || 'unknown');
+    if (bytes[3] !== FORMAT_VERSION) fail('version', `format version ${bytes[3]}`);
+    return bytes.slice(6, 6 + len);
+  }
+
+  function reader(body) {
+    let pos = 0;
+    const r = {
+      take(n, what) {
+        if (pos + n > body.length) fail('malformed', `${what} cut short`);
+        const v = body.slice(pos, pos + n);
+        pos += n;
+        return v;
+      },
+      u8(what) {
+        return r.take(1, what)[0];
+      },
+      u16(what) {
+        const b = r.take(2, what);
+        return (b[0] << 8) | b[1];
+      },
+      end() {
+        if (pos !== body.length) fail('malformed', 'extra bytes at the end');
+      },
+    };
+    return r;
+  }
+
+  function fixed(value, size, what) {
+    const b = bytesOf(value, what);
+    if (b.length !== size) fail('malformed', `${what} must be ${size} bytes`);
+    return b;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // The Mac label
+  // ---------------------------------------------------------------------------------------------
+
+  // OPEN: the label rule. 1 to 32 bytes of UTF-8, no leading or trailing space, and none of:
+  // control characters, line or paragraph separators, zero-width characters, the byte order mark,
+  // or the characters that change text direction. The app should apply the same rule when the
+  // owner types the label, so a label can never make the page show something misleading.
+  const LABEL_REFUSED = /[\p{Cc}\p{Zl}\p{Zp}­؜᠎​-‏‪-‮⁠-⁯﻿]/u;
+
+  function checkLabel(label) {
+    if (typeof label !== 'string') fail('malformed', 'label is not text');
+    const n = utf8Encode(label).length;
+    if (n < 1 || n > LIMITS.labelBytes) fail('malformed', 'label length');
+    if (label.trim() !== label || label.trim() === '') fail('malformed', 'label spacing');
+    if (LABEL_REFUSED.test(label)) fail('malformed', 'label has a refused character');
+    return label;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // P-256 and signatures
+  // ---------------------------------------------------------------------------------------------
+
+  const P256_P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn;
+  const P256_B = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604bn;
+  const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+
+  function bigFrom(bytes) {
+    let v = 0n;
+    for (const b of bytes) v = (v << 8n) | BigInt(b);
+    return v;
+  }
+
+  // An uncompressed P-256 point: 0x04, then X and Y, each 32 bytes, on the curve.
+  function checkPublicKey(key) {
+    const k = fixed(key, LIMITS.publicKey, 'public key');
+    if (k[0] !== 0x04) fail('malformed', 'public key is not uncompressed');
+    const x = bigFrom(k.subarray(1, 33));
+    const y = bigFrom(k.subarray(33, 65));
+    if (x >= P256_P || y >= P256_P) fail('malformed', 'public key out of range');
+    const p = P256_P;
+    const lhs = (y * y) % p;
+    const rhs = (((x * x) % p) * x - 3n * x + P256_B) % p;
+    if (lhs !== (rhs + p) % p) fail('malformed', 'public key is not on the curve');
+    return k;
+  }
+
+  // Strict DER: SEQUENCE { INTEGER r, INTEGER s }, minimal lengths, both in 1..n-1.
+  // Returns the fixed 64-byte form (r then s). The page carries the DER bytes as the passkey made
+  // them; the app converts (chapter 03 section 8). This function checks the form either way.
+  function derToRawSignature(der) {
+    const d = bytesOf(der, 'signature');
+    if (d.length < LIMITS.signatureMin || d.length > LIMITS.signatureMax) fail('malformed', 'signature length');
+    if (d[0] !== 0x30 || d[1] !== d.length - 2) fail('malformed', 'signature is not a DER sequence');
+    let pos = 2;
+    const out = new Uint8Array(64);
+    for (let part = 0; part < 2; part++) {
+      if (pos + 2 > d.length || d[pos] !== 0x02) fail('malformed', 'signature integer missing');
+      const len = d[pos + 1];
+      pos += 2;
+      if (len < 1 || len > 33 || pos + len > d.length) fail('malformed', 'signature integer length');
+      let v = d.subarray(pos, pos + len);
+      pos += len;
+      if (v[0] & 0x80) fail('malformed', 'signature integer is negative');
+      if (v.length > 1 && v[0] === 0 && !(v[1] & 0x80)) fail('malformed', 'signature integer not minimal');
+      if (v[0] === 0 && v.length > 1) v = v.subarray(1);
+      if (v.length > 32) fail('malformed', 'signature integer too large');
+      const n = bigFrom(v);
+      if (n === 0n || n >= P256_N) fail('malformed', 'signature integer out of range');
+      out.set(v, part * 32 + (32 - v.length));
+    }
+    if (pos !== d.length) fail('malformed', 'signature has extra bytes');
+    return out;
+  }
+
+  // The SPKI form returned by getPublicKey() for a P-256 key: a fixed 26-byte head, then the point.
+  const SPKI_P256_HEAD = [
+    0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a,
+    0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00,
+  ];
+  function spkiToRawP256(spki) {
+    const s = bytesOf(spki, 'public key');
+    if (s.length !== SPKI_P256_HEAD.length + 65) fail('passkey', 'public key is not P-256');
+    for (let i = 0; i < SPKI_P256_HEAD.length; i++) if (s[i] !== SPKI_P256_HEAD[i]) fail('passkey', 'public key is not P-256');
+    return checkPublicKey(s.slice(SPKI_P256_HEAD.length));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // A small CBOR reader, enough for a passkey's attestation object and its COSE key
+  // ---------------------------------------------------------------------------------------------
+
+  function cborRead(bytes, start, depth) {
+    if (depth > 8) fail('passkey', 'CBOR nested too deeply');
+    let pos = start;
+    const need = n => {
+      if (pos + n > bytes.length) fail('passkey', 'CBOR cut short');
+    };
+    need(1);
+    const head = bytes[pos++];
+    const major = head >>> 5;
+    const info = head & 31;
+    let arg;
+    if (info < 24) arg = info;
+    else if (info === 24) {
+      need(1);
+      arg = bytes[pos++];
+    } else if (info === 25) {
+      need(2);
+      arg = (bytes[pos] << 8) | bytes[pos + 1];
+      pos += 2;
+    } else if (info === 26) {
+      need(4);
+      arg = ((bytes[pos] << 24) | (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3]) >>> 0;
+      pos += 4;
+    } else fail('passkey', 'CBOR length form not supported');
+    switch (major) {
+      case 0:
+        return { value: arg, end: pos };
+      case 1:
+        return { value: -1 - arg, end: pos };
+      case 2:
+        need(arg);
+        return { value: bytes.slice(pos, pos + arg), end: pos + arg };
+      case 3:
+        need(arg);
+        return { value: utf8Decode(bytes.subarray(pos, pos + arg)), end: pos + arg };
+      case 4: {
+        if (arg > 64) fail('passkey', 'CBOR array too long');
+        const list = [];
+        for (let i = 0; i < arg; i++) {
+          const item = cborRead(bytes, pos, depth + 1);
+          list.push(item.value);
+          pos = item.end;
+        }
+        return { value: list, end: pos };
+      }
+      case 5: {
+        if (arg > 64) fail('passkey', 'CBOR map too long');
+        const map = new Map();
+        for (let i = 0; i < arg; i++) {
+          const k = cborRead(bytes, pos, depth + 1);
+          const v = cborRead(bytes, k.end, depth + 1);
+          if (typeof k.value !== 'number' && typeof k.value !== 'string') fail('passkey', 'CBOR map key type');
+          if (map.has(k.value)) fail('passkey', 'CBOR map key repeated');
+          map.set(k.value, v.value);
+          pos = v.end;
+        }
+        return { value: map, end: pos };
+      }
+      case 7:
+        if (info === 20) return { value: false, end: pos };
+        if (info === 21) return { value: true, end: pos };
+        if (info === 22) return { value: null, end: pos };
+        return fail('passkey', 'CBOR simple value not supported');
+      default:
+        return fail('passkey', 'CBOR type not supported');
+    }
+  }
+
+  // The authenticator data a passkey returns: rpIdHash (32), flags (1), counter (4), and, when the
+  // AT flag is set, AAGUID (16), credential ID length (2), credential ID and the COSE public key.
+  function parseAuthenticatorData(data) {
+    const a = bytesOf(data, 'authenticator data');
+    if (a.length < 37) fail('passkey', 'authenticator data too short');
+    const out = {
+      rpIdHash: a.slice(0, 32),
+      flags: a[32],
+      signCount: ((a[33] << 24) | (a[34] << 16) | (a[35] << 8) | a[36]) >>> 0,
+      length: a.length,
+    };
+    if (out.flags & FLAG_AT) {
+      if (a.length < 55) fail('passkey', 'attested data too short');
+      const idLen = (a[53] << 8) | a[54];
+      if (55 + idLen > a.length) fail('passkey', 'credential ID cut short');
+      out.credentialId = a.slice(55, 55 + idLen);
+      const key = cborRead(a, 55 + idLen, 0);
+      out.credentialPublicKey = key.value;
+      out.attestedEnd = key.end;
+    }
+    return out;
+  }
+
+  // COSE_Key for ES256: kty 2 (EC2), alg -7 (ES256), crv 1 (P-256), x (-2) and y (-3).
+  function coseToRawP256(cose) {
+    if (!(cose instanceof Map)) fail('passkey', 'public key is not a COSE key');
+    if (cose.get(1) !== 2 || cose.get(3) !== -7 || cose.get(-1) !== 1) fail('passkey', 'the key is not ES256');
+    const x = cose.get(-2);
+    const y = cose.get(-3);
+    if (!(x instanceof Uint8Array) || !(y instanceof Uint8Array) || x.length !== 32 || y.length !== 32) fail('passkey', 'public key coordinates');
+    return checkPublicKey(concat([new Uint8Array([0x04]), x, y]));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Enrolment record (register 8a: format version; credential ID; public key)
+  // Body: credential ID length (1) | credential ID (1..128) | public key (65)
+  // ---------------------------------------------------------------------------------------------
+
+  function encodeEnrolmentCode(fields) {
+    const id = bytesOf(fields.credentialId, 'credential ID');
+    if (id.length < 1 || id.length > LIMITS.credentialId) fail('malformed', 'credential ID length');
+    const key = checkPublicKey(fields.publicKey);
+    return base32Encode(encodeRecord(TYPE.ENROLMENT, concat([new Uint8Array([id.length]), id, key])));
+  }
+
+  function decodeEnrolmentCode(text) {
+    const r = reader(decodeRecord(base32Decode(text), TYPE.ENROLMENT));
+    const idLen = r.u8('credential ID length');
+    if (idLen < 1 || idLen > LIMITS.credentialId) fail('malformed', 'credential ID length');
+    const credentialId = r.take(idLen, 'credential ID');
+    const publicKey = checkPublicKey(r.take(LIMITS.publicKey, 'public key'));
+    r.end();
+    return { version: FORMAT_VERSION, credentialId, publicKey };
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Request code (register 8a: format version; request or batch ID; Mac label; kind; a random
+  // challenge bound to this request; for a batch, the item hashes). Made by the keeper.
+  // Body: kind (1) | request ID (16) | challenge (32) | label length (1) | label (1..32)
+  //       | item count (1) | item hashes (32 each; 1..16 for a batch, none otherwise)
+  // OPEN: the code always carries the challenge, even for a batch, and the page signs it as given.
+  // The page does not re-derive a batch's challenge from its ID and items; that rule is the
+  // keeper's and is not yet written down. The item hashes are carried as the register says.
+  // ---------------------------------------------------------------------------------------------
+
+  function checkItems(kind, items) {
+    if (kind === KIND.ADMIN_BATCH) {
+      if (items.length < 1 || items.length > LIMITS.batchItems) fail('malformed', 'batch item count');
+    } else if (items.length !== 0) fail('malformed', 'only a batch carries items');
+  }
+
+  function encodeRequestCode(fields) {
+    const kind = fields.kind;
+    if (!Number.isInteger(kind) || kind < 0 || kind >= KIND_NAMES.length) fail('malformed', 'unknown kind');
+    const requestId = fixed(fields.requestId, LIMITS.requestId, 'request ID');
+    const challenge = fixed(fields.challenge, LIMITS.challenge, 'challenge');
+    const label = utf8Encode(checkLabel(fields.label));
+    const items = (fields.items || []).map(h => fixed(h, LIMITS.itemHash, 'item hash'));
+    checkItems(kind, items);
+    const body = concat([
+      new Uint8Array([kind]),
+      requestId,
+      challenge,
+      new Uint8Array([label.length]),
+      label,
+      new Uint8Array([items.length]),
+      ...items,
+    ]);
+    return base32Encode(encodeRecord(TYPE.REQUEST, body));
+  }
+
+  function decodeRequestCode(text) {
+    const r = reader(decodeRecord(base32Decode(text), TYPE.REQUEST));
+    const kind = r.u8('kind');
+    if (kind >= KIND_NAMES.length) fail('malformed', 'unknown kind');
+    const requestId = r.take(LIMITS.requestId, 'request ID');
+    const challenge = r.take(LIMITS.challenge, 'challenge');
+    const labelLen = r.u8('label length');
+    if (labelLen < 1 || labelLen > LIMITS.labelBytes) fail('malformed', 'label length');
+    const label = checkLabel(utf8Decode(r.take(labelLen, 'label')));
+    const count = r.u8('item count');
+    const items = [];
+    for (let i = 0; i < count; i++) items.push(r.take(LIMITS.itemHash, 'item hash'));
+    checkItems(kind, items);
+    r.end();
+    return { version: FORMAT_VERSION, kind, kindName: KIND_NAMES[kind], requestId, challenge, label, items };
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Approval code (register 8a: format version; request or batch ID; authenticator data; the
+  // client-data bytes; ES256 signature). Made by the page.
+  // Body: request ID (16) | authenticator data (37) | client data length (2) | client data
+  //       | signature length (1) | signature (DER, 8..72)
+  // ---------------------------------------------------------------------------------------------
+
+  function checkAssertionFlags(authenticatorData) {
+    const a = bytesOf(authenticatorData, 'authenticator data');
+    if (a.length !== LIMITS.authenticatorData) fail('malformed', 'authenticator data must be 37 bytes');
+    const flags = a[32];
+    if (!(flags & FLAG_UP)) fail('malformed', 'user-present flag missing');
+    if (!(flags & FLAG_UV)) fail('malformed', 'user-verified flag missing');
+    if (flags & (FLAG_AT | FLAG_ED)) fail('malformed', 'unexpected attested or extension data');
+    return a;
+  }
+
+  function encodeApprovalCode(fields) {
+    const requestId = fixed(fields.requestId, LIMITS.requestId, 'request ID');
+    const authenticatorData = checkAssertionFlags(fields.authenticatorData);
+    const clientData = bytesOf(fields.clientData, 'client data');
+    if (clientData.length < 1 || clientData.length > LIMITS.clientData) fail('malformed', 'client data length');
+    const signature = bytesOf(fields.signature, 'signature');
+    derToRawSignature(signature);
+    const body = concat([
+      requestId,
+      authenticatorData,
+      new Uint8Array([clientData.length >>> 8, clientData.length & 0xff]),
+      clientData,
+      new Uint8Array([signature.length]),
+      signature,
+    ]);
+    return base32Encode(encodeRecord(TYPE.APPROVAL, body));
+  }
+
+  function decodeApprovalCode(text) {
+    const r = reader(decodeRecord(base32Decode(text), TYPE.APPROVAL));
+    const requestId = r.take(LIMITS.requestId, 'request ID');
+    const authenticatorData = checkAssertionFlags(r.take(LIMITS.authenticatorData, 'authenticator data'));
+    const cdLen = r.u16('client data length');
+    if (cdLen < 1 || cdLen > LIMITS.clientData) fail('malformed', 'client data length');
+    const clientData = r.take(cdLen, 'client data');
+    const sigLen = r.u8('signature length');
+    const signature = r.take(sigLen, 'signature');
+    derToRawSignature(signature);
+    r.end();
+    return { version: FORMAT_VERSION, requestId, authenticatorData, clientData, signature };
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Passkey options and the checks made before a code is shown
+  // ---------------------------------------------------------------------------------------------
+
+  const TIMEOUT_MS = 300000;
+
+  // navigator.credentials.create: ES256 only, user verification required, attestation "none",
+  // a discoverable credential (chapter 09 section 14; chapter 07 section 7.13).
+  // OPEN: the user handle is 16 random bytes made fresh for each key, not one fixed handle: a
+  // phone keeps one passkey per site and handle, so a fixed handle would let a second enrolment
+  // (for a second owner, or a fresh start) silently replace the first key.
+  function createOptions({ rpId, userId, challenge, keyName }) {
+    const name = String(keyName || '').trim().slice(0, 64) || 'SafeSight Mac keyholder';
+    return {
+      rp: { id: rpId, name: 'SafeSight Mac keyholder' },
+      user: { id: fixed(userId, 16, 'user handle'), name, displayName: name },
+      challenge: fixed(challenge, 32, 'challenge'),
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+      authenticatorSelection: { residentKey: 'required', requireResidentKey: true, userVerification: 'required' },
+      attestation: 'none',
+      excludeCredentials: [],
+      timeout: TIMEOUT_MS,
+    };
+  }
+
+  // navigator.credentials.get: the challenge is the request code's 32 bytes exactly as carried,
+  // with no hashing or wrapping (chapter 03 section 8).
+  // OPEN: chapter 09 says allowCredentials holds the one credential ID, but the request code
+  // carries none and the page keeps nothing, so the list is empty and the phone offers its
+  // keyholder keys for this site. Picking the wrong key gives an approval the keeper refuses.
+  function getOptions({ rpId, challenge }) {
+    return {
+      rpId,
+      challenge: new Uint8Array(fixed(challenge, LIMITS.challenge, 'challenge')),
+      allowCredentials: [],
+      userVerification: 'required',
+      timeout: TIMEOUT_MS,
+    };
+  }
+
+  // The fixed prefix the keeper compares (chapter 03 section 8, step 5): the fixed opening of a
+  // passkey sign-in assertion, the challenge in its text form (base64url, no padding), and the
+  // page origin, up to and including the quote that closes the origin.
+  // OPEN: whether the keeper's prefix should also hold ',"crossOrigin":false'. Older browsers
+  // leave that member out, so the prefix stops after the origin. The page refuses to run inside a
+  // frame instead, since a policy set in a meta tag cannot forbid framing.
+  function clientDataPrefix(challenge, origin) {
+    const c = base64url(fixed(challenge, LIMITS.challenge, 'challenge'));
+    return `{"type":"webauthn.get","challenge":"${c}","origin":"${origin}"`;
+  }
+
+  function startsWith(bytes, prefix) {
+    const p = utf8Encode(prefix);
+    return bytes.length >= p.length && equalBytes(bytes.subarray(0, p.length), p);
+  }
+
+  // From navigator.credentials.create's result to the enrolment code. Checks that the key is
+  // ES256, made for this site, with the user verified, and that the credential ID matches.
+  async function enrolmentFromCreate({ rawId, attestationObject, clientDataJSON, spki, rpId }) {
+    let att;
+    try {
+      att = cborRead(bytesOf(attestationObject, 'attestation object'), 0, 0).value;
+    } catch (e) {
+      return fail('passkey', 'attestation object could not be read');
+    }
+    if (!(att instanceof Map) || !(att.get('authData') instanceof Uint8Array)) fail('passkey', 'attestation object has no authenticator data');
+    const ad = parseAuthenticatorData(att.get('authData'));
+    if (!equalBytes(ad.rpIdHash, await sha256(utf8Encode(rpId)))) fail('passkey', 'key made for another site');
+    if (!(ad.flags & FLAG_UP) || !(ad.flags & FLAG_UV)) fail('passkey', 'user not verified');
+    if (!ad.credentialId) fail('passkey', 'no credential data');
+    const id = bytesOf(rawId, 'credential ID');
+    if (!equalBytes(ad.credentialId, id)) fail('passkey', 'credential ID mismatch');
+    if (id.length < 1 || id.length > LIMITS.credentialId) fail('passkey', `credential ID is ${id.length} bytes`);
+    const publicKey = coseToRawP256(ad.credentialPublicKey);
+    if (spki) {
+      if (!equalBytes(spkiToRawP256(spki), publicKey)) fail('passkey', 'the two forms of the public key differ');
+    }
+    if (clientDataJSON) {
+      let cd;
+      try {
+        cd = JSON.parse(utf8Decode(bytesOf(clientDataJSON, 'client data')));
+      } catch (e) {
+        return fail('passkey', 'client data could not be read');
+      }
+      if (!cd || cd.type !== 'webauthn.create') fail('passkey', 'client data type');
+    }
+    return { credentialId: id, publicKey, code: encodeEnrolmentCode({ credentialId: id, publicKey }) };
+  }
+
+  // From navigator.credentials.get's result to the approval code. Runs the checks the keeper
+  // will run that need no pinned key (chapter 03 section 8, steps 3 to 5), so the keyholder is
+  // told at once if their phone signs in a form the Mac cannot accept.
+  async function approvalFromGet({ authenticatorData, clientDataJSON, signature, request, origin, rpId }) {
+    const a = bytesOf(authenticatorData, 'authenticator data');
+    if (a.length !== LIMITS.authenticatorData) fail('passkey', `authenticator data is ${a.length} bytes, not 37`);
+    if (!equalBytes(a.subarray(0, 32), await sha256(utf8Encode(rpId)))) fail('passkey', 'signed for another site');
+    if (!(a[32] & FLAG_UP) || !(a[32] & FLAG_UV)) fail('passkey', 'user not verified');
+    const cd = bytesOf(clientDataJSON, 'client data');
+    if (!startsWith(cd, clientDataPrefix(request.challenge, origin))) fail('passkey', 'client data does not start as the Mac expects');
+    try {
+      return encodeApprovalCode({ requestId: request.requestId, authenticatorData: a, clientData: cd, signature });
+    } catch (e) {
+      return fail('passkey', e.detail || e.message);
+    }
+  }
+
+  // What the keyholder is asked, in plain words (SD-196: request ID, Mac label, what is asked).
+  function askText(request) {
+    switch (request.kind) {
+      case KIND.TEST:
+        return 'This just checks that your key works with their Mac. Approving it changes nothing.';
+      case KIND.EXIT:
+        return "They're asking to switch off the lock on their Mac.";
+      case KIND.LOWER_WAIT:
+        return "They're asking to make their wait shorter.";
+      case KIND.LOOSEN_SETTING:
+        return "They're asking to relax one of the lock's settings.";
+      case KIND.ADMIN_BATCH:
+        return request.items.length === 1
+          ? "They're asking to make an admin change on their Mac."
+          : `They're asking to make ${request.items.length} admin changes on their Mac.`;
+      default:
+        return fail('malformed', 'unknown kind');
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // QR codes (model 2, error correction level M, alphanumeric or byte mode, versions 1 to 40)
+  // ---------------------------------------------------------------------------------------------
+
+  // OPEN: error correction level M; ST-029 may show that L (a smaller code) reads better.
+  // Error correction codewords per block and number of blocks, level M, versions 1 to 40.
+  const QR_ECC_PER_BLOCK = [
+    10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26,
+    26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28,
+  ];
+  const QR_BLOCKS = [
+    1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16,
+    17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49,
+  ];
+  const QR_ALNUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+
+  // Galois field GF(2^8) with the QR polynomial x^8 + x^4 + x^3 + x^2 + 1.
+  const GF_EXP = new Uint8Array(512);
+  const GF_LOG = new Uint8Array(256);
+  (() => {
+    let x = 1;
+    for (let i = 0; i < 255; i++) {
+      GF_EXP[i] = x;
+      GF_LOG[x] = i;
+      x <<= 1;
+      if (x & 0x100) x ^= 0x11d;
+    }
+    for (let i = 255; i < 512; i++) GF_EXP[i] = GF_EXP[i - 255];
+  })();
+  function gfMul(a, b) {
+    return a === 0 || b === 0 ? 0 : GF_EXP[GF_LOG[a] + GF_LOG[b]];
+  }
+
+  // The generator polynomial (x - a^0)(x - a^1)...(x - a^(n-1)), highest power first.
+  function rsGenerator(n) {
+    let g = [1];
+    for (let i = 0; i < n; i++) {
+      const next = new Array(g.length + 1).fill(0);
+      for (let j = 0; j < g.length; j++) {
+        next[j] ^= g[j];
+        next[j + 1] ^= gfMul(g[j], GF_EXP[i]);
+      }
+      g = next;
+    }
+    return g;
+  }
+
+  // The n error correction codewords for a block of data codewords.
+  function rsEcc(data, n) {
+    const gen = rsGenerator(n);
+    const rem = new Array(n).fill(0);
+    for (const d of data) {
+      const factor = d ^ rem[0];
+      rem.shift();
+      rem.push(0);
+      if (factor !== 0) for (let j = 0; j < n; j++) rem[j] ^= gfMul(gen[j + 1], factor);
+    }
+    return rem;
+  }
+
+  function qrRawDataModules(v) {
+    let n = (16 * v + 128) * v + 64;
+    if (v >= 2) {
+      const a = Math.floor(v / 7) + 2;
+      n -= (25 * a - 10) * a - 55;
+      if (v >= 7) n -= 36;
+    }
+    return n;
+  }
+  function qrTotalCodewords(v) {
+    return Math.floor(qrRawDataModules(v) / 8);
+  }
+  function qrDataCodewords(v) {
+    return qrTotalCodewords(v) - QR_ECC_PER_BLOCK[v - 1] * QR_BLOCKS[v - 1];
+  }
+  function qrAlignmentPositions(v) {
+    if (v === 1) return [];
+    const count = Math.floor(v / 7) + 2;
+    const step = Math.floor((v * 8 + count * 3 + 5) / (count * 4 - 4)) * 2;
+    const out = [];
+    for (let pos = v * 4 + 10; out.length < count - 1; pos -= step) out.unshift(pos);
+    out.unshift(6);
+    return out;
+  }
+
+  // Split the data codewords into blocks, add each block's error correction, and interleave.
+  function qrInterleave(data, v) {
+    const blocks = QR_BLOCKS[v - 1];
+    const ecc = QR_ECC_PER_BLOCK[v - 1];
+    const total = qrTotalCodewords(v);
+    const shortBlocks = blocks - (total % blocks);
+    const shortData = Math.floor(total / blocks) - ecc;
+    const parts = [];
+    let at = 0;
+    for (let b = 0; b < blocks; b++) {
+      const len = shortData + (b < shortBlocks ? 0 : 1);
+      const chunk = data.slice(at, at + len);
+      at += len;
+      parts.push({ data: chunk, ecc: rsEcc(chunk, ecc) });
+    }
+    const out = [];
+    for (let i = 0; i <= shortData; i++) for (const p of parts) if (i < p.data.length) out.push(p.data[i]);
+    for (let i = 0; i < ecc; i++) for (const p of parts) out.push(p.ecc[i]);
+    return out;
+  }
+
+  // 15 format bits: level M (00) and the mask, BCH(15,5), masked with 101010000010010.
+  function qrFormatBits(mask) {
+    const data = mask & 7;
+    let rem = data;
+    for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+    return ((data << 10) | (rem & 0x3ff)) ^ 0x5412;
+  }
+  // 18 version bits for versions 7 and up, BCH(18,6).
+  function qrVersionBits(v) {
+    let rem = v;
+    for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
+    return (v << 12) | (rem & 0xfff);
+  }
+
+  const QR_MASKS = [
+    (r, c) => (r + c) % 2 === 0,
+    r => r % 2 === 0,
+    (r, c) => c % 3 === 0,
+    (r, c) => (r + c) % 3 === 0,
+    (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
+    (r, c) => ((r * c) % 2) + ((r * c) % 3) === 0,
+    (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0,
+    (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0,
+  ];
+
+  function qrPenalty(m, size) {
+    let score = 0;
+    const at = (line, i, j) => (line === 0 ? m[i * size + j] : m[j * size + i]);
+    for (let line = 0; line < 2; line++) {
+      for (let i = 0; i < size; i++) {
+        let run = 0;
+        let prev = -1;
+        for (let j = 0; j < size; j++) {
+          const v = at(line, i, j);
+          if (v === prev) {
+            run++;
+            if (run === 5) score += 3;
+            else if (run > 5) score += 1;
+          } else {
+            prev = v;
+            run = 1;
+          }
+        }
+        // A finder-like 1:1:3:1:1 run with four light modules on one side (outside is light).
+        const light = (j0, j1) => {
+          for (let j = j0; j < j1; j++) if (j >= 0 && j < size && at(line, i, j) === 1) return false;
+          return true;
+        };
+        for (let j = 0; j + 7 <= size; j++) {
+          if (at(line, i, j) === 1 && at(line, i, j + 1) === 0 && at(line, i, j + 2) === 1 && at(line, i, j + 3) === 1 &&
+              at(line, i, j + 4) === 1 && at(line, i, j + 5) === 0 && at(line, i, j + 6) === 1 &&
+              (light(j - 4, j) || light(j + 7, j + 11))) score += 40;
+        }
+      }
+    }
+    for (let r = 0; r + 1 < size; r++) {
+      for (let c = 0; c + 1 < size; c++) {
+        const v = m[r * size + c];
+        if (v === m[r * size + c + 1] && v === m[(r + 1) * size + c] && v === m[(r + 1) * size + c + 1]) score += 3;
+      }
+    }
+    let dark = 0;
+    for (const v of m) dark += v;
+    const total = size * size;
+    score += Math.floor(Math.abs(dark * 20 - total * 10) / total) * 10;
+    return score;
+  }
+
+  // Returns { version, size, modules, isFunction }: modules[row * size + col] is 1 for dark.
+  function qrEncode(text) {
+    const s = String(text);
+    const alnum = /^[0-9A-Z $%*+\-./:]*$/.test(s);
+    const bytes = alnum ? null : utf8Encode(s);
+    const count = alnum ? s.length : bytes.length;
+    const dataBits = alnum ? Math.floor(s.length / 2) * 11 + (s.length % 2) * 6 : bytes.length * 8;
+    const countBits = v => (alnum ? (v <= 9 ? 9 : v <= 26 ? 11 : 13) : v <= 9 ? 8 : 16);
+    let version = 0;
+    for (let v = 1; v <= 40; v++) {
+      if (4 + countBits(v) + dataBits <= qrDataCodewords(v) * 8) {
+        version = v;
+        break;
+      }
+    }
+    if (!version) fail('too-long', 'too much for one QR code');
+    const capacity = qrDataCodewords(version);
+
+    const bits = [];
+    const put = (value, n) => {
+      for (let i = n - 1; i >= 0; i--) bits.push((value >>> i) & 1);
+    };
+    put(alnum ? 0b0010 : 0b0100, 4);
+    put(count, countBits(version));
+    if (alnum) {
+      for (let i = 0; i + 1 < s.length; i += 2) put(QR_ALNUM.indexOf(s[i]) * 45 + QR_ALNUM.indexOf(s[i + 1]), 11);
+      if (s.length % 2) put(QR_ALNUM.indexOf(s[s.length - 1]), 6);
+    } else for (const b of bytes) put(b, 8);
+    put(0, Math.min(4, capacity * 8 - bits.length));
+    put(0, (8 - (bits.length % 8)) % 8);
+    const codewords = [];
+    for (let i = 0; i < bits.length; i += 8) {
+      let b = 0;
+      for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
+      codewords.push(b);
+    }
+    for (let pad = 0xec; codewords.length < capacity; pad ^= 0xec ^ 0x11) codewords.push(pad);
+    const stream = qrInterleave(codewords, version);
+
+    const size = version * 4 + 17;
+    const base = new Uint8Array(size * size);
+    const isFunction = new Uint8Array(size * size);
+    const set = (r, c, d) => {
+      base[r * size + c] = d ? 1 : 0;
+      isFunction[r * size + c] = 1;
+    };
+    for (let i = 0; i < size; i++) {
+      set(6, i, i % 2 === 0);
+      set(i, 6, i % 2 === 0);
+    }
+    for (const [r0, c0] of [[0, 0], [0, size - 7], [size - 7, 0]]) {
+      for (let dr = -1; dr <= 7; dr++) {
+        for (let dc = -1; dc <= 7; dc++) {
+          const r = r0 + dr;
+          const c = c0 + dc;
+          if (r < 0 || c < 0 || r >= size || c >= size) continue;
+          const ring = Math.max(Math.abs(dr - 3), Math.abs(dc - 3));
+          set(r, c, ring !== 2 && ring <= 3);
+        }
+      }
+    }
+    const align = qrAlignmentPositions(version);
+    const last = align[align.length - 1];
+    for (const r of align) {
+      for (const c of align) {
+        if ((r === 6 && c === 6) || (r === 6 && c === last) || (r === last && c === 6)) continue;
+        for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
+      }
+    }
+    const drawFormat = (target, mask) => {
+      const f = qrFormatBits(mask);
+      const b = i => ((f >>> i) & 1) === 1;
+      const put2 = (r, c, d) => {
+        target[r * size + c] = d ? 1 : 0;
+        isFunction[r * size + c] = 1;
+      };
+      for (let i = 0; i <= 5; i++) put2(i, 8, b(i));
+      put2(7, 8, b(6));
+      put2(8, 8, b(7));
+      put2(8, 7, b(8));
+      for (let i = 9; i < 15; i++) put2(8, 14 - i, b(i));
+      for (let i = 0; i < 8; i++) put2(8, size - 1 - i, b(i));
+      for (let i = 8; i < 15; i++) put2(size - 15 + i, 8, b(i));
+      put2(size - 8, 8, true);
+    };
+    drawFormat(base, 0); // reserves the format areas; redrawn for each mask below
+    if (version >= 7) {
+      const vb = qrVersionBits(version);
+      for (let i = 0; i < 18; i++) {
+        const d = ((vb >>> i) & 1) === 1;
+        const a = size - 11 + (i % 3);
+        const b = Math.floor(i / 3);
+        set(b, a, d);
+        set(a, b, d);
+      }
+    }
+
+    // Data: two-module columns from the right, alternating up and down, skipping column 6.
+    let bit = 0;
+    const totalBits = stream.length * 8;
+    let upward = true;
+    for (let col = size - 1; col > 0; col -= 2) {
+      if (col === 6) col = 5;
+      for (let k = 0; k < size; k++) {
+        const r = upward ? size - 1 - k : k;
+        for (const c of [col, col - 1]) {
+          const idx = r * size + c;
+          if (isFunction[idx]) continue;
+          if (bit < totalBits) base[idx] = (stream[bit >>> 3] >>> (7 - (bit & 7))) & 1;
+          bit++;
+        }
+      }
+      upward = !upward;
+    }
+
+    let best = null;
+    let bestScore = Infinity;
+    for (let mask = 0; mask < 8; mask++) {
+      const m = base.slice();
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const idx = r * size + c;
+          if (!isFunction[idx] && QR_MASKS[mask](r, c)) m[idx] ^= 1;
+        }
+      }
+      drawFormat(m, mask);
+      const score = qrPenalty(m, size);
+      if (score < bestScore) {
+        bestScore = score;
+        best = { mask, modules: m };
+      }
+    }
+    return { version, size, mask: best.mask, modules: best.modules, isFunction };
+  }
+
+  // An SVG path for the dark modules, with a quiet zone of `margin` modules on every side.
+  function qrSvgPath(qr, margin) {
+    const q = margin == null ? 4 : margin;
+    let d = '';
+    for (let r = 0; r < qr.size; r++) {
+      let c = 0;
+      while (c < qr.size) {
+        if (!qr.modules[r * qr.size + c]) {
+          c++;
+          continue;
+        }
+        const startCol = c;
+        while (c < qr.size && qr.modules[r * qr.size + c]) c++;
+        d += `M${startCol + q},${r + q}h${c - startCol}v1h-${c - startCol}z`;
+      }
+    }
+    return d;
+  }
+
+  return Object.freeze({
+    FORMAT_VERSION,
+    TYPE,
+    KIND,
+    KIND_NAMES,
+    LIMITS,
+    PINNED_ORIGIN,
+    CodeError,
+    crc32,
+    base32Encode,
+    base32Decode,
+    base64url,
+    extractCode,
+    toHex,
+    checkLabel,
+    checkPublicKey,
+    derToRawSignature,
+    spkiToRawP256,
+    cborRead,
+    parseAuthenticatorData,
+    coseToRawP256,
+    encodeEnrolmentCode,
+    decodeEnrolmentCode,
+    encodeRequestCode,
+    decodeRequestCode,
+    encodeApprovalCode,
+    decodeApprovalCode,
+    createOptions,
+    getOptions,
+    clientDataPrefix,
+    enrolmentFromCreate,
+    approvalFromGet,
+    askText,
+    qr: Object.freeze({
+      encode: qrEncode,
+      svgPath: qrSvgPath,
+      rsEcc,
+      formatBits: qrFormatBits,
+      versionBits: qrVersionBits,
+      dataCodewords: qrDataCodewords,
+      rawDataModules: qrRawDataModules,
+      alignmentPositions: qrAlignmentPositions,
+    }),
+  });
+})();
+</script>
+<script>// SPDX-License-Identifier: Apache-2.0
+// The keyholder page's screens. Everything happens here, in the keyholder's browser: the page
+// makes a passkey, reads a request code, asks the passkey to sign it, and shows the result for
+// the keyholder to hand back themself. It keeps nothing and sends nothing (SD-155, SD-194).
+(() => {
+  'use strict';
+  const K = KeyholderCore;
+  const $ = id => document.getElementById(id);
+  const SCREENS = ['home', 'enrolled', 'paste', 'request', 'approved', 'declined', 'stopped'];
+
+  // The request on screen. Held in memory only, and dropped once it is answered.
+  let current = null;
+
+  function show(name) {
+    for (const s of SCREENS) $(`screen-${s}`).hidden = s !== name;
+    window.scrollTo(0, 0);
+    const heading = $(`screen-${name}`).querySelector('h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }
+
+  function stop(title, text) {
+    $('stopped-title').textContent = title;
+    $('stopped-text').textContent = text;
+    show('stopped');
+  }
+
+  function setError(id, text) {
+    const el = $(id);
+    el.textContent = text || '';
+    el.hidden = !text;
+  }
+
+  function busy(on) {
+    for (const b of document.querySelectorAll('button')) b.disabled = on;
+  }
+
+  function random(n) {
+    return crypto.getRandomValues(new Uint8Array(n));
+  }
+
+  const DAMAGED = 'That code looks incomplete or damaged. Ask them to show it again, or copy it again.';
+  const CODE_MESSAGES = {
+    empty: 'Paste the code first.',
+    'too-long': "That's longer than any request code. Check that you copied only the code.",
+    characters: "That doesn't look like a request code. Check that you copied all of it, and nothing else.",
+    damaged: DAMAGED,
+    malformed: DAMAGED,
+    version: "That code was made by a different version of SafeSight Mac, so this page can't read it. Ask them to check their Mac for updates.",
+  };
+
+  function codeMessage(err) {
+    if (err && err.reason === 'wrong-type') {
+      return err.detail === 'enrolment' || err.detail === 'approval'
+        ? "That's a code this page made for their Mac. A request code is the one their Mac shows you."
+        : "That doesn't look like a request code.";
+    }
+    return (err && CODE_MESSAGES[err.reason]) || DAMAGED;
+  }
+
+  function passkeyMessage(err, making) {
+    const name = err && err.name;
+    if (name === 'NotAllowedError' || name === 'AbortError') {
+      return making
+        ? "No key was made. If you cancelled, that's fine. You can try again whenever you like."
+        : "No key was used. If you cancelled, that's fine. If your phone found no key, this may not be the phone or browser you made it on.";
+    }
+    if (name === 'NotSupportedError') return "Your phone can't make the kind of key SafeSight Mac needs. Try another browser on this phone, or another phone.";
+    if (name === 'SecurityError') return "Keys can't be made or used on this address.";
+    if (name === 'InvalidStateError') return 'This phone already has that key.';
+    if (err && err.reason === 'passkey') {
+      return `Your phone answered in a way their Mac can't read, so nothing was made or approved. (${err.detail})`;
+    }
+    return `Something went wrong, and nothing was made or approved. (${(err && (err.detail || err.message)) || 'unknown'})`;
+  }
+
+  function showCode(prefix, text) {
+    const qr = K.qr.encode(text);
+    const n = String(qr.size + 8);
+    $(`${prefix}-qr`).setAttribute('viewBox', `0 0 ${n} ${n}`);
+    $(`${prefix}-qr-bg`).setAttribute('width', n);
+    $(`${prefix}-qr-bg`).setAttribute('height', n);
+    $(`${prefix}-qr-path`).setAttribute('d', K.qr.svgPath(qr, 4));
+    $(`${prefix}-text`).value = text;
+    $(`${prefix}-status`).textContent = '';
+  }
+
+  function clearCode(prefix) {
+    $(`${prefix}-qr-path`).setAttribute('d', '');
+    $(`${prefix}-text`).value = '';
+    $(`${prefix}-status`).textContent = '';
+  }
+
+  async function copy(prefix) {
+    const area = $(`${prefix}-text`);
+    try {
+      await navigator.clipboard.writeText(area.value);
+      $(`${prefix}-status`).textContent = 'Copied.';
+    } catch (e) {
+      area.focus();
+      area.select();
+      $(`${prefix}-status`).textContent = "Selected. Use your phone's Copy to copy it.";
+    }
+  }
+
+  // Enrolment (SD-195): make an ES256 passkey for this page's origin and show the enrolment code.
+  async function createKey() {
+    setError('home-error', '');
+    busy(true);
+    try {
+      const rpId = location.hostname;
+      const publicKey = K.createOptions({ rpId, userId: random(16), challenge: random(32), keyName: $('key-name').value });
+      const cred = await navigator.credentials.create({ publicKey });
+      if (!cred || !cred.response || !cred.response.attestationObject) throw new K.CodeError('passkey', 'no key came back');
+      const r = cred.response;
+      let spki = null;
+      try {
+        spki = typeof r.getPublicKey === 'function' ? r.getPublicKey() : null;
+      } catch (e) {
+        spki = null;
+      }
+      const result = await K.enrolmentFromCreate({
+        rawId: cred.rawId,
+        attestationObject: r.attestationObject,
+        clientDataJSON: r.clientDataJSON,
+        spki: spki ? new Uint8Array(spki) : null,
+        rpId,
+      });
+      showCode('enrolled', result.code);
+      show('enrolled');
+    } catch (e) {
+      setError('home-error', passkeyMessage(e, true));
+    } finally {
+      busy(false);
+    }
+  }
+
+  // A request (SD-196): say plainly what is asked, then wait for the keyholder's answer.
+  function openRequest(text) {
+    const req = K.decodeRequestCode(K.extractCode(text));
+    const test = req.kind === K.KIND.TEST;
+    current = req;
+    $('request-eyebrow').textContent = test ? 'Test' : 'Request';
+    $('request-title').textContent = test ? `A test from ${req.label}` : `A request from ${req.label}`;
+    $('request-ask').textContent = K.askText(req);
+    $('request-real').hidden = test;
+    $('request-approve').textContent = test ? 'Approve the test' : 'Approve with my key';
+    setError('request-error', '');
+    show('request');
+  }
+
+  async function approve() {
+    const req = current;
+    if (!req) {
+      show('home');
+      return;
+    }
+    setError('request-error', '');
+    busy(true);
+    try {
+      const rpId = location.hostname;
+      const cred = await navigator.credentials.get({ publicKey: K.getOptions({ rpId, challenge: req.challenge }) });
+      if (!cred || !cred.response || !cred.response.signature) throw new K.CodeError('passkey', 'no signature came back');
+      const r = cred.response;
+      const code = await K.approvalFromGet({
+        authenticatorData: r.authenticatorData,
+        clientDataJSON: r.clientDataJSON,
+        signature: r.signature,
+        request: req,
+        origin: location.origin,
+        rpId,
+      });
+      const test = req.kind === K.KIND.TEST;
+      $('approved-title').textContent = test ? 'Test approved' : 'Approved';
+      $('approved-label').textContent = req.label;
+      $('approved-real').hidden = test;
+      $('approved-test').hidden = !test;
+      showCode('approved', code);
+      current = null;
+      show('approved');
+    } catch (e) {
+      setError('request-error', passkeyMessage(e, false));
+    } finally {
+      busy(false);
+    }
+  }
+
+  function readPasted() {
+    setError('paste-error', '');
+    try {
+      openRequest($('paste-text').value);
+      $('paste-text').value = '';
+    } catch (e) {
+      setError('paste-error', codeMessage(e));
+    }
+  }
+
+  function goPaste() {
+    setError('paste-error', '');
+    show('paste');
+  }
+
+  // The request code travels only after "#" (SD-195). Read it, then take it out of the address
+  // bar and this page's history entry.
+  function takeFragment() {
+    const raw = location.hash.length > 1 ? location.hash.slice(1) : '';
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    return raw;
+  }
+
+  function openFromFragment() {
+    const raw = takeFragment();
+    if (!raw) return false;
+    try {
+      openRequest(raw);
+    } catch (e) {
+      goPaste();
+      setError('paste-error', codeMessage(e));
+    }
+    return true;
+  }
+
+  function start() {
+    const linked = takeFragment();
+    // A policy set in a meta tag cannot forbid framing, so the page checks for itself.
+    if (window.top !== window.self) {
+      stop('Open this page on its own', "This page only works when it isn't inside another site. Open its address directly.");
+      return;
+    }
+    if (K.PINNED_ORIGIN && location.origin !== K.PINNED_ORIGIN) {
+      stop("This isn't the keyholder page's address", 'Keys for SafeSight Mac can only be made and used on the keyholder page itself.');
+      return;
+    }
+    const supported = window.isSecureContext && typeof window.PublicKeyCredential === 'function' &&
+      navigator.credentials && typeof navigator.credentials.create === 'function';
+    if (!supported) {
+      stop("This browser can't make passkeys", "Try your phone's main browser, such as Safari on an iPhone or Chrome on Android. The phone also needs a screen lock: a passcode, face or fingerprint.");
+      return;
+    }
+
+    $('create-key').addEventListener('click', createKey);
+    $('go-paste').addEventListener('click', goPaste);
+    $('enrolled-paste').addEventListener('click', goPaste);
+    $('enrolled-copy').addEventListener('click', () => copy('enrolled'));
+    $('paste-read').addEventListener('click', readPasted);
+    $('paste-back').addEventListener('click', () => show('home'));
+    $('request-approve').addEventListener('click', approve);
+    $('request-decline').addEventListener('click', () => {
+      current = null;
+      show('declined');
+    });
+    $('approved-copy').addEventListener('click', () => copy('approved'));
+    $('approved-done').addEventListener('click', () => {
+      clearCode('approved');
+      show('home');
+    });
+    $('declined-home').addEventListener('click', () => show('home'));
+    for (const id of ['enrolled-text', 'approved-text']) $(id).addEventListener('focus', e => e.target.select());
+    window.addEventListener('hashchange', openFromFragment);
+
+    if (!linked) {
+      show('home');
+      return;
+    }
+    try {
+      openRequest(linked);
+    } catch (e) {
+      goPaste();
+      setError('paste-error', codeMessage(e));
+    }
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>

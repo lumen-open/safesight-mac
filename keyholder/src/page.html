@@ -1,0 +1,142 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151311" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:,">
+<title>SafeSight Mac keyholder</title>
+<style>{{STYLE}}</style>
+</head>
+<body>
+<main>
+
+<header class="brand">
+  <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.25"/><path d="M12.25 12H20.5M17.5 12v3.25M20.5 12v2.25"/></svg></span>
+  <span class="brand-name">SafeSight Mac <span class="brand-role">Keyholder</span></span>
+</header>
+
+<noscript>
+  <section class="card">
+    <p>This page needs JavaScript turned on to make and use your key. It still sends nothing to anyone.</p>
+  </section>
+</noscript>
+
+<section id="screen-home" class="card">
+  <p class="eyebrow">Welcome</p>
+  <h1>You've been asked to be a keyholder</h1>
+  <p class="lead">Someone you know has put a lock on their Mac that takes time to switch off. They chose how long.</p>
+  <ul class="facts">
+    <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>If they ever ask, you can approve one request. It then takes 24 hours instead of their full wait.</span></li>
+    <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>That's all a keyholder can do. You can't stop them leaving, and nobody can ask you to. Saying no, or not answering, is always fine.</span></li>
+    <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>You won't see anything about them or their Mac, and you won't be told anything.</span></li>
+    <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>This page sends nothing to anyone. Your key is kept by your phone, like a saved password.</span></li>
+  </ul>
+
+  <div class="field">
+    <label for="key-name">Name this key <span class="optional">optional</span></label>
+    <input id="key-name" type="text" maxlength="64" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="For example, Sam's Mac">
+    <p class="hint">Only you see this name, in your saved passwords.</p>
+  </div>
+  <div class="actions">
+    <button id="create-key" class="primary" type="button">Create my key</button>
+    <button id="go-paste" class="secondary" type="button">I have a request code</button>
+  </div>
+  <p id="home-error" class="error" role="alert" hidden></p>
+</section>
+
+<section id="screen-enrolled" class="card" hidden>
+  <p class="eyebrow">Your key</p>
+  <h1>Your key is ready</h1>
+  <p class="lead">Show this code to their Mac. It reads the code with its camera, or they can paste the text.</p>
+  <figure class="qr"><svg id="enrolled-qr" role="img" aria-label="QR code of your key's code" viewBox="0 0 29 29" shape-rendering="crispEdges"><rect id="enrolled-qr-bg" width="29" height="29" fill="#fff"/><path id="enrolled-qr-path" d="" fill="#000"/></svg></figure>
+  <div class="code-box">
+    <textarea id="enrolled-text" class="code" readonly rows="3" aria-label="Your key's code as text"></textarea>
+    <button id="enrolled-copy" class="ghost" type="button">Copy</button>
+  </div>
+  <p id="enrolled-status" class="status" role="status"></p>
+  <div class="next">
+    <p>Next, they'll show you a test request. Scan it with your phone's camera, or paste it here.</p>
+  </div>
+  <div class="actions">
+    <button id="enrolled-paste" class="primary" type="button">I have a request code</button>
+  </div>
+</section>
+
+<section id="screen-paste" class="card" hidden>
+  <p class="eyebrow">Request code</p>
+  <h1>Read a request code</h1>
+  <p class="lead">Scan their QR code with your phone's camera, or paste the code they sent you.</p>
+  <div class="field">
+    <label for="paste-text">Request code</label>
+    <textarea id="paste-text" class="code" rows="5" autocomplete="off" autocapitalize="characters" spellcheck="false"></textarea>
+  </div>
+  <div class="actions">
+    <button id="paste-read" class="primary" type="button">Read the code</button>
+    <button id="paste-back" class="secondary" type="button">Back</button>
+  </div>
+  <p id="paste-error" class="error" role="alert" hidden></p>
+</section>
+
+<section id="screen-request" class="card" hidden>
+  <p id="request-eyebrow" class="eyebrow">Request</p>
+  <h1 id="request-title"></h1>
+  <p id="request-ask" class="ask"></p>
+  <div id="request-real" class="panel">
+    <p>If you approve, it takes 24 hours instead of their full wait.</p>
+    <p>You can't stop this. Without your approval they can still do it, after their full wait. You can only make it sooner.</p>
+  </div>
+  <p class="quiet">Saying no, or not answering, is fine. This is all you'll see, and you won't be told what happens next.</p>
+  <div class="actions">
+    <button id="request-approve" class="primary" type="button">Approve with my key</button>
+    <button id="request-decline" class="secondary" type="button">Not now</button>
+  </div>
+  <p id="request-error" class="error" role="alert" hidden></p>
+</section>
+
+<section id="screen-approved" class="card" hidden>
+  <p class="eyebrow">Done on your side</p>
+  <h1 id="approved-title">Approved</h1>
+  <p class="lead">Give this code back to <strong id="approved-label"></strong>. Their Mac reads it with its camera, or they can paste the text.</p>
+  <figure class="qr"><svg id="approved-qr" role="img" aria-label="QR code of your approval" viewBox="0 0 29 29" shape-rendering="crispEdges"><rect id="approved-qr-bg" width="29" height="29" fill="#fff"/><path id="approved-qr-path" d="" fill="#000"/></svg></figure>
+  <div class="code-box">
+    <textarea id="approved-text" class="code" readonly rows="4" aria-label="Your approval as text"></textarea>
+    <button id="approved-copy" class="ghost" type="button">Copy</button>
+  </div>
+  <p id="approved-status" class="status" role="status"></p>
+  <div class="next">
+    <p id="approved-real">That's everything. You can close this page.</p>
+    <p id="approved-test" hidden>When their Mac says the test passed, you're done. You won't hear from SafeSight Mac again unless they ask you.</p>
+  </div>
+  <div class="actions">
+    <button id="approved-done" class="secondary" type="button">Done</button>
+  </div>
+</section>
+
+<section id="screen-declined" class="card" hidden>
+  <p class="eyebrow">Not now</p>
+  <h1>Nothing was approved</h1>
+  <p class="lead">That's fine. Nothing was sent and nothing changed. You can close this page.</p>
+  <div class="actions">
+    <button id="declined-home" class="secondary" type="button">Back to the start</button>
+  </div>
+</section>
+
+<section id="screen-stopped" class="card" hidden>
+  <p class="eyebrow">Keyholder</p>
+  <h1 id="stopped-title"></h1>
+  <p id="stopped-text" class="lead"></p>
+</section>
+
+<footer class="foot">This page sends nothing and keeps nothing.</footer>
+
+</main>
+<script>{{CORE}}</script>
+<script>{{PAGE}}</script>
+</body>
+</html>
