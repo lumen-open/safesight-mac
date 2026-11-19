@@ -29,7 +29,7 @@ final class BreakableModel: ScoringModel {
         let bands = Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) })
         let d = Detector(models: ModelSet(models: [a, b], bundleVersion: "faults"), table: ThresholdTable(schema: "test", models: ["fa": bands, "fb": bands]),
                          config: DetectorConfig(), finder: RegionFinder())
-        let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
         var img = Fixtures.blank(400, 300)
         Fixtures.paint(&img, PixelRect(x: 100, y: 120, w: 120, h: 120), channel: nil, seed: 4)   // harmless
         let picture = CGRect(x: 100, y: 120, width: 120, height: 120)

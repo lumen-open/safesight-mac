@@ -54,10 +54,9 @@ public final class DisplayPipeline {
     /// Cover first when judging a window's new pictures would end later than this after the frame arrived
     /// (`COVER_GOAL`; tests that run unoptimised builds raise it).
     public var coverGoalMs = Register.COVER_GOAL * 1000
-    /// How long one `process` call may judge (`JUDGE_CALL_WALL`); what is left is blurred and judged next time.
-    public var callWallMs = DisplayPipeline.defaultCallWallMs
-    /// The starting value of `callWallMs`. Tests that run unoptimised builds raise it.
-    nonisolated(unsafe) public static var defaultCallWallMs = Register.JUDGE_CALL_WALL * 1000
+    /// How long one `process` call may judge (`JUDGE_CALL_WALL`); what is left is blurred and judged next time. Tests
+    /// that run unoptimised builds pass a longer limit when they make the pipeline.
+    public var callWallMs: Double
     /// About how long one model judgement takes here (fading average), to keep a call within `callWallMs`.
     var msPerJudgement = 5.0
     /// The covers' window level (`CoverLevel.canvas`). Another app's window at or above it that overlaps a cover would
@@ -78,8 +77,9 @@ public final class DisplayPipeline {
     /// Stage timings of the last `process` call (durations and counts only; nothing is written anywhere).
     public private(set) var lastTimings = PipelineTimings()
 
-    public init(display: DisplayDescriptor, judger: Judging, budgetShare: Double, ignoredPIDs: Set<Int32>) {
-        self.display = display; self.judger = judger; self.ignoredPIDs = ignoredPIDs
+    public init(display: DisplayDescriptor, judger: Judging, budgetShare: Double, ignoredPIDs: Set<Int32>,
+                callWallMs: Double = Register.JUDGE_CALL_WALL * 1000) {
+        self.display = display; self.judger = judger; self.ignoredPIDs = ignoredPIDs; self.callWallMs = callWallMs
         self.bucket = TokenBucket(rate: budgetShare)
         // A display starts covered whole until its first judged frame.
         self.lastPlan = .covered(display, because: .notYetJudged)

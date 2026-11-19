@@ -231,7 +231,7 @@ extension DisplayCoverage {
         displays.screens = [1]; displays.active = [1]; displays.online = [1]; displays.capture = [1]
         c.reset(displays.list)
         let judge = MidJudgementJudge(Fixtures.detector())
-        let p = DisplayPipeline(display: a, judger: judge, budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: a, judger: judge, budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         let g1 = c.generations.next()
         let window = Fixtures.oneWindow(a.bounds)
         let first = p.process(Fixtures.frame(Fixtures.blank(300, 200), display: a, scale: 1, t: 0, generation: g1), snapshot: window, now: 0)
@@ -269,7 +269,7 @@ extension DisplayCoverage {
         #expect(c.shownPlan(1)?.wholeDisplay == nil)
         #expect(c.shownPlan(2)?.wholeDisplay == .displayChanging)
 
-        let pb = DisplayPipeline(display: b, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let pb = DisplayPipeline(display: b, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         var onB = Fixtures.blank(300, 200)
         Fixtures.paintFlagged(&onB, PixelRect(x: 100, y: 50, w: 100, h: 100))
         let firstOnB = pb.process(Fixtures.frame(onB, display: b, scale: 1, t: 0.4, generation: g2),
@@ -297,7 +297,7 @@ extension DisplayCoverage {
         c.reset(FakeDisplays.two.list)
         let g = c.generations.next()
         // Only "started" and "idle" frames: nothing has been judged.
-        let p = DisplayPipeline(display: b, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: b, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         for status in [FrameStatus.started, .idle, .started] {
             let plan = p.process(CapturedFrame(display: b, status: status, image: nil, map: nil, dirty: [], time: 0, generation: g), snapshot: .empty, now: 0)
             c.accept(plan, generation: g)
@@ -458,7 +458,7 @@ extension DisplayCoverage {
     var window: WindowSnapshot { Fixtures.oneWindow(d.bounds) }
 
     @Test func aFrameFromBeforeTheChangeIsNeverJudged() {
-        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         _ = p.process(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, t: 0, generation: 1), snapshot: window, now: 0)
         #expect(p.judged)
         p.cover(because: .displayChanging, until: 2)
@@ -477,14 +477,14 @@ extension DisplayCoverage {
         let tiny = [PixelRect(x: 0, y: 0, w: 8, h: 8)]
         let g = CGRect(x: 160, y: 40, width: 100, height: 100)
 
-        let sameStream = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let sameStream = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         _ = sameStream.process(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, t: 0, generation: 1), snapshot: window, now: 0)
         // An honest frame first, so the once-a-second check of the reported areas against the pixels is not due next.
         _ = sameStream.process(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, dirty: tiny, t: 0.05, generation: 1), snapshot: window, now: 0.05)
         let same = sameStream.process(Fixtures.frame(img, display: d, scale: 1, dirty: tiny, t: 0.1, generation: 1), snapshot: window, now: 0.1)
         #expect(!same.covers(g), "within one stream only the changed areas are judged (the control case)")
 
-        let newStream = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
+        let newStream = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [], callWallMs: .infinity)
         _ = newStream.process(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, t: 0, generation: 1), snapshot: window, now: 0)
         let fresh = newStream.process(Fixtures.frame(img, display: d, scale: 1, dirty: tiny, t: 0.1, generation: 2), snapshot: window, now: 0.1)
         #expect(fresh.covers(g, kind: .plain), "a new stream's first frame is judged whole")

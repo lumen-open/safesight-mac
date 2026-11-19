@@ -30,7 +30,7 @@ final class VerdictScript: Judging {
     let win = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
     var snap: WindowSnapshot { WindowSnapshot(windows: [win], time: 0) }
 
-    func pipeline() -> DisplayPipeline { DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: []) }
+    func pipeline() -> DisplayPipeline { DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity) }
 
     func idle(_ t: TimeInterval) -> CapturedFrame { CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t) }
 
@@ -70,7 +70,7 @@ final class VerdictScript: Judging {
                                           RegionVerdict(rect: area, display: .cover, reason: .bothFamilies, pass: .whole)],
                                 coverWindow: true, strike: false, hot: false, judgements: 4, overloaded: 0)
         }
-        let p = DisplayPipeline(display: d, judger: judge, budgetShare: 1e6, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
         var img = Fixtures.blank(600, 400)
         _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
         flagNext = true
@@ -218,7 +218,7 @@ final class VerdictScript: Judging {
             func setRule(_ rule: DetectorRule) {}
         }
         let j = Watch()
-        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
         p.coverGoalMs = 1e9
         _ = p.process(Fixtures.frame(flaggedAt(PixelRect(x: 60, y: 60, w: 100, h: 100)), display: d, scale: 1, t: 0),
                       snapshot: Fixtures.oneWindow(CGRect(x: 40, y: 40, width: 300, height: 300)), now: 0)
@@ -280,13 +280,19 @@ final class VerdictScript: Judging {
         for w in [WindowInfo(number: 5, ownerPID: 700, layer: CoverLevel.canvas + 5, bounds: CGRect(x: 400, y: 300, width: 100, height: 50)),
                   WindowInfo(number: 6, ownerPID: 42, layer: CoverLevel.appAbove, bounds: d.bounds),
                   WindowInfo(number: 7, ownerPID: 700, layer: CoverLevel.canvas, bounds: d.bounds, alpha: 0)] {
-            let q = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [42])
+            let q = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [42], callWallMs: .infinity)
             let r = q.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: [w, win], time: 0), now: 0)
             #expect(r.wholeDisplay == nil && r.covers(CGRect(x: 100, y: 100, width: 100, height: 100)), "\(w)")
         }
     }
 
     // MARK: Time to cover under load
+
+    @Test func theAppJudgesAFrameForAtMostAQuarterOfASecond() {
+        let p = DisplayPipeline(display: d, judger: VerdictScript { VerdictScript.clean($0) }, budgetShare: 40, ignoredPIDs: [])
+        #expect(p.callWallMs == 250)
+        #expect(Register.JUDGE_CALL_WALL == 0.25)
+    }
 
     /// A judge that takes `ms` per call and finds everything clean.
     final class SlowJudge: Judging {
@@ -312,7 +318,7 @@ final class VerdictScript: Judging {
 
     @Test func oneFrameIsJudgedForAtMostTheTimeLimitAndTheRestIsBlurredMeanwhile() {
         let j = SlowJudge(ms: 30)
-        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
         let img = Fixtures.blank(600, 400)
         _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: six, now: 0)
         p.callWallMs = 70
@@ -330,7 +336,7 @@ final class VerdictScript: Judging {
 
     @Test func theFirstFrameIsJudgedWithinOneCallsWorthInAll() {
         let j = SlowJudge(ms: 0, spendAll: true)
-        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
         p.callWallMs = .infinity
         _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: six, now: 0)
         #expect(j.budgets.count == 6)
@@ -349,7 +355,7 @@ final class VerdictScript: Judging {
             func setRule(_ rule: DetectorRule) {}
         }
         let j = Watch()
-        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
         p.callWallMs = .infinity
         let img = Fixtures.blank(600, 400)
         _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)   // 150 ms: over the goal
@@ -412,7 +418,7 @@ final class VerdictScript: Judging {
 
     @Test func aPlaceShowingTheCoversOwnColourNeverCountsAsClean() {
         // As if capture saw the covers: the covered place shows the light cover colour, and every judgement is clean.
-        let p = DisplayPipeline(display: d, judger: VerdictScript { VerdictScript.clean($0) }, budgetShare: 1e6, ignoredPIDs: [])
+        let p = DisplayPipeline(display: d, judger: VerdictScript { VerdictScript.clean($0) }, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
         var img = Fixtures.blank(600, 400)
         _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
         let r = CGRect(x: 100, y: 100, width: 80, height: 80)
