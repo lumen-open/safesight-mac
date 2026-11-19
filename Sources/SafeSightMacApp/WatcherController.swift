@@ -33,6 +33,9 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// Capture requests and reports between the coordinator and the stream scheduler (ready once the detector is).
     private let link: CaptureLink
     private var busySince: [UInt32: TimeInterval] = [:]
+    /// What the frame being judged on each display shows unjudged (nil: the whole display), for covering it if judging
+    /// it runs long.
+    private var busyAreas: [UInt32: [CGRect]?] = [:]
     private var wholeSince: TimeInterval?
     private(set) var detectorFailed = false
     private(set) var running = false
@@ -130,7 +133,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         }
         timer?.invalidate(); timer = nil
         coordinator.stop()
-        busySince = [:]; wholeSince = nil
+        busySince = [:]; busyAreas = [:]; wholeSince = nil
         repairCard.hide()
         onChange?()
     }
@@ -140,7 +143,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     @MainActor func restart(rule: DetectorRule) {
         guard running else { start(rule: rule); return }
         detectorFailed = false
-        busySince = [:]
+        busySince = [:]; busyAreas = [:]
         coordinator.restart()
         loadDetector(rule: rule)
         onChange?()
@@ -231,7 +234,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             pipelines[id] = p
         }
         let start = ProcessInfo.processInfo.systemUptime
-        DispatchQueue.main.async { self.busySince[id] = start }
+        let unjudged = FrameQueue.unjudgedAreas(f)
+        DispatchQueue.main.async { self.busySince[id] = start; self.busyAreas[id] = unjudged }
         // Plans handed out before judging ends (moved covers, cover-first blurs, fast flags) are drawn at once.
         // The pointer, in global points: the window under it and the pictures nearest it go first.
         let pointer = CGEvent(source: nil)?.location
@@ -242,7 +246,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         let ended = ProcessInfo.processInfo.systemUptime
         let judgeMs = (ended - start) * 1000, latencyMs = (ended - f.time) * 1000
         DispatchQueue.main.async {
-            self.busySince[id] = nil
+            self.busySince[id] = nil; self.busyAreas[id] = nil
             self.coordinator.deliver(plan, generation: generation)
             self.onJudged?(id, judgeMs, latencyMs, plan)
         }
@@ -265,7 +269,15 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         let now = ProcessInfo.processInfo.systemUptime
         var stalled = Set(busySince.filter { now - $0.value > Register.JUDGING_STALL }.keys)
         for (id, waited) in frames.waiting(now: now) where waited > Register.JUDGING_STALL { stalled.insert(id) }
-        coordinator.tick(stalled: stalled)
+        // Changes left unjudged for `WAITING_FRAME_COVER` (a frame waiting its turn, or one whose judging runs long) are
+        // covered until judged; where they cannot be told, the display is covered whole.
+        let waiting = frames.waitingChanges(now: now, after: Register.WAITING_FRAME_COVER)
+        stalled.formUnion(waiting.whole)
+        var unjudged = waiting.areas
+        for (id, since) in busySince where now - since >= Register.WAITING_FRAME_COVER {
+            if let a = busyAreas[id] ?? nil { unjudged[id, default: []] += a } else { stalled.insert(id) }
+        }
+        coordinator.tick(stalled: stalled, unjudged: unjudged)
         updateRepairCard(now: now)
     }
 

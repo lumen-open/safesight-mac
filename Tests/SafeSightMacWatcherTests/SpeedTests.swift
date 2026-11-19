@@ -166,6 +166,7 @@ final class OrderJudger: Judging {
     let whole = [PixelRect(x: 0, y: 0, w: 800, h: 500)]
 
     func slowDetector(ms: Double = 4) -> Detector {
+        Fixtures.noTimeLimit()
         let a = SlowModel(MarkerModel(id: "fa", family: .a, channel: 0), msPerTile: ms), b = SlowModel(MarkerModel(id: "fb", family: .b, channel: 2), msPerTile: ms)
         let c = Cutoffs(cover: 0.3, clean: 0.05, strike: 0.8, gridMember: 0.3, gridLow: 0.3)
         let table = ThresholdTable(schema: "test", models: ["fa": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) }),

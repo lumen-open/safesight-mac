@@ -132,6 +132,9 @@ public struct FrameMailbox: Sendable {
         pending = old
     }
 
+    /// The frame waiting, without taking it.
+    public var peek: CapturedFrame? { pending }
+
     public mutating func take() -> CapturedFrame? {
         defer { pending = nil }
         return pending
@@ -194,4 +197,37 @@ public final class FrameQueue: @unchecked Sendable {
     public func waiting(now: TimeInterval) -> [UInt32: TimeInterval] {
         lock.withLock { since.mapValues { now - $0 } }
     }
+
+    /// What frames that have waited at least `after` would show unjudged: per display, the changed areas of its waiting
+    /// frame (global points), or the whole display when they cannot be told (see `unjudgedAreas`).
+    public func waitingChanges(now: TimeInterval, after: TimeInterval) -> UnjudgedChanges {
+        lock.withLock {
+            var out = UnjudgedChanges()
+            for (id, s) in since where now - s >= after {
+                guard let f = boxes[id]?.peek else { continue }
+                if let a = Self.unjudgedAreas(f) { if !a.isEmpty { out.areas[id] = a } } else { out.whole.insert(id) }
+            }
+            return out
+        }
+    }
+
+    /// The areas a frame shows that have not been judged: none for a frame that says nothing changed; its changed areas
+    /// for a complete frame with a usable map; nil (the whole display) for anything else.
+    public static func unjudgedAreas(_ f: CapturedFrame) -> [CGRect]? {
+        switch f.status {
+        case .idle, .started: return []
+        case .blank, .suspended, .stopped: return nil
+        case .complete:
+            guard let img = f.image, let map = f.map, let dirty = f.dirty else { return nil }
+            return DirtyRegions.prepare(dirty, width: img.width, height: img.height).map(map.toGlobal)
+        }
+    }
+}
+
+/// Changes waiting to be judged, for covering them meanwhile: displays to cover whole, and areas to cover on others.
+public struct UnjudgedChanges: Equatable, Sendable {
+    public var whole: Set<UInt32> = []
+    public var areas: [UInt32: [CGRect]] = [:]
+    public init() {}
+    public var isEmpty: Bool { whole.isEmpty && areas.isEmpty }
 }

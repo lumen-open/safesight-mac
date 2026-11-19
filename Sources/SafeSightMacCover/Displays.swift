@@ -134,6 +134,7 @@ public final class CoverCoordinator {
     public private(set) var topUpDue: TimeInterval?
     private var topUps = 0
     private var stalled: Set<UInt32> = []
+    private var unjudged: [UInt32: [CGRect]] = [:]
     private var handedToJudging: (judged: [UInt32], required: [UInt32: Int])?
 
     public init(presenter: CoverPresenter, generations: GenerationCounter,
@@ -266,11 +267,13 @@ public final class CoverCoordinator {
 
     /// Runs what is due (a restart after a change has settled, a retry, the end of an announced change that never
     /// finished) and reads the OS's lists again. `stalled`: displays whose judging has fallen too far behind.
-    public func tick(stalled: Set<UInt32> = []) {
+    /// `unjudged`: changed areas left waiting too long to be judged, covered until they are.
+    public func tick(stalled: Set<UInt32> = [], unjudged: [UInt32: [CGRect]] = [:]) {
         guard running else { return }
         let now = clock()
-        var redraw = stalled != self.stalled
+        var redraw = stalled != self.stalled || unjudged != self.unjudged
         self.stalled = stalled
+        self.unjudged = unjudged
         if let e = coverage.holdEnds, now >= e { didChange(); redraw = false }
         endHoldsThatAreOver(now)
         if coverage.hold == nil, let r = restartDue, now >= r {
@@ -311,7 +314,7 @@ public final class CoverCoordinator {
 
     private func draw(urgent: Bool) {
         guard running else { return }
-        shown = coverage.shown(stalled: stalled)
+        shown = coverage.shown(stalled: stalled, unjudged: unjudged)
         presenter.apply(shown)
         if urgent { flush() }
         let judged = coverage.list.judged, required = coverage.required

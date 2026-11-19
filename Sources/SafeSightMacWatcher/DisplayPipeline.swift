@@ -50,6 +50,12 @@ public final class DisplayPipeline {
     /// Cover first when judging a window's new pictures would end later than this after the frame arrived
     /// (`COVER_GOAL`; tests that run unoptimised builds raise it).
     public var coverGoalMs = Register.COVER_GOAL * 1000
+    /// How long one `process` call may judge (`JUDGE_CALL_WALL`); what is left is blurred and judged next time.
+    public var callWallMs = DisplayPipeline.defaultCallWallMs
+    /// The starting value of `callWallMs`. Tests that run unoptimised builds raise it.
+    nonisolated(unsafe) public static var defaultCallWallMs = Register.JUDGE_CALL_WALL * 1000
+    /// About how long one model judgement takes here (fading average), to keep a call within `callWallMs`.
+    var msPerJudgement = 5.0
     /// The covers' window level (`CoverLevel.canvas`). Another app's window at or above it that overlaps a cover would
     /// show over that cover: the display is then covered whole, under that window, until it goes. Nil turns this off.
     public var canvasLevel: Int? = CoverLevel.canvas
@@ -226,12 +232,43 @@ public final class DisplayPipeline {
             provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead + fresh) + early))
             timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
         }
+        // Cover first, for the whole frame: when recent frames took longer than the goal to judge, every changed part is
+        // blurred now, before any judging, and shown as its verdicts come in.
+        if judged, provisional != nil, runEstimateMs > coverGoalMs {
+            for p in parts {
+                for r in p.changed { if let px = map.toPixels(r) {
+                    let kind: CoverKind = ContainBlur.make(img, px).map { .blur($0) } ?? .plain
+                    early.append(CoverItem(rect: CoordinateSpace.snapOutward(r, pointsPerPixel: map.pointsPerPixel), kind: kind))
+                    timing.blurredAtOnce += 1
+                } }
+            }
+            publishEarly()
+        }
+        // Parts this call had no time for: blurred in this plan, and judged in the next call.
+        var leftOver: [CoverItem] = []
+        // The first frame after the display was covered whole is judged within one call's worth in all.
+        let firstFrame = !judged
+        var firstLeft = Register.DETECTOR_CALL_CAP
         for p in parts {
             guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
                   let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
+            let spentMs = PipelineTimings.ms(since: tRun)
+            if spentMs >= callWallMs {
+                pending += p.changed
+                leftOver += p.changed.compactMap { r in
+                    map.toPixels(r).map { px in
+                        CoverItem(rect: CoordinateSpace.snapOutward(r, pointsPerPixel: map.pointsPerPixel),
+                                  kind: ContainBlur.make(img, px).map { .blur($0) } ?? .plain)
+                    }
+                }
+                timing.leftForLater += 1
+                continue
+            }
             bucket.refill(now: now)
-            // The first judgement after the display was covered whole is not limited by the budget (SD-120).
-            let budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
+            // The first judgement after the display was covered whole is not limited by the budget (SD-120), but by one
+            // call's worth over the whole frame; every call is kept within the time left.
+            var budget = firstFrame ? firstLeft : min(bucket.available, Register.DETECTOR_CALL_CAP)
+            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (callWallMs - spentMs) / msPerJudgement))))
             let focus = pointer.flatMap { q in map.toPixels(CGRect(x: q.x - 1, y: q.y - 1, width: 2, height: 2)) }
             let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
                                    sliceAnchor: sliceAnchor(p.target, snapshot, map), focus: focus)
@@ -265,7 +302,10 @@ public final class DisplayPipeline {
             }
             tStage = PipelineTimings.now()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: progress)
-            timing.judgeMs += PipelineTimings.ms(since: tStage)
+            let callMs = PipelineTimings.ms(since: tStage)
+            timing.judgeMs += callMs
+            if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
+            if firstFrame { firstLeft = max(0, firstLeft - v.judgements) }
             timing.calls += 1
             timing.judgements += v.judgements
             timing.overloaded += v.overloaded
@@ -301,7 +341,9 @@ public final class DisplayPipeline {
         //     missing from the list) is judged on its own, over that whole rectangle where it stands on screen: only
         //     clean judgements of every pixel it hides count towards lifting it.
         for i in held.indices where !shownWhole(held[i], snapshot, visible) {
-            guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
+            // Only within the call's time: a cover not judged now simply stays.
+            guard PipelineTimings.ms(since: tRun) < callWallMs,
+                  let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
             bucket.refill(now: now)
             let budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
             let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
@@ -332,7 +374,7 @@ public final class DisplayPipeline {
         contentOffset = contentOffset.filter { visible[$0.key] != nil }
 
         // 5. Draw.
-        let items = drawItems(snapshot, visible, map, moved: moved, lead: lead)
+        let items = drawItems(snapshot, visible, map, moved: moved, lead: lead) + leftOver
         lastBounds = [:]
         for w in snapshot.windows where w.bounds.intersects(d) { lastBounds[.window(number: w.number, ownerPID: w.ownerPID)] = w.bounds }
         lastPlan = CoverPlan(display: display, items: items)

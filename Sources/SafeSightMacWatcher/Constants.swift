@@ -33,4 +33,10 @@ public enum Register {
     /// `VIDEO_VOTE` times, or until the window has been gone this long and the place has been judged clean once. Not in
     /// the register; a working value.
     public static let WINDOW_GONE: TimeInterval = 1
+    /// How long one frame may be judged for (one `process` call). Parts of the frame not reached by then are blurred
+    /// and judged in the next call, so one busy frame cannot hold up the other display's frames or leave new pictures
+    /// sharp for long. Not in the register; a working value, tied to ST-038.
+    public static let JUDGE_CALL_WALL: TimeInterval = 0.25
+    /// A display's frame left waiting this long has its changed areas covered until it is judged (`TIME_TO_COVER`).
+    public static let WAITING_FRAME_COVER: TimeInterval = TIME_TO_COVER
 }

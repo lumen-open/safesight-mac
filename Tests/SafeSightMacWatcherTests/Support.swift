@@ -26,7 +26,12 @@ final class MarkerModel: ScoringModel {
 }
 
 enum Fixtures {
+    /// Tests run unoptimised builds, many times slower than the release build the time limit per frame is set for:
+    /// pipelines made after this judge without it, unless a test sets `callWallMs` itself.
+    static func noTimeLimit() { DisplayPipeline.defaultCallWallMs = .infinity }
+
     static func detector(rule: DetectorRule = .balanced) -> Detector {
+        noTimeLimit()
         let a = MarkerModel(id: "fa", family: .a, channel: 0), b = MarkerModel(id: "fb", family: .b, channel: 2)
         let c = Cutoffs(cover: 0.3, clean: 0.05, strike: 0.8, gridMember: 0.3, gridLow: 0.3)
         let table = ThresholdTable(schema: "test", models: ["fa": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) }),

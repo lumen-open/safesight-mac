@@ -279,14 +279,21 @@ public final class DisplayCoverage {
 
     /// What every display shows now: exactly one plan per listed display. `stalled`: displays whose judging has fallen
     /// too far behind (`JUDGING_STALL`), covered whole until they catch up.
-    public func shown(stalled: Set<UInt32> = []) -> [CoverPlan] {
+    /// `unjudged`: areas whose change has waited too long to be judged (`WAITING_FRAME_COVER`), covered plainly on top of
+    /// the display's plan until it is judged.
+    public func shown(stalled: Set<UInt32> = [], unjudged: [UInt32: [CGRect]] = [:]) -> [CoverPlan] {
         let judged = Set(list.judged)
         return list.displays.map { d in
             if detectorFailed { return .covered(d, because: .detectorUnavailable) }
             if let h = hold { return .covered(d, because: h) }
             guard judged.contains(d.id) else { return .covered(d, because: .tooManyDisplays) }
             if stalled.contains(d.id) { return .covered(d, because: .judgingBehind) }
-            if let p = accepted[d.id], p.display.bounds == d.bounds { return p }
+            if var p = accepted[d.id], p.display.bounds == d.bounds {
+                for r in unjudged[d.id] ?? [] where r.intersection(d.bounds).hasArea {
+                    p.items.append(CoverItem(rect: r.intersection(d.bounds), kind: .plain))
+                }
+                return p
+            }
             return .covered(d, because: causes[d.id] ?? .notYetJudged)
         }
     }

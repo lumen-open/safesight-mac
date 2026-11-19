@@ -75,6 +75,10 @@ public struct PipelineTimings: Sendable, Equatable {
     public var coveredFirst = 0
     /// Pictures the fastest model flagged, shown blurred before the full rule decided.
     public var fastFlags = 0
+    /// Changed parts blurred at once, before judging, because recent frames took longer than `COVER_GOAL` to judge.
+    public var blurredAtOnce = 0
+    /// Parts of the frame left for the next call because this one reached `JUDGE_CALL_WALL` (blurred meanwhile).
+    public var leftForLater = 0
     public init() {}
 
     static func now() -> UInt64 { DispatchTime.now().uptimeNanoseconds }

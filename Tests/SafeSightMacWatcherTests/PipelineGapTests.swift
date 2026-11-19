@@ -285,6 +285,100 @@ final class VerdictScript: Judging {
             #expect(r.wholeDisplay == nil && r.covers(CGRect(x: 100, y: 100, width: 100, height: 100)), "\(w)")
         }
     }
+
+    // MARK: Time to cover under load
+
+    /// A judge that takes `ms` per call and finds everything clean.
+    final class SlowJudge: Judging {
+        let ms: Double, spendAll: Bool
+        var calls = 0, budgets: [Int] = []
+        init(ms: Double, spendAll: Bool = false) { self.ms = ms; self.spendAll = spendAll }
+        func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                       progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+            calls += 1; budgets.append(budget)
+            usleep(useconds_t(ms * 1000))
+            return FrameVerdict(regions: [RegionVerdict(rect: area, display: .clear, reason: .judgedClean, pass: .whole)],
+                                coverWindow: false, strike: false, hot: false, judgements: spendAll ? budget : min(budget, 20), overloaded: 0)
+        }
+        func setRule(_ rule: DetectorRule) {}
+    }
+
+    /// Six windows side by side, each 200 x 200 points.
+    var six: WindowSnapshot {
+        WindowSnapshot(windows: (0..<6).map { i in
+            WindowInfo(number: UInt32(i + 1), ownerPID: 500, layer: 0, bounds: CGRect(x: (i % 3) * 200, y: (i / 3) * 200, width: 200, height: 200))
+        }, time: 0)
+    }
+
+    @Test func oneFrameIsJudgedForAtMostTheTimeLimitAndTheRestIsBlurredMeanwhile() {
+        let j = SlowJudge(ms: 30)
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [])
+        let img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: six, now: 0)
+        p.callWallMs = 70
+        j.calls = 0
+        let all = PixelRect(x: 0, y: 0, w: 600, h: 400)
+        let plan = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: [all], t: 0.1), snapshot: six, now: 0.1)
+        #expect(j.calls < 6, "stopped at the time limit")
+        #expect(p.lastTimings.leftForLater > 0)
+        // What was not reached is blurred in this plan, and judged next time.
+        #expect(plan.covers(CGRect(x: 400, y: 200, width: 200, height: 200), kind: .blur(BlurTile(columns: 1, rows: 1, rgba: [0, 0, 0, 255]))))
+        j.calls = 0
+        _ = p.process(idle(0.2), snapshot: six, now: 0.2)
+        #expect(j.calls > 0)
+    }
+
+    @Test func theFirstFrameIsJudgedWithinOneCallsWorthInAll() {
+        let j = SlowJudge(ms: 0, spendAll: true)
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [])
+        p.callWallMs = .infinity
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: six, now: 0)
+        #expect(j.budgets.count == 6)
+        #expect(p.lastTimings.judgements <= Register.DETECTOR_CALL_CAP, "\(j.budgets)")
+    }
+
+    @Test func whenFramesRunLongEveryChangeIsBlurredBeforeJudging() {
+        final class Watch: Judging {
+            var early: [CoverPlan] = [], seen: [CoverPlan]?
+            func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                           progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+                if seen == nil { seen = early }
+                usleep(150_000)
+                return VerdictScript.clean(area)
+            }
+            func setRule(_ rule: DetectorRule) {}
+        }
+        let j = Watch()
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [])
+        p.callWallMs = .infinity
+        let img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)   // 150 ms: over the goal
+        j.seen = nil
+        let changed = PixelRect(x: 100, y: 100, w: 200, h: 120)
+        _ = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: [changed], t: 0.2), snapshot: snap, now: 0.2) { j.early.append($0) }
+        #expect((j.seen ?? []).contains { $0.covers(CGRect(x: 100, y: 100, width: 200, height: 120)) }, "blurred before the first judge call")
+    }
+
+    @Test func aFrameLeftWaitingHasItsChangesCovered() {
+        let q = FrameQueue()
+        q.open()
+        let img = Fixtures.blank(600, 400)
+        _ = q.offer(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 100, y: 100, w: 50, h: 50)], t: 0), now: 0)
+        #expect(q.waitingChanges(now: 0.3, after: Register.WAITING_FRAME_COVER).isEmpty)
+        let w = q.waitingChanges(now: 0.6, after: Register.WAITING_FRAME_COVER)
+        #expect(w.areas[1] == [CGRect(x: 96, y: 96, width: 56, height: 56)])
+        let other = DisplayDescriptor(id: 2, bounds: CGRect(x: 600, y: 0, width: 600, height: 400))
+        _ = q.offer(Fixtures.frame(img, display: other, scale: 1, dirty: nil, t: 0), now: 0)
+        #expect(q.waitingChanges(now: 0.6, after: Register.WAITING_FRAME_COVER).whole == [2], "changed everywhere: covered whole")
+
+        // The display rule draws them over the display's plan until the frame is judged.
+        let c = DisplayCoverage()
+        c.reset(DisplayList(displays: [d], main: 1))
+        let g = c.newRequest()
+        #expect(c.accept(.clear(d), generation: g))
+        let shown = c.shown(unjudged: w.areas).first { $0.display.id == 1 }
+        #expect(shown?.covers(CGRect(x: 100, y: 100, width: 50, height: 50)) == true)
+    }
 }
 
 extension CapturedFrame {
