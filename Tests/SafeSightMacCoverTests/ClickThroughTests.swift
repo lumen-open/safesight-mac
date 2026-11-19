@@ -37,6 +37,7 @@ import Testing
         #expect(!p.hidesOnDeactivate)
         #expect(!p.isAccessibilityElement())
         #expect(p.level == CoverLevels.canvas)
+        #expect(!p.isRestorable, "macOS keeps no saved state for it")
     }
 
     @Test func theRepairCardNeverTakesTheKeyboard() {
@@ -48,5 +49,6 @@ import Testing
         func all(_ v: NSView) -> [NSView] { v.subviews + v.subviews.flatMap(all) }
         #expect(all(p.contentView!).allSatisfy { !$0.needsPanelToBecomeKey }, "no view on it needs the keyboard, so it is never key")
         #expect(p.level.rawValue > CoverLevels.canvas.rawValue, "above the covers")
+        #expect(!p.isRestorable)
     }
 }

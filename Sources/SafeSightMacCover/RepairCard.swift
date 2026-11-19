@@ -95,6 +95,7 @@ final class RepairPanel: NSPanel {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         p.isReleasedWhenClosed = false
         p.hidesOnDeactivate = false
+        p.isRestorable = false
         return p
     }
 }

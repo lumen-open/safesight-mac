@@ -30,6 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        // It starts only when its owner opens it: never again by itself at the next login, and with no window
+        // state kept for one (found in the Testing edition's safety pass).
+        NSApp.disableRelaunchOnLogin()
+        UserDefaults.standard.register(defaults: ["NSQuitAlwaysKeepsWindows": false])
         // Compiled models left by a run that ended without quitting (a crash or a forced quit).
         CompiledModelFolder.sweep()
         #if SAFESIGHTMAC_TESTING

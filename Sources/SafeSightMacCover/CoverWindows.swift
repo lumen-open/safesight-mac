@@ -63,6 +63,7 @@ final class CoverPanel: NSPanel {
         p.isReleasedWhenClosed = false
         p.hidesOnDeactivate = false
         p.isExcludedFromWindowsMenu = true
+        p.isRestorable = false
         p.title = ""
         p.setAccessibilityElement(false)
         p.setAccessibilityRole(.unknown)

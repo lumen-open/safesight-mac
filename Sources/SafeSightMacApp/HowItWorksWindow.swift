@@ -21,6 +21,7 @@ final class HowItWorksWindow {
                           backing: .buffered, defer: false)
         window.title = AppText.howItWorksWindowTitle(edition)
         window.isReleasedWhenClosed = false
+        window.isRestorable = false
         window.level = CoverLevels.appAbove
         window.titlebarAppearsTransparent = true
         window.backgroundColor = CoverTheme.dynamic(\.background)
