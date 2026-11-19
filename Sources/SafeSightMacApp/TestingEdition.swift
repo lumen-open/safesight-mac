@@ -105,7 +105,8 @@ final class TestingEditionApp {
         let w = report ?? TestingReportWindow { [weak self] note in
             guard let self else { return "" }
             return TestingReport.text(facts: facts, stats: self.stats, running: ProcessInfo.processInfo.systemUptime - self.startedAt,
-                                      cpu: TestingFacts.cpuSeconds() - self.cpuAtStart, note: note)
+                                      cpu: TestingFacts.cpuSeconds() - self.cpuAtStart, note: note,
+                                      power: TestingFacts.power())
         }
         report = w
         w.show()

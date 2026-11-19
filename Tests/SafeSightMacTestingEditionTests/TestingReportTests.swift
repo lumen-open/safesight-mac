@@ -43,6 +43,9 @@ import Testing
         #expect(t.contains("CPU: 25% of one core on average"))
         #expect(t.contains("Capture to cover plan: median 60 ms"))
         #expect(!TestingReport.text(facts: facts, stats: s, running: 1, cpu: 0, note: "").contains("Note: \n"))
+        #expect(!t.contains("Power:"), "no power line unless one is given")
+        let p = TestingReport.text(facts: facts, stats: s, running: 1, cpu: 0, note: "", power: TestingFacts.power())
+        #expect(p.contains("Power: heat ") && p.contains(", Low Power Mode o"))
     }
 
     @Test func theReportsWordsAreCheckedLikeEveryOther() {

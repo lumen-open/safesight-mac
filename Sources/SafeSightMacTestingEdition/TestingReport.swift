@@ -4,7 +4,7 @@
 // a file, put on the clipboard by the app, or sent anywhere.
 //
 // It holds only: the Mac's model and macOS version, the displays' sizes and how they are arranged, the edition, build
-// and models, timings, counts of covers and faults, the CPU the app used, whether ⌃⌥⌘Q is the app's, and the note the
+// and models, timings, counts of covers and faults, the CPU the app used, the Mac's heat and Low Power Mode, whether ⌃⌥⌘Q is the app's, and the note the
 // helper types. Never a picture, a window title, an app's name, an address, or anything about what was covered.
 import Foundation
 import SafeSightMacCore
@@ -81,11 +81,26 @@ public struct TestingFacts: Sendable {
         func s(_ t: timeval) -> Double { Double(t.tv_sec) + Double(t.tv_usec) / 1_000_000 }
         return s(u.ru_utime) + s(u.ru_stime)
     }
+
+    /// How warm the Mac is and whether Low Power Mode is on, as macOS tells any app. The battery's charge is not read:
+    /// that needs IOKit, which the Testing app may not link.
+    public static func power(_ info: ProcessInfo = .processInfo) -> String {
+        let heat: String
+        switch info.thermalState {
+        case .nominal: heat = "nominal"
+        case .fair: heat = "fair"
+        case .serious: heat = "serious"
+        case .critical: heat = "critical"
+        @unknown default: heat = "unknown"
+        }
+        return "heat \(heat), Low Power Mode " + (info.isLowPowerModeEnabled ? "on" : "off")
+    }
 }
 
 public enum TestingReport {
     /// The report as plain text. `running`: seconds since covering started; `cpu`: CPU seconds used in that time.
-    public static func text(facts f: TestingFacts, stats s: TestingStats, running: TimeInterval, cpu: Double, note: String) -> String {
+    public static func text(facts f: TestingFacts, stats s: TestingStats, running: TimeInterval, cpu: Double, note: String,
+                            power: String? = nil) -> String {
         var lines = [AppText.testingReportTitle, ""]
         let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
         lines.append("Note: " + (n.isEmpty ? "(none)" : n))
@@ -102,6 +117,7 @@ public enum TestingReport {
         lines.append(String(format: "Covering for %.1f min; frames judged %d (%.1f a second)", minutes, s.judged,
                             running > 0 ? Double(s.judged) / running : 0))
         lines.append(String(format: "CPU: %.0f%% of one core on average", running > 0 ? 100 * cpu / running : 0))
+        if let power { lines.append("Power: " + power) }
         lines.append("Capture to cover plan: " + s.summary(s.latencyMs))
         lines.append("Judging a frame: " + s.summary(s.judgeMs))
         lines.append("Frames with a cover or blur: \(s.framesWithCovers)")
