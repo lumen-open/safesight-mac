@@ -6,6 +6,8 @@ SafeSight Mac watches your screen and covers explicit images as soon as they app
 
 What makes it different is the off switch. When you set it up, you choose how long turning it off should take, anywhere from a week to a year. If you ask to leave, a countdown starts. Change your mind, press **Stay**, and it's as if you never asked. You can add a friend who's allowed to shorten the wait to a day, but nobody can ever stop you from leaving.
 
+**Looking for something for your phone?** We recommend [SHIFT](https://shiftyourphone.com/content-filter/). Its Content Filter is free, works on iPhone and Android, and is set up from your computer so it can't simply be deleted from the phone. We're not affiliated with SHIFT; we just think it's good.
+
 ## Why it exists
 
 Pornography is the most patient thing ever built. It's free, it never closes, it never runs out, and every inch of it was designed by people who get paid when you stay. It doesn't have to win the argument. It only has to wait until you're tired, until it's late, until the house is quiet and the part of you that knows better has gone to sleep. Then it takes a little more of the person you were trying to become.
@@ -44,8 +46,6 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 - Wiping your Mac removes it.
 - It can miss an image, and it sometimes covers a harmless one.
 - It only protects this Mac, not your phone, a TV or another computer.
-
-**Looking for something for your phone?** We recommend [SHIFT](https://shiftyourphone.com/content-filter/). Its Content Filter is free, works on iPhone and Android, and is set up from your computer so it can't simply be deleted from the phone. We're not affiliated with SHIFT; we just think it's good.
 
 ## Where things stand
 
