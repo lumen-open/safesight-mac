@@ -159,7 +159,7 @@ describe('request code', () => {
   test('says plainly what is asked', () => {
     const base = goodRequest();
     assert.match(K.askText({ ...base, kind: K.KIND.TEST }), /changes nothing/);
-    assert.match(K.askText({ ...base, kind: K.KIND.EXIT }), /switch off the lock/);
+    assert.match(K.askText({ ...base, kind: K.KIND.EXIT }), /asked to leave/);
     assert.match(K.askText({ ...base, kind: K.KIND.LOWER_WAIT }), /wait shorter/);
     assert.match(K.askText({ ...base, kind: K.KIND.LOOSEN_SETTING }), /settings/);
     assert.match(K.askText({ ...base, kind: K.KIND.ADMIN_BATCH, items: [random(32)] }), /an admin change/);

@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-owFsidZNIcccO3QhKqvrndFBXG9cm0fjNEbIr5beVQ0=' 'sha256-MNYW13wbMJHsBYJODNuPssagKHNoZN00z5nXuqgi1wc='; style-src 'sha256-MZ5mmCQ9MzRQTTm9YLu5roo4V72SD8J5uiuYkPDcbZQ='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-/jvVQtmAG0JpWbD+H6n13KewvIlwFRs6JLkbYrHlmJc=' 'sha256-MNYW13wbMJHsBYJODNuPssagKHNoZN00z5nXuqgi1wc='; style-src 'sha256-MZ5mmCQ9MzRQTTm9YLu5roo4V72SD8J5uiuYkPDcbZQ='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
@@ -237,7 +237,7 @@ button:disabled { opacity: 0.5; cursor: default; transform: none; }
 <section id="screen-home" class="card">
   <p class="eyebrow">Welcome</p>
   <h1>You've been asked to be a keyholder</h1>
-  <p class="lead">Someone you know has put a lock on their Mac that takes time to switch off. They chose how long.</p>
+  <p class="lead">Someone you know has put a lock on their Mac. It stays on until a wait they chose has passed.</p>
   <ul class="facts">
     <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>If they ever ask, you can approve one request. It then takes 24 hours instead of their full wait.</span></li>
     <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.2 3.2L15 7"/></svg></span><span>That's all a keyholder can do. You can't stop them leaving, and nobody can ask you to. Saying no, or not answering, is always fine.</span></li>
@@ -1052,7 +1052,7 @@ const KeyholderCore = (() => {
       case KIND.TEST:
         return 'This just checks that your key works with their Mac. Approving it changes nothing.';
       case KIND.EXIT:
-        return "They're asking to switch off the lock on their Mac.";
+        return "They've asked to leave. If you approve, their wait becomes 24 hours.";
       case KIND.LOWER_WAIT:
         return "They're asking to make their wait shorter.";
       case KIND.LOOSEN_SETTING:

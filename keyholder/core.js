@@ -707,7 +707,7 @@ const KeyholderCore = (() => {
       case KIND.TEST:
         return 'This just checks that your key works with their Mac. Approving it changes nothing.';
       case KIND.EXIT:
-        return "They're asking to switch off the lock on their Mac.";
+        return "They've asked to leave. If you approve, their wait becomes 24 hours.";
       case KIND.LOWER_WAIT:
         return "They're asking to make their wait shorter.";
       case KIND.LOOSEN_SETTING:

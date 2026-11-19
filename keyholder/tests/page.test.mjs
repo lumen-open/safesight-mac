@@ -250,7 +250,7 @@ describe('the screens', () => {
     assert.equal(b.location.hash, '');
     assert.deepEqual(b.shown(), ['screen-request']);
     assert.equal(b.$('request-title').textContent, "A request from Sam's Mac");
-    assert.equal(b.$('request-ask').textContent, "They're asking to switch off the lock on their Mac.");
+    assert.equal(b.$('request-ask').textContent, "They've asked to leave. If you approve, their wait becomes 24 hours.");
     assert.equal(b.$('request-real').hidden, false);
     await b.$('request-approve').click();
     assert.deepEqual(b.calls.get[0].challenge, fields.challenge, 'the passkey signs the challenge exactly');
