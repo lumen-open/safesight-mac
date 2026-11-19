@@ -69,9 +69,14 @@ The owner's requirement: if pages get covered up, the user must be able to leave
   - A cover with too little room shows nothing, and a narrow one gets a smaller line. Picture covers stay wordless.
   - It is an image on a layer, so it cannot take a click.
 - **The repair card** repeats the line. It never takes the keyboard (non-activating, key only if a view needs typing, and none does).
-- **Look.** All colours are in `CoverTheme` (tentative Lumen palette, light and dark). Covers are a calm, opaque neutral, never teal: a system material would show what is under them. Teal marks the key caps and Try again only. Tested contrast: words at least 7:1, key letters at least 4.5:1.
+- **Look.** All colours and typefaces are in `CoverTheme`, light and dark. It follows the "desert" study (`DESIGN-desert.md` on the website branch), which the owner approved: lime plaster by day, lapis night by night, malachite for the one accent, gold only as a hairline.
+  - Covers are a calm, opaque, flat neutral with no ornament: limestone `#e5e7e1`, or lapis-black `#121828` in dark mode. A system material would show what is under them.
+  - The way-out line keeps the system font. Its key caps are plain neutral caps with near-black or near-white letters, on a pill in the card colour with a hairline edge.
+  - The repair card and the "How it works" window use the theme's colours. Headings are in the system serif (New York) and the rest is in the system sans. Controls stay native, and Try again is malachite.
+  - The arch appears only on the card's mark and on the panel holding the promise. One gold hairline sits inside the card's edge and one inside the promise panel.
+  - Tested contrast: words and quieter words at least 7:1, key letters at least 7:1, the words on Try again at least 4.5:1.
 
-Seen only in the lab, never on a real screen: `safesightmac-harness wayout` draws synthetic desktops with the cover layer's own layers and the card's own views, offscreen. ST-032 still needs to check:
+Seen only in the lab, never on a real screen: `safesightmac-harness wayout` draws synthetic desktops with the cover layer's own layers and the card's own views, offscreen, and the "How it works" window from its own views. ST-032 still needs to check:
 - the band on real apps;
 - that macOS 26 lists the menu bar as assumed (if not, it stays covered);
 - that menus opened from the menu bar fall under a whole-display cover (their shortcuts still work).
@@ -84,8 +89,8 @@ Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 147 test functions: 43 XCTest + 104 Swift Testing, all pass
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 149: adds the 2 stand-in tests, all pass
+swift test                                                 # 152 test functions: 43 XCTest + 109 Swift Testing, all pass
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 154: adds the 2 stand-in tests, all pass
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness wayout --out OUT --appearance light   # and dark
@@ -301,7 +306,7 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **Load.** A busy screen judged from scratch exceeds the budget. Its new pictures are blurred first; unjudged 512-pixel slices are covered; after 0.5 s of unjudged entries the window is covered whole. A busy Retina page stays blurred or covered for 13 to 21 s at `JUDGEMENT_BUDGET` (6 to 8 s with no budget limit). A third display and beyond are covered whole.
 - **Choices made where the register is silent or open.** Each is a working value tied to its test:
   - canvas window level: screen-saver level (ST-032);
-  - cover colour: one calm neutral per appearance, in the theme type `CoverTheme` (Lumen, tentative);
+  - cover colour: one calm neutral per appearance, in the theme type `CoverTheme` (the desert study);
   - the control band a whole-window cover leaves: 92 points (`WayOut.controlBand`, ST-032);
   - the room a cover needs around the way-out line: 24 points;
   - blur: at most 6 colour cells;
