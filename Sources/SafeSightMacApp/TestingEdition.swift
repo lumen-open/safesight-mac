@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // What the Testing edition adds to the app (docs/TESTING-EDITION.md). Compiled only into the Testing edition.
 //
+// - One copy at a time: a second copy says so and quits.
 // - ⌃⌥⌘Q quits at once from anywhere, covers or not (EmergencyQuit). If another app holds the shortcut, every
 //   line says to quit from the menu bar icon instead.
 // - It checks and covers only inside the App Sandbox (Sandbox).
@@ -25,8 +26,16 @@ final class TestingEditionApp {
 
     var shortcutWorks: Bool { emergency?.state.works ?? false }
 
-    /// At launch.
+    /// At launch. False only when another copy is already running: this one has then said so and is ending.
     func launch(watcher: WatcherController) -> Bool {
+        if SingleCopy.anotherCopyRunning() {
+            NSApp.activate()
+            let a = NSAlert()
+            a.messageText = AppText.testingAlreadyRunning
+            a.addButton(withTitle: AppText.testingRemovedDone)
+            a.runModal()
+            exit(0)
+        }
         self.watcher = watcher
         // The way out that needs nothing else: registered first, before anything can be covered.
         let e = EmergencyQuit { [weak self] in MainActor.assumeIsolated { self?.quitNow() } }
