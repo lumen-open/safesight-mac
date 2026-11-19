@@ -29,7 +29,7 @@ Nothing. There's no account, no email address, no payment, no analytics, no cras
 |---|---|---|
 | **What's on your screen** | Judged in memory by the watcher, on your Mac. Never written to a file, a log or a crash report, and never sent anywhere | Today, for the preview app |
 | **What was covered** | Nowhere. No list is kept of what was covered, where or when | Today |
-| **New pictures and videos you download** | Checked in memory on your Mac as they arrive. A clearly explicit file stays where it is, with its permissions changed so nothing can open or send it until your wait is over. Its contents are never changed, nothing about it is written down, and nothing is sent anywhere | Designed |
+| **New pictures and videos you download** | Checked in memory on your Mac as they arrive. A clearly explicit file stays where it is, with its permissions changed so nothing can open or send it until your wait is over. Its contents are never changed, nothing about it is written down, and nothing is sent anywhere | Designed, for after the first release. Until then a downloaded file is covered on screen but not checked or locked |
 | **Checked-picture memory** | A short memory of pictures already judged, so they aren't judged twice. It holds a fingerprint and a verdict, never the picture, lives in memory only and is gone when the app quits | Today |
 | **Your settings** | The preview keeps one setting, the detector mode, in macOS's ordinary preferences. The full product keeps its settings in the lock's own root-only folder | Today / Designed |
 | **The lock's records** | Your wait, your requests, the lock's clock, your keyholder's public key. In a root-only folder on your Mac, removed when you leave | Designed (written and tested, not yet installed on any Mac) |
@@ -69,7 +69,7 @@ How these requests are designed:
 
 What this doesn't hide: someone who can see your network traffic can tell that your Mac contacts these hosts, and could guess that SafeSight Mac is installed.
 
-**If you install the optional browser extension** (designed): Chrome and Edge check their stores for updates, as they do for any store extension, so Google or Microsoft can learn the extension is installed. The Firefox copy is signed by Mozilla, and what Firefox tells Mozilla about it will be recorded and listed here before it ships. The Safari copy comes inside the app. The extension itself sends nothing and keeps no history.
+**If you install the optional browser extension** (designed, for the first full release, where it carries site blocking): Chrome and Edge check their stores for updates, as they do for any store extension, so Google or Microsoft can learn the extension is installed. The Firefox copy is signed by Mozilla, and what Firefox tells Mozilla about it will be recorded and listed here before it ships. The Safari copy comes inside the app. The extension itself sends nothing and keeps no history.
 
 **If you choose the Hardcore lock**, Apple's own services are involved too. See "What device management can do" below.
 
@@ -102,7 +102,7 @@ SafeSight Mac doesn't switch off your Mac's camera or microphone; it simply does
 
 ## What device management can do
 
-This section is about the **Hardcore lock**, a stronger optional tier: even a full restore from another Mac won't free the Mac before the wait ends. Apple's own receipt process stays open as the one way back that Apple keeps.
+This section is about the **Hardcore lock**, a stronger optional tier that comes after the first release: even a full restore from another Mac won't free the Mac before the wait ends. Apple's own receipt process stays open as the one way back that Apple keeps.
 
 **Status: research only.** Nothing of it is built, and no Mac has been enrolled. The first test may change the design, and this section will be updated before anything ships.
 
