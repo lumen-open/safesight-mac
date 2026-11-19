@@ -1075,7 +1075,9 @@ mod tests {
         assert_eq!(read_round(repeated.as_bytes(), 1_000).err(), Some(RoundInputError::NotARound));
         // JSON with a nested value or an escape is not read as JSON.
         assert!(json_object(br#"{"round":1000,"a":{"b":1}}"#).is_none());
-        assert!(json_object(br#"{"round":1000,"a":"A"}"#).is_none());
+        let escaped = [&br#"{"round":1000,"a":""#[..], &[0x5C][..], &br#"u0041"}"#[..]].concat();
+        assert_eq!(escaped[19], b'\\');
+        assert!(json_object(&escaped).is_none());
         assert!(json_object(br#"{"round":01000}"#).is_none());
         assert!(json_object(br#"{"round":18446744073709551616}"#).is_none());
         assert!(json_object(br#"{"round":1000} x"#).is_none());
