@@ -58,6 +58,10 @@ This is an early preview, and there's no download yet. The screen cover is built
 
 > SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. If you choose to add a friend, they can shorten that wait, but never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
 
+## Terms and risks
+
+Please read [TERMS-AND-RISKS.md](TERMS-AND-RISKS.md) before you install it. It's short.
+
 ## Found a weakness?
 
 Please tell us privately rather than in a public issue. [SECURITY.md](SECURITY.md) explains how.
