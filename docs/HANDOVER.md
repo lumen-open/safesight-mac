@@ -106,7 +106,7 @@ Nothing has shipped and no Mac holds the lock, so today every identity below can
 - **A Mac section:** what the Mac app keeps and doesn't keep (the tables in PRIVACY.md), the read-or-send rule, and the three public hosts and what each can see.
 - **The Hardcore lock's device management,** listed the way SHIFT already lists its phone management permissions, stating that the server is the keeper on the owner's Mac and that SHIFT doesn't run it or hold it.
 - **SHIFT's own flows,** if it adds them: account sign-in, payment through Stripe, its own release host, website analytics. Those are SHIFT's data and belong in its policy. They must stay outside the parts that read the screen or hold the lock, and a payment state can never weaken or unlock anything.
-- **Age and ownership:** SafeSight Mac is for adults on their own Mac. SHIFT's children's and parent sections wouldn't apply to it. A parent-held version would be a different design, because the parent would hold a lever.
+- **Age and ownership:** SafeSight Mac is for people protecting their own Mac, and for parents and guardians protecting a child's account on a Mac they own (a parent setup is being designed). It collects nothing about children either, so SHIFT's children's data sections would apply only to whatever SHIFT itself adds, such as accounts. In a parent setup the parent holds the lever for the child's account; for an adult protecting themselves, nobody does.
 
 ## 7. Open design questions you inherit
 

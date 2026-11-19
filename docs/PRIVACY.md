@@ -141,7 +141,7 @@ No. It has none to sell. There are no ads, no advertising identifiers and nothin
 
 ## Who it's for
 
-SafeSight Mac is for adults, 18 or over, on a Mac they own and control, set up by themselves for themselves. It has no children's accounts, no parent or employer features, and no way to monitor another person. That's a design choice rather than a judgement: products built for families, such as SHIFT's parent features, make different trade-offs and have their own policies.
+SafeSight Mac is for people protecting their own Mac, and for parents and legal guardians protecting their child's account on a Mac they own. It's never for setting up on another adult's Mac, and never a condition of a job, a home or anyone's support. Even on a child's account it collects nothing and reports nothing: it only covers explicit sexual content on that screen, and no one, the parent included, is shown what was covered. A parent setup is being designed now, so this section will be updated as it's built.
 
 ## Keeping and deleting
 
