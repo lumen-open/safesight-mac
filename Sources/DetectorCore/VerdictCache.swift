@@ -105,9 +105,9 @@ final class VerdictCache {
     /// Why: a cached clean verdict holds for as long as the pixels stay the same, so a picture that jitter
     /// once pushed just under a cut-off would never be judged again. Half the cut-off is a wide working
     /// margin, not a measured bound on how far jitter moves a score (that is not measured on this build):
-    /// pictures the models score far below their cut-offs, as they score most harmless pictures, are still
-    /// cached, and any picture within a factor of two of a cut-off is judged afresh each time it comes back.
-    /// Raising it caches more and protects less. Its speed cost is in docs/STEP-1-STATUS.md.
+    /// any picture that scores at least half a cut-off is judged afresh each time it comes back. Raising it
+    /// caches more and protects less. Its cost (docs/STEP-1-STATUS.md): on the lab's busy pages of harmless
+    /// photos, about one entry in five is judged again on every reload.
     static let CLEAN_CACHE_MARGIN: Float = 0.5
 
     /// About 64 bytes an entry with the dictionaries' spare room: 65,536 entries stay under about 4 MB.
