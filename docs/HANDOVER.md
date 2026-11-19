@@ -113,7 +113,7 @@ Nothing has shipped and no Mac holds the lock, so today every identity below can
 The design record lists each with its default. The ones that matter most:
 
 **The lock**
-- Whether macOS accepts a device management server running on the Mac itself. This decides whether the Hardcore lock needs any outside server; it's the first test.
+- The Hardcore lock on real hardware. Its first trial worked on a virtual Mac: macOS took its settings from a management server running on the Mac itself, with no outside server and no push certificate. Recovery Lock came on, and leaving still worked with that server deleted. Activation Lock and restores from a second Mac need a spare Apple-silicon Mac.
 - The keeper's open points: missing fields that block replaying the request journal after a crash, field sizes for some records, a second reader for the cryptography crates, and vectors from the reference time-lock and `age` tools.
 - Which macOS mechanism draws the plain shield.
 - Whether Stay needs the password (default: no).
