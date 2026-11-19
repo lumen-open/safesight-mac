@@ -110,9 +110,9 @@ Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 292 tests pass (43 XCTest, 249 Swift Testing)
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 294 (43, 251)
-SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing  # 282 (43, 239)
+swift test                                                 # 349 tests pass (64 XCTest, 285 Swift Testing)
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 354 (67, 287)
+SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing  # 339 (64, 275)
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 tools/check-testing-edition.sh && tools/check-covers-vanish.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
@@ -356,14 +356,14 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - whether a still screen sends idle frames;
   - whether `.best` gives full backing pixels on every display type;
   - whether excluding the app keeps the content under a cover visible to capture.
-- **Window levels and surfaces** (ST-032): full-screen apps, Spaces, Mission Control, menus, the Dock, notifications, click-through, VoiceOver. The canvas level is a working value (screen-saver level).
+- **Window levels and surfaces** (ST-032): full-screen apps, Spaces, Mission Control, menus, the Dock, notifications, click-through, VoiceOver. The canvas level is a working value: just under the lock screen's shielding level, far above the screen saver and the assistive-technology levels, with the app's own windows and its menu one level higher. Another app's window at or above the canvas, over a cover, covers that display whole. **Must check on a test Mac** which ordinary system windows sit that high or could trigger it, so none leaves a display covered whole for good: Live Captions, the Accessibility Keyboard, VoiceOver's caption panel, Zoom's window, picture-in-picture video, the screenshot toolbar (⇧⌘5), Notification Centre, Spotlight, the Force Quit window and the lock screen itself. Also check that the app's own menu really opens above a whole-display cover (its windows are lifted while it is open), and that ScreenCaptureKit always lists the app while its canvas is up (no stream starts otherwise).
 - **Displays** (ST-033, ST-034): external, mirrored, Sidecar, AirPlay, DisplayLink; plug, unplug, sleep, wake, lid, rotation and resolution changes. The display rule is tested with faked display lists and frames only. Not yet seen on hardware:
   - whether macOS makes the reconfiguration callback's begin call before it applies each kind of change, and on the main thread;
   - how many frames a new display shows before its canvas exists (SL-023);
   - whether ScreenCaptureKit lists and streams DisplayLink, Sidecar, AirPlay and app-made virtual displays (one it cannot see stays covered whole, which makes that display unusable);
   - **must check on a real mirrored set-up** (built-in display mirrored to an external display, and AirPlay mirroring to a TV): which of CoreGraphics' active and online lists, AppKit's screens and ScreenCaptureKit's list hold the mirror; that it gets no canvas of its own; that it shows its source's covers; and that a whole-display cover still leaves the main display's menu bar in sight while mirrored;
   - a stream that stops delivering frames without an error, and ScreenCaptureKit handing one display's picture to another display's stream (Apple feedback FB17797423). Neither is detected: the per-display canary of red-team fix FIX-13 is the planned check;
-  - a display captured by an app (`CGDisplayCapture`): that app draws at the shielding window level, far above the canvas level (screen-saver level), so its pictures would show over the covers (ST-032).
+  - a display captured by an app (`CGDisplayCapture`): that app draws at the shielding window level, above the canvas level, so its pictures would show over the covers (ST-032).
 - **Time to cover on a real display** (ST-031). The flash length is unknown.
 - **Speed, memory and energy** (ST-038, ST-039). Each complete frame is copied into an RGBA buffer for the detector, which costs memory and energy, unmeasured. `JUDGEMENT_BUDGET` (40 per second) and `FULL_REJUDGE` (30 s) are proposals.
 - **False covers on real screens in daily use.** ST-040 re-ran through this pipeline on 932 held-out harmless screens (above); nothing has been measured on a live screen.
@@ -410,7 +410,10 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **Other screens.** Media sent from the Mac straight to a TV, and a window capture sent to another device, never pass through the cover. See "Other displays and other screens" below.
 - **Load.** A busy screen judged from scratch exceeds the budget. Its new pictures are blurred first; unjudged 512-pixel slices are covered; after 0.5 s of unjudged entries the window is covered whole. A busy Retina page stays blurred or covered for 13 to 21 s at `JUDGEMENT_BUDGET` (6 to 8 s with no budget limit). A third display and beyond are covered whole.
 - **Choices made where the register is silent or open.** Each is a working value tied to its test:
-  - canvas window level: screen-saver level (ST-032);
+  - canvas window level: just under the shielding level (ST-032);
+  - time per judged frame: 0.25 s (`JUDGE_CALL_WALL`); a change left unjudged 0.5 s is covered; the pictures of new frames are blurred before judging after 3 slow frames in a row; a large change is blurred whole only until its pictures are found (ST-038);
+  - a closed window's cover: kept where it stood until judged clean 4 times, or 2 times after 1 s (`WINDOW_GONE`);
+  - the reported changed areas are checked against the pixels once a second;
   - cover colour: one calm neutral per appearance, in the theme type `CoverTheme` (the desert study);
   - the control band a whole-window cover leaves: 92 points (`WayOut.controlBand`, ST-032);
   - the room a cover needs around the way-out line: 24 points;
@@ -420,7 +423,9 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - `JUDGEMENT_BURST`: 400 (ST-038);
   - the repair card: shown after 2 s of a whole-display cover.
 
-  A flagged whole pass covers the whole window only when the call spanned the window. On a call over changed parts, it covers the judged area unless a region cover in the same call explains it.
+  A flagged whole pass covers the whole window only when the call spanned the window. On a call over changed parts, it covers the judged area.
+
+  **Known cost: covers are never trimmed by windows in front.** A window in front may be see-through, so a cover is always drawn whole, over any window in front of its own. A whole-window cover on a window behind therefore also hides the part of the front window that overlaps it, until it lifts.
 
   For an unjudged slice or whole entry, this build keeps the detector's cover where C05-20 would blur only the pending regions it touches. That is more covering, not less.
 - **Not built in this version:**
@@ -428,7 +433,7 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - "This is wrong";
   - heat and Low Power Mode inputs;
   - keyboard-focus priority (the pointer's window and the pictures nearest the pointer go first since 18 November; the front-most window comes before windows behind it);
-  - matching a frame to the window list taken nearest its time (the list is read when the frame is judged);
+  - matching a frame to the window list taken nearest its time (the list is read when the frame is taken for judging);
   - the crash-loop breaker;
   - the heartbeat and the plain shield, which are not part of the practice state.
 - **Models ship compiled** in an app made by `tools/make-app.sh` (correction C06-14). Outside an app (the harness, lab builds, tests) each package is still compiled once at first load, to a fixed place. An app made by `make-app.sh` holds only compiled models, so it never compiles, and `tools/check-testing-edition.sh` refuses a Testing app that holds packages.
