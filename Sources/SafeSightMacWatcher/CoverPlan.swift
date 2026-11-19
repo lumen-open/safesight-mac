@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// What the cover layer draws (chapter 05, sections 5.2, 5.4 to 5.6). Covers are plain and wordless.
+// What the cover layer draws (chapter 05, sections 5.2, 5.4 to 5.6). Covers are plain and wordless, with
+// one exception: whole-window and whole-display covers carry the way-out line (WayOut.swift).
 import CoreGraphics
 import Foundation
 import Preprocess
@@ -32,7 +33,26 @@ public enum CoverKind: Equatable, Hashable, Sendable {
 public struct CoverItem: Equatable, Sendable {
     public var rect: CGRect
     public var kind: CoverKind
-    public init(rect: CGRect, kind: CoverKind) { self.rect = rect; self.kind = kind }
+    /// True on the largest visible piece of a whole-window cover: the way-out line is drawn on it.
+    public var wayOut: Bool
+    public init(rect: CGRect, kind: CoverKind, wayOut: Bool = false) { self.rect = rect; self.kind = kind; self.wayOut = wayOut }
+}
+
+/// Where the way-out line sits on a cover.
+public enum WayOutPlacement: Equatable, Sendable {
+    /// A whole-window cover: in the middle, raised a little.
+    case centre
+    /// A whole-display cover: below the middle, clear of the repair card, which sits in the middle.
+    case belowCard
+}
+
+/// One cover as drawn: its frame (canvas layer space, or Cocoa points for an overlay window), its kind and,
+/// for whole-window and whole-display covers, where the way-out line goes.
+public struct CoverPiece: Equatable, Sendable {
+    public var frame: CGRect
+    public var kind: CoverKind
+    public var wayOut: WayOutPlacement?
+    public init(frame: CGRect, kind: CoverKind, wayOut: WayOutPlacement? = nil) { self.frame = frame; self.kind = kind; self.wayOut = wayOut }
 }
 
 /// Everything drawn on one display, applied in one step.
@@ -63,25 +83,39 @@ public enum CoverLayout {
         CoordinateSpace.toCocoa(display, primaryHeight: primaryHeight)
     }
 
-    /// Each cover's frame inside the canvas (layer space: display-local, origin bottom-left).
-    public static func layerFrames(_ plan: CoverPlan) -> [(CGRect, CoverKind)] {
+    /// What a plan covers, in global points, cut to its display, with each piece's way-out placement.
+    /// A whole-display cover leaves the top `menuBar` points (`WayOut.menuBarHeight`) for the menu bar; the
+    /// Dock stays covered.
+    static func globalPieces(_ plan: CoverPlan, menuBar: CGFloat) -> [CoverPiece] {
         let d = plan.display.bounds
-        if plan.wholeDisplay != nil { return [(CGRect(origin: .zero, size: d.size), .plain)] }
+        if plan.wholeDisplay != nil {
+            let mb = min(max(0, menuBar.isFinite ? menuBar : 0), WayOut.menuBarMax)
+            return [CoverPiece(frame: CGRect(x: d.minX, y: d.minY + mb, width: d.width, height: d.height - mb), kind: .plain, wayOut: .belowCard)]
+        }
         return plan.items.compactMap { item in
             let r = item.rect.intersection(d)
-            return r.hasArea ? (CoordinateSpace.toCanvasLayer(r, display: d), item.kind) : nil
+            return r.hasArea ? CoverPiece(frame: r, kind: item.kind, wayOut: item.wayOut ? .centre : nil) : nil
         }
+    }
+
+    /// Each cover inside the canvas (layer space: display-local, origin bottom-left).
+    public static func layerPieces(_ plan: CoverPlan, menuBar: CGFloat = 0) -> [CoverPiece] {
+        globalPieces(plan, menuBar: menuBar).map { var p = $0; p.frame = CoordinateSpace.toCanvasLayer(p.frame, display: plan.display.bounds); return p }
+    }
+
+    /// Each cover's frame inside the canvas (layer space: display-local, origin bottom-left).
+    public static func layerFrames(_ plan: CoverPlan, menuBar: CGFloat = 0) -> [(CGRect, CoverKind)] {
+        layerPieces(plan, menuBar: menuBar).map { ($0.frame, $0.kind) }
     }
 
     /// The per-window overlay form (the written pivot of ST-032): one overlay window per cover, its
     /// frame in Cocoa points, cut to the display.
-    public static func overlayFrames(_ plan: CoverPlan, primaryHeight: CGFloat) -> [(CGRect, CoverKind)] {
-        let d = plan.display.bounds
-        if plan.wholeDisplay != nil { return [(CoordinateSpace.toCocoa(d, primaryHeight: primaryHeight), .plain)] }
-        return plan.items.compactMap { item in
-            let r = item.rect.intersection(d)
-            return r.hasArea ? (CoordinateSpace.toCocoa(r, primaryHeight: primaryHeight), item.kind) : nil
-        }
+    public static func overlayPieces(_ plan: CoverPlan, primaryHeight: CGFloat, menuBar: CGFloat = 0) -> [CoverPiece] {
+        globalPieces(plan, menuBar: menuBar).map { var p = $0; p.frame = CoordinateSpace.toCocoa(p.frame, primaryHeight: primaryHeight); return p }
+    }
+
+    public static func overlayFrames(_ plan: CoverPlan, primaryHeight: CGFloat, menuBar: CGFloat = 0) -> [(CGRect, CoverKind)] {
+        overlayPieces(plan, primaryHeight: primaryHeight, menuBar: menuBar).map { ($0.frame, $0.kind) }
     }
 }
 

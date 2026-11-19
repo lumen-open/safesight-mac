@@ -2,6 +2,8 @@
 
 **Free, open-source blocking of explicit images and video on your Mac. Once it's on, it stays on.**
 
+**[Visit the website](https://lumen-open.github.io/safesight-mac/)** for a quick tour and straight answers to the hard questions, like streaming, downloads and other browsers.
+
 SafeSight Mac covers explicit images and video as soon as they appear on your screen: in any app, in any browser, on every display. Everything else is left alone. Your work, your calls, your music and your code carry on as normal.
 
 What makes it different is that it stays on. There's no off switch for a bad night, no password to beg for, and nobody who can unlock it early, not even us. When you set it up, you choose how long getting out should take, anywhere from a week to a year, and you can always make it longer. If you ever ask to leave, the countdown starts; change your mind, press **Stay**, and it's as if you never asked. The only shortcut is an optional friend you choose to add, who can bring the wait down to a day but can never stop you leaving.
@@ -22,7 +24,7 @@ This is about freedom. Not the thin kind, where you do whatever the next five mi
 
 ## Hard to get around, by design
 
-Most blockers fall to a five-minute trick, and everyone who's needed one knows the tricks. SafeSight Mac is designed so the usual ones don't work.
+Most blockers fall to a five-minute trick, and everyone who's needed one knows the tricks. SafeSight Mac is built to be airtight. Here's what happens to the usual ones.
 
 | The usual way around it | Most blockers | SafeSight Mac |
 |---|---|---|
@@ -57,6 +59,10 @@ This is an early preview, and there's no download yet. The screen cover is built
 ## Our promise
 
 > SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. If you choose to add a friend, they can shorten that wait, but never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
+
+## Terms and risks
+
+Please read [TERMS-AND-RISKS.md](TERMS-AND-RISKS.md) before you install it. It's short.
 
 ## Found a weakness?
 

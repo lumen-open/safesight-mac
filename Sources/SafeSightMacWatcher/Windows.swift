@@ -92,8 +92,11 @@ public struct WindowSnapshot: Equatable, Sendable {
     }
 
     /// The window's bounds, if it is in this snapshot.
-    public func bounds(of target: JudgeTarget) -> CGRect? {
+    public func bounds(of target: JudgeTarget) -> CGRect? { info(of: target)?.bounds }
+
+    /// The window, if it is in this snapshot.
+    public func info(of target: JudgeTarget) -> WindowInfo? {
         guard case let .window(n, pid) = target else { return nil }
-        return windows.first { $0.number == n && $0.ownerPID == pid }?.bounds
+        return windows.first { $0.number == n && $0.ownerPID == pid }
     }
 }

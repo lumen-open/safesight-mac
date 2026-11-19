@@ -37,6 +37,10 @@ jobs:
         run: tools/check-no-network.sh
       - name: Dependency licences
         run: tools/check-licences.sh
+      - name: Keyholder page tests
+        run: |
+          node --version
+          node --test keyholder/tests/*.test.mjs
       - name: Swift build and test
         run: |
           swift build -c release

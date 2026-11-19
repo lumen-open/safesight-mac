@@ -63,18 +63,31 @@ final class CacheTests: XCTestCase {
     }
 
     func testAFlaggedPictureNeverInheritsACleanVerdict() {
-        // A harmless picture is judged clean and cached; a flagged picture drawn in its place, same size and
-        // place, is covered.
+        // The safety rule: a harmless picture is judged clean and cached; a flagged picture drawn in its place,
+        // same size and place, is judged afresh, and nothing over it comes from the cache.
+        // Whether it is then covered is the models' call, not the cache's. So the cut-offs here (0.3) sit far
+        // below the flagged picture's score for each family (0.47 to 0.5 over 2,000 jitter draws). At a
+        // cut-off of 0.5, jitter put both families just under it about one run in 30.
         var img = canvas(400, 300)
         let r = PixelRect(x: 60, y: 60, w: 120, h: 120)
         paint(&img, r, channel: nil, seed: 6)
-        let (d, _, _) = detector()
-        XCTAssertFalse(d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)).regions.contains { $0.display == .cover })
+        let (d, _, _) = detector(cover: 0.3)
+        let ctx = JudgeContext(windowID: 1, startsCovered: false)
+        let first = d.judge(img, context: ctx)
+        XCTAssertGreaterThan(first.judgements, 0)
+        XCTAssertFalse(first.regions.contains { $0.display != .clear }, "the harmless picture is judged clean")
+        XCTAssertEqual(d.judge(img, context: ctx).judgements, 0, "and its clean verdict is cached")
         var flagged = img
         paint(&flagged, PixelRect(x: r.x, y: r.y, w: 60, h: 120), channel: 0, seed: 7)
         paint(&flagged, PixelRect(x: r.x + 60, y: r.y, w: 60, h: 120), channel: 2, seed: 8)
-        let v = d.judge(flagged, context: JudgeContext(windowID: 1, startsCovered: false))
-        XCTAssertTrue(v.regions.contains { $0.display == .cover && $0.rect.intersects(r) })
+        d.resetTimings()
+        let v = d.judge(flagged, context: ctx)
+        XCTAssertGreaterThan(v.judgements, 0, "the changed picture is judged afresh")
+        XCTAssertEqual(d.timings.cacheHits, 0, "no entry of the changed frame comes from the cache")
+        XCTAssertEqual(v.overloaded, 0, "every entry was judged")
+        XCTAssertFalse(v.regions.contains { $0.rect.intersects(r) && $0.reason == .cached && $0.display == .clear },
+                       "no region over it carries a cached clean verdict")
+        XCTAssertTrue(v.regions.contains { $0.display == .cover && $0.rect.intersects(r) }, "far above the cut-offs, it is covered")
     }
 
     func testAMovedPictureIsNotJudgedAgain() {
@@ -97,7 +110,7 @@ final class CacheTests: XCTestCase {
         let c = VerdictCache(capacity: 64)
         XCTAssertEqual(c.maxBytes, 64 * VerdictCache.bytesPerEntry)
         let img = noise(64, 64, seed: 3)
-        let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
+        let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false, cacheable: true)
         for i in 0..<5_000 {
             c.put(VerdictCache.key(img, PixelRect(x: 0, y: 0, w: 1 + i % 64, h: 1 + (i / 64) % 64), pass: "region", version: "v"), o)
             XCTAssertLessThanOrEqual(c.count, 64)
@@ -108,7 +121,7 @@ final class CacheTests: XCTestCase {
     func testRecentlyUsedEntriesSurvive() {
         let c = VerdictCache(capacity: 64)
         let img = noise(64, 64, seed: 3)
-        let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
+        let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false, cacheable: true)
         let kept = VerdictCache.key(img, PixelRect(x: 0, y: 0, w: 64, h: 64), pass: "region", version: "v")
         c.put(kept, o)
         for i in 0..<2_000 {
@@ -186,6 +199,165 @@ final class CacheTests: XCTestCase {
         XCTAssertEqual(one.regions.map(\.rect), two.regions.map(\.rect))
         XCTAssertEqual(one.regions.map(\.display), two.regions.map(\.display))
         XCTAssertEqual(two.judgements, 0)
+    }
+}
+
+/// A fake model whose score the test sets, whatever the pixels and the jitter, so the margin tests are
+/// deterministic with no change to jitter.
+final class SetScoreModel: ScoringModel {
+    let id: String, family: Family, side = 32
+    var score: Float
+    var calls = 0
+    init(id: String, family: Family, score: Float) { self.id = id; self.family = family; self.score = score }
+    func flagScores(_ tensors: [[UInt8]]) throws -> [Float] {
+        calls += tensors.count
+        return tensors.map { _ in score }
+    }
+}
+
+/// The margin rule for caching (SafeSight Mac): a clean outcome is cached only when every model scored it
+/// below `CLEAN_CACHE_MARGIN` of its cover cut-off for the size band; a borderline-clean one is judged again
+/// each time it comes back; an outcome that covers is cached. Synthetic patterns and set scores only.
+final class CleanCacheMarginTests: XCTestCase {
+    let ctx = JudgeContext(windowID: 1, startsCovered: false)
+    /// A neutral 96 x 96 picture on a 400 x 300 frame: one region (band 64-127) and the whole pass (128+).
+    let r = PixelRect(x: 60, y: 60, w: 96, h: 96)
+    var img: RGBAImage {
+        var i = canvas(400, 300)
+        paint(&i, r, channel: nil, seed: 5)
+        return i
+    }
+
+    /// Cut-offs for "fa", "fb" and the tie-breaker "fr": `cover` in every band, or `byBand` where given.
+    func cutoffs(_ cover: Float = 0.5, byBand: [Band: Float] = [:]) -> ThresholdTable {
+        var m: [String: [String: Cutoffs]] = [:]
+        for id in ["fa", "fb", "fr"] {
+            m[id] = Dictionary(uniqueKeysWithValues: Band.allCases.map {
+                ($0.rawValue, Cutoffs(cover: byBand[$0] ?? cover, clean: 0.05, strike: 0.95, gridMember: 0.3, gridLow: 0.2))
+            })
+        }
+        return ThresholdTable(schema: "test", models: m)
+    }
+
+    func scored(_ a: Float, _ b: Float, referee: Float? = nil, table: ThresholdTable? = nil, rule: DetectorRule = .balanced)
+        -> (Detector, SetScoreModel, SetScoreModel, SetScoreModel?) {
+        let fa = SetScoreModel(id: "fa", family: .a, score: a), fb = SetScoreModel(id: "fb", family: .b, score: b)
+        let fr = referee.map { SetScoreModel(id: "fr", family: .b, score: $0) }
+        var cfg = DetectorConfig(); cfg.rule = rule
+        let d = Detector(models: ModelSet(models: [fa, fb], referee: fr, bundleVersion: "margin"), table: table ?? cutoffs(),
+                         config: cfg, finder: RegionFinder())
+        return (d, fa, fb, fr)
+    }
+
+    func over(_ v: FrameVerdict) -> RegionVerdict? { v.regions.first { $0.pass == .region && $0.rect.intersects(r) } }
+
+    func testTheMarginIsHalfTheCoverCutOff() {
+        XCTAssertEqual(VerdictCache.CLEAN_CACHE_MARGIN, 0.5)
+    }
+
+    func testABorderlineCleanOutcomeIsNotCachedAndIsJudgedAgain() {
+        // Both families score 0.4 against a cut-off of 0.5: clean, but not clearly (0.4 >= 0.25).
+        let (d, fa, fb, _) = scored(0.4, 0.4)
+        let first = d.judge(img, context: ctx)
+        XCTAssertEqual(over(first)?.display, .clear)
+        XCTAssertGreaterThan(first.judgements, 0)
+        d.resetTimings()
+        let calls = fa.calls
+        let again = d.judge(img, context: ctx)
+        XCTAssertEqual(again.judgements, first.judgements, "the same pixels are judged again, every entry")
+        XCTAssertEqual(d.timings.cacheHits, 0)
+        XCTAssertGreaterThan(fa.calls, calls)
+        // The next fresh judgement goes the other way (as jitter can make it): the same pixels are now covered.
+        fa.score = 0.6; fb.score = 0.6
+        let third = d.judge(img, context: ctx)
+        XCTAssertGreaterThan(third.judgements, 0)
+        XCTAssertEqual(over(third)?.display, .cover, "a borderline picture gets another chance to be caught")
+        XCTAssertEqual(over(third)?.reason, .bothFamilies)
+    }
+
+    func testAClearlyCleanOutcomeIsCached() {
+        let (d, fa, fb, _) = scored(0.1, 0.2)
+        let first = d.judge(img, context: ctx)
+        XCTAssertEqual(over(first)?.display, .clear)
+        XCTAssertGreaterThan(first.judgements, 0)
+        let calls = (fa.calls, fb.calls)
+        d.resetTimings()
+        let again = d.judge(img, context: ctx)
+        XCTAssertEqual(again.judgements, 0, "every entry comes from the cache")
+        XCTAssertEqual(d.timings.cacheMisses, 0)
+        XCTAssertEqual(fa.calls, calls.0); XCTAssertEqual(fb.calls, calls.1)
+        XCTAssertEqual(over(again)?.display, .clear)
+    }
+
+    func testEveryModelMustBeBelowTheMarginStrictly() {
+        // (family A, family B, cached?) against a cut-off of 0.5, so the margin is 0.25.
+        for (a, b, cached) in [(Float(0.1), Float(0.2499), true), (0.1, 0.25, false), (0.25, 0.1, false), (0, 0.49, false),
+                               (0.49, 0, false), (0, 0, true), (0.1, .nan, false)] {
+            let (d, _, _, _) = scored(a, b)
+            let first = d.judge(img, context: ctx)
+            XCTAssertEqual(over(first)?.display, .clear, "\(a), \(b): clean either way")
+            let again = d.judge(img, context: ctx)
+            XCTAssertEqual(again.judgements == 0, cached, "\(a), \(b)")
+        }
+    }
+
+    func testTheMarginUsesEachSizeBandsCutOff() {
+        // The region (96 px, band 64-127) has a cut-off of 0.9; the whole pass (300 px, band 128+) one of 0.3.
+        // A score of 0.2 is clearly clean for the region (below 0.45) but not for the whole pass (0.15).
+        let (d, _, _, _) = scored(0.2, 0.2, table: cutoffs(byBand: [.b64: 0.9, .b128: 0.3]))
+        let first = d.judge(img, context: ctx)
+        XCTAssertFalse(first.regions.contains { $0.display != .clear })
+        XCTAssertEqual(first.regions.filter { $0.pass == .region }.map(\.rect), [r], "one region, as the setup expects")
+        XCTAssertEqual(first.judgements, 4, "the region and the whole pass, two models each")
+        d.resetTimings()
+        let again = d.judge(img, context: ctx)
+        XCTAssertEqual(d.timings.cacheHits, 1, "the region comes from the cache")
+        XCTAssertEqual(again.judgements, 2, "the whole pass is judged again")
+    }
+
+    func testACoveredOutcomeIsCached() {
+        // Both families agree; a dispute nobody could settle; under Either, one family's flag.
+        for (a, b, rule, reason) in [(Float(0.9), Float(0.9), DetectorRule.balanced, Reason.bothFamilies),
+                                     (0.9, 0, .balanced, .disputed), (0, 0.9, .either, .referee)] {
+            let (d, fa, _, _) = scored(a, b, rule: rule)
+            let first = d.judge(img, context: ctx)
+            XCTAssertEqual(over(first)?.display, .cover, "\(rule) \(reason)")
+            XCTAssertEqual(over(first)?.reason, reason)
+            let calls = fa.calls
+            // Even if a fresh judgement would now clear it, the same pixels stay covered from the cache.
+            fa.score = 0
+            let again = d.judge(img, context: ctx)
+            XCTAssertEqual(again.judgements, 0, "\(rule) \(reason): cached")
+            XCTAssertEqual(fa.calls, calls)
+            XCTAssertEqual(over(again)?.display, .cover)
+            XCTAssertEqual(over(again)?.reason, reason)
+        }
+    }
+
+    func testADisputeTheTieBreakerDeclinedIsJudgedAgain() {
+        // Family A flags, family B does not, the tie-breaker declines: shown clear, but not clearly clean.
+        let (d, _, _, fr) = scored(0.9, 0, referee: 0)
+        let first = d.judge(img, context: ctx)
+        XCTAssertEqual(over(first)?.display, .clear)
+        let asked = fr!.calls
+        XCTAssertGreaterThan(asked, 0)
+        XCTAssertGreaterThan(d.judge(img, context: ctx).judgements, 0, "judged again")
+        XCTAssertGreaterThan(fr!.calls, asked, "the tie-breaker is asked again")
+        fr!.score = 0.9
+        let third = d.judge(img, context: ctx)
+        XCTAssertEqual(over(third)?.display, .cover)
+        XCTAssertEqual(over(third)?.reason, .referee)
+    }
+
+    func testTheCacheRefusesAnOutcomeNotMarkedCacheable() {
+        let c = VerdictCache(capacity: 64)
+        let k = VerdictCache.key(img, r, pass: "region", version: "v")
+        var o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
+        c.put(k, o)
+        XCTAssertNil(c.get(k), "not marked: not kept")
+        o.cacheable = true
+        c.put(k, o)
+        XCTAssertEqual(c.get(k), o)
     }
 }
 

@@ -31,3 +31,11 @@ import Testing
 @Test func strictCoverModeIsShownAsNotInThisVersion() {
     #expect(AppText.strictCoverMode.hasSuffix("not in this version"))
 }
+
+@Test func theWayOutLineSaysHowToLeaveInPlainWords() {
+    #expect(AppText.wayOutLine == "Press ⌘W to close this tab, or ⌘[ to go back.")
+    #expect(AppText.all.contains(AppText.wayOutLine), "the forbidden-words check reads it")
+    #expect(AppText.wayOutPieces.map(\.text).joined() == AppText.wayOutLine)
+    #expect(AppText.wayOutPieces.filter(\.isKey).map(\.text) == AppText.wayOutKeys)
+    #expect(AppText.wayOutPieces.first?.text == "Press ")
+}

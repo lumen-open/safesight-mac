@@ -9,20 +9,23 @@
 //            (lab build only) times the chain from frame to cover plan to cover layer update, by stage; see Bench.swift
 //   safesightmac-harness falsecovers --models DIR --list FILE [--root DIR] [--rule R] [--jsonl FILE] [--json FILE]
 //            false covers on harmless screens through the whole pipeline; see FalseCovers.swift
+//   safesightmac-harness wayout --out DIR [--appearance light|dark]
+//            (lab build only) synthetic desktops whose covers leave the way out in sight; see WayOutScenes.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
 //            --models DIR (real models, checked against the sealed hash list)  --null-models (lab build only)
+//            --appearance light|dark (how the covers are drawn in the PNGs; default light)
 //
 // Prints one JSON line per frame: the cover plan, each cover's global rectangle, its overlay window
 // frame (Cocoa points) and its canvas layer frame. With --out, also writes each frame with its covers
-// drawn on it as a PNG, so the covers can be looked at.
+// drawn on it as a PNG (the cover layer's own layers, rendered offscreen), so the covers can be looked at.
 import CoreGraphics
 import DetectorCore
 import SafeSightMacWatcher
 import Foundation
 import ImageIO
 import Preprocess
-import UniformTypeIdentifiers
+import SafeSightMacCover
 #if SAFESIGHTMAC_LAB
 import LabStandIn
 #endif
@@ -42,6 +45,7 @@ struct Options {
     var list: String?
     var root: String?
     var jsonl: String?
+    var theme = CoverTheme.light
 }
 
 /// Bench options, parsed in every build so that a release build can refuse `bench` plainly.
@@ -74,6 +78,8 @@ func parse() -> Options {
         case "--models": o.models = v()
         case "--null-models": o.nullModels = true
         case "--out": o.out = v()
+        case "--appearance":
+            switch v() { case "light": o.theme = .light; case "dark": o.theme = .dark; default: fail("--appearance light|dark") }
         case "--trials": o.bench.trials = Int(v()) ?? 8
         case "--list": o.list = v()
         case "--root": o.root = v()
@@ -144,7 +150,7 @@ func report(_ i: Int, _ label: String, _ plan: CoverPlan, primaryHeight: CGFloat
                       "overlayWindow": rectJSON(overlays[0].0), "canvasLayer": rectJSON(layers[0].0)])
     } else {
         for (k, item) in plan.items.enumerated() {
-            items.append(["kind": item.kind == .plain ? "cover" : "blur", "global": rectJSON(item.rect),
+            items.append(["kind": item.kind == .plain ? "cover" : "blur", "global": rectJSON(item.rect), "wayOut": item.wayOut,
                           "overlayWindow": rectJSON(overlays[k].0), "canvasLayer": rectJSON(layers[k].0)])
         }
     }
@@ -153,41 +159,6 @@ func report(_ i: Int, _ label: String, _ plan: CoverPlan, primaryHeight: CGFloat
                                "wholeDisplay": plan.wholeDisplay?.rawValue ?? NSNull(), "covers": plan.plainCount, "blurs": plan.blurCount,
                                "items": items, "ms": Int(ms)]
     print(String(data: try! JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]), encoding: .utf8)!)
-}
-
-/// Draws the plan over the frame (covers grey, blurs as their colour cells) and writes a PNG.
-func writeComposite(_ img: RGBAImage?, _ plan: CoverPlan, map: CaptureMap?, to url: URL) {
-    let w = img?.width ?? Int(plan.display.bounds.width), h = img?.height ?? Int(plan.display.bounds.height)
-    var px = img?.pixels ?? [UInt8](repeating: 0, count: w * h * 4)
-    func paint(_ r: PixelRect, _ color: (Int, Int) -> (UInt8, UInt8, UInt8)) {
-        guard let c = r.clamped(width: w, height: h) else { return }
-        for y in c.y..<c.maxY { for x in c.x..<c.maxX {
-            let p = (y * w + x) * 4, (R, G, B) = color(x - c.x, y - c.y)
-            px[p] = R; px[p + 1] = G; px[p + 2] = B; px[p + 3] = 255
-        } }
-    }
-    if plan.wholeDisplay != nil || map == nil {
-        paint(PixelRect(x: 0, y: 0, w: w, h: h)) { _, _ in (102, 105, 110) }
-    } else if let m = map {
-        for item in plan.items {
-            guard let r = m.toPixels(item.rect) else { continue }
-            switch item.kind {
-            case .plain: paint(r) { _, _ in (102, 105, 110) }
-            case let .blur(t):
-                paint(r) { x, y in
-                    let o = ((y * t.rows / max(1, r.h)) * t.columns + (x * t.columns / max(1, r.w))) * 4
-                    return (t.rgba[o], t.rgba[o + 1], t.rgba[o + 2])
-                }
-            }
-        }
-    }
-    guard let provider = CGDataProvider(data: Data(px) as CFData),
-          let cg = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                           bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue), provider: provider, decode: nil,
-                           shouldInterpolate: false, intent: .defaultIntent),
-          let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else { return }
-    CGImageDestinationAddImage(dest, cg, nil)
-    CGImageDestinationFinalize(dest)
 }
 
 // MARK: Run
@@ -217,6 +188,16 @@ if o.command == "falsecovers" {
     FalseCovers.run(detector: detector, list: list, root: o.root ?? FileManager.default.currentDirectoryPath, rule: o.rule,
                     jsonl: o.jsonl, json: o.bench.json, modelsNote: "real models (\((o.models! as NSString).lastPathComponent)), checked against the sealed hash list: Marqo, NSFWJS and the Bumble tie-breaker")
     exit(0)
+}
+
+if o.command == "wayout" {
+    #if SAFESIGHTMAC_LAB
+    guard let out = o.out else { fail("wayout needs --out DIR") }
+    WayOutScenes.run(detector: detector, theme: o.theme, out: URL(fileURLWithPath: out))
+    exit(0)
+    #else
+    fail("wayout needs a lab build (the lab stand-in forces its covers): SAFESIGHTMAC_LAB=1 swift run --scratch-path .build-lab safesightmac-harness wayout --out DIR")
+    #endif
 }
 
 if o.command == "bench" {
@@ -297,7 +278,9 @@ for (i, s) in steps(for: display).enumerated() {
     let plan = pipeline.process(frame, snapshot: snapshot, now: t)
     report(i, s.label, plan, primaryHeight: primaryHeight, ms: Date().timeIntervalSince(t0) * 1000)
     if let out = o.out {
-        writeComposite(s.image, plan, map: frame.map, to: URL(fileURLWithPath: out).appendingPathComponent(String(format: "frame-%02d.png", i)))
+        if let cg = Composite.render(s.image, plan, scale: o.scale, theme: o.theme) {
+            Composite.writePNG(cg, to: URL(fileURLWithPath: out).appendingPathComponent(String(format: "frame-%02d.png", i)))
+        }
     }
     t += 0.1
 }
