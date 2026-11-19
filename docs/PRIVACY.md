@@ -150,7 +150,7 @@ SafeSight Mac is for people protecting their own Mac, and for parents and legal 
 
 Nothing is held anywhere but your Mac, so deleting your data means removing SafeSight Mac.
 
-- **Today:** quit the preview and delete it. Its one stored setting, the detector mode, is in its macOS preferences file.
+- **Today:** quit the preview and delete it. Its one stored setting, the detector mode, is in its macOS preferences file. Core ML, which runs the models, also keeps a cache for them in `~/Library/Caches`, under the app's identifier, which you can delete. The preview's own compiled copies of the models are removed when it quits. The Testing edition, the build for helpers, keeps all of this inside its sandbox and removes it with one click ([TESTING-EDITION.md](TESTING-EDITION.md)).
 - **Designed:** when you leave after your wait, the exit steps remove the lock's records, the capsules on your Mac and the model files.
 - What you saved yourself stays yours: your Recovery Key, any capsule copy you kept, and your keyholder's passkey on their phone.
 

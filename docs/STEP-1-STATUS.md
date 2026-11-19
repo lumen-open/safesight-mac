@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Step 1 status: the cover-only app
 
-14 November 2026, updated 18 November (speed work, ST-040 re-run) and 19 November (the way out). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness only. **The app has not been run live on any Mac.** Running it needs the Screen Recording permission, which only the owner can grant, on a test Mac.
+14 November 2026, updated 18 November (speed work, ST-040 re-run) and 19 November (the way out, the Testing edition). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness only. **The app has not been run live on any Mac.** Running it needs the Screen Recording permission, which only the owner can grant, on a test Mac.
 
 Step 1 is the practice state of the watcher shipped alone (register SD-223 (f)). It has no lock: no keeper, no root part, no plain shield, no installer, no updater, no login item. It can be paused or quit at any time, and it protects nothing against its own owner.
 
@@ -52,6 +52,7 @@ These parts are built, and each is exercised by tests or the harness:
   - Pause for 15 minutes or 1 hour, enabled only in the practice state;
   - "How it works", with plain words and the honest promise word for word;
   - Quit.
+- **The Testing edition** (19 November), the only build offered to volunteer helpers: this app built with `SAFESIGHTMAC_TESTING=1` and assembled with `tools/make-app.sh --testing`. No keeper check; quit any time, also with ⌃⌥⌘Q; runs only inside the App Sandbox; one click removes its own data; and "Testing edition: no lock. Quit any time with ⌃⌥⌘Q." on its menu bar item, menu, covers, repair card and "How it works". `tools/check-testing-edition.sh` and `tools/check-covers-vanish.sh`, both in CI, check it. See [TESTING-EDITION.md](TESTING-EDITION.md).
 - **The lab harness** (`safesightmac-harness`). It feeds image files or built-in synthetic scenes through the real pipeline without capturing the screen. It prints each cover's global rectangle, overlay window frame and canvas layer frame, and can write each frame with its covers drawn on it (the cover layer's own layers, rendered offscreen, in light or dark).
 - **The lab stand-in.** A synthetic magenta-and-green checker that can only force a cover. It exists only in lab builds (`SAFESIGHTMAC_LAB=1`). `tools/check-no-standin.sh`, now in CI, finds no stand-in symbol or string in any release binary.
 - **No networking code anywhere.** `tools/check-no-network.sh`, now in CI, fails if any source names a networking API.
@@ -83,15 +84,26 @@ Seen only in the lab, never on a real screen: `safesightmac-harness wayout` draw
 
 Found, not changed: a window is judged over the bounding box of its visible area, which can include a window in front of it. A flagged front window can therefore get the window behind it covered whole too (often the desktop picture). That covers more, never less.
 
+## Found in the Testing edition's safety pass (19 November 2026)
+
+Five of the safety pass's fixes ([TESTING-EDITION.md](TESTING-EDITION.md), "The safety pass") change this app too:
+- **Compiled models no longer pile up.** Core ML compiled each model package into the temporary folder at every start and never removed the copy: about 220 MB a start (144 copies, 9.1 GB, had piled up on the developer Mac from lab runs). Each run now compiles into a folder of its own (`CompiledModelFolder`), removes it when it quits, and removes folders left by runs that crashed or were forced to quit. The harness does the same.
+- **The repair card sits on a display that is covered whole.** With a third display covered for good (`DISPLAYS_MAX` is 2) it sat in the middle of the main display and never went away.
+- **It never starts by itself.** `disableRelaunchOnLogin()`, so "Reopen windows when logging back in" (and the restart after a macOS update) does not open it again, and none of its windows keeps saved state.
+- **`tools/make-app.sh` never builds a lab app,** even when `SAFESIGHTMAC_LAB` is set in the shell.
+- **"How it works" shows every paragraph whole.** A line that only just fitted when measured could wrap when drawn on a Retina display, and the paragraph's last word was cut off. Paragraphs are now measured with room for that line (`HowItWorksPageTests`).
+
 ## What is tested, and how
 
 Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 152 test functions: 43 XCTest + 109 Swift Testing, all pass
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 154: adds the 2 stand-in tests, all pass
+swift test                                                 # 204 test functions: 43 XCTest + 161 Swift Testing, all pass
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 206: adds the 2 stand-in tests, all pass
+SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing  # 194: the Testing edition, without the 10 keeper-check tests, all pass
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
+tools/check-testing-edition.sh && tools/check-covers-vanish.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness wayout --out OUT --appearance light   # and dark
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models ../v3-detector/models/converted --pages ../v3-detector/data/finder-bench-heldout/screens --json FILE
@@ -118,6 +130,8 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 | Slice grid moved with the content | 3 `SliceGridTests` | No anchor gives the lab build's grid exactly; 300 random areas and anchors: every slice inside the area, the grid reaches both edges, steps of at most 384 (overlap at least 128), at most one slice more per axis; a scrolled view judges fewer tiles |
 | Covers follow scrolling | `MotionTests` | Vertical and horizontal scrolls are found; nothing moved, another page and a blank page give none; the match is exact to one byte; a cover moves with its picture in a plan handed out before judging and reaches ahead along the motion, with no smear left behind; a cover whose picture did not move with the page covers both places; nothing is handed out when nothing scrolled |
 | Faster order, never less judging | 4 `FastFirstTests`, `CoverFirstTests` | With or without the fast pass: the same verdicts, judgements and tiles per model, also under a tight budget; what is left is told after the finder, and once cached holds only what was not clearly clean; a fast flag is told but the tie-breaker still decides (it can clear it); under Either it is told as a cover; pictures nearest the pointer come first and the rest are left as overload, never clear. A busy page is blurred first and shown when cleared; a picture judged in time is not blurred first; a fast flag is blurred before the full rule covers; every early plan keeps every cover already shown; no early plan while a display is covered whole; the window under the pointer is judged first, and with no pointer the order is front to back |
+| Compiled models | 3 `CompiledModelsTests` | A run's folder is kept while its lock is held and removed when it quits; folders left by ended runs (with or without a lock file) are swept; nothing without the prefix, and no symbolic link, is touched |
+| The Testing edition | `EmergencyQuitTests`, `KeyLayoutTests`, `RemovalTests`, `SandboxTests`, `SingleCopyTests`, `StallWatchdogTests` (SafeSightMacTestingEditionTests); `TestingLineTests`, `TestingCardTests` (SafeSightMacCoverTests); the Testing tests in `AppTextTests` and `PracticeMenuTests` | ⌃⌥⌘Q as written and registered; a hot-key event sent to the app's own event target runs the quit and no other event does; a shortcut already taken is refused and the lines then name none; Q found on US, French, Belgian, German, Dvorak and Dvorak-QWERTY ⌘ layouts. Removal clears only a container's own data, never following a symbolic link (the files links point to stay), and outside a container only the settings. The sandbox needs both signs. A second copy is found. The watchdog quits only with a cover up, the main thread silent for 8 s and its own check on time. The line under the way out on whole-window and whole-display covers (both appearances, both cover forms), on covers hiding half a display, never in the release edition; the card's line; the card on a covered display. The words, word for word, and no forbidden claim |
 
 **Harness results** (lab build, null models, stand-in, an 800 x 500 point display at 2x, placed right of a 900-point-high primary):
 
@@ -266,7 +280,7 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **Speed, memory and energy** (ST-038, ST-039). Each complete frame is copied into an RGBA buffer for the detector, which costs memory and energy, unmeasured. `JUDGEMENT_BUDGET` (40 per second) and `FULL_REJUDGE` (30 s) are proposals.
 - **False covers on real screens in daily use.** ST-040 re-ran through this pipeline on 932 held-out harmless screens (above); nothing has been measured on a live screen.
 - **The catch rate.** Not measurable on this Mac by design.
-- **The signed `.app`.** `tools/make-app.sh` assembles an unsigned bundle under `.build/`. That was checked once, and the bundle was then deleted. Nothing has been signed or notarized.
+- **The signed `.app`.** `tools/make-app.sh` assembles an unsigned bundle under `.build/`. That was checked once, and the bundle was then deleted. Nothing has been signed or notarized. The Testing edition's bundle is signed ad hoc (sandboxed, not notarized); `tools/check-testing-edition.sh` assembles one without models in a temporary folder, checks it and deletes it.
 
 ## What needs the founder
 
