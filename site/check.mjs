@@ -48,7 +48,7 @@ const FORBIDDEN = [
 // Always required on the home page, even without the README beside it.
 const REQUIRED_HOME = [
   ['why it exists', 'the "Why it exists" heading'],
-  ['pornography is the most patient thing ever built.', 'the "Why it exists" opening'],
+  ['pornography is built to wait you out.', 'the "Why it exists" opening'],
   ['being the same person at midnight that you were at noon.', 'the "Why it exists" closing line'],
   ["it's free forever.", 'the "free forever" sentence'],
   ['nobody else can, including us.', 'the promise'],
