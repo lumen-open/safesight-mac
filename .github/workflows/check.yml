@@ -48,3 +48,45 @@ jobs:
         run: |
           cargo build --release
           cargo test
+      - name: Command-line opener build and test
+        working-directory: keeper
+        run: |
+          cargo build --release --locked --features opener --bin safesightmac-opener
+          cargo test --locked --features opener --test opener_cli
+  # The opener page (SD-066): its WebAssembly core is built here, with the toolchain pinned
+  # in opener/wasm/rust-toolchain.toml. The page CI builds is kept as an artifact, and the
+  # committed opener/index.html must be byte for byte the same.
+  opener-page:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pinned Rust toolchain for WebAssembly
+        working-directory: opener/wasm
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+          rustup target add wasm32-unknown-unknown
+          rustc --version
+          cargo --version
+          node --version
+      - name: Page core tests (native)
+        working-directory: opener/wasm
+        run: cargo test --locked
+      - name: Build the page
+        run: |
+          node opener/build.mjs --out "$RUNNER_TEMP/opener-page/index.html"
+          cp opener/wasm/target/wasm32-unknown-unknown/release/safesightmac_opener_wasm.wasm "$RUNNER_TEMP/opener-page/"
+          (cd "$RUNNER_TEMP/opener-page" && shasum -a 256 index.html safesightmac_opener_wasm.wasm)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: opener-page
+          path: ${{ runner.temp }}/opener-page/
+      - name: Page tests, on the page CI built
+        run: OPENER_PAGE="$RUNNER_TEMP/opener-page/index.html" node --test opener/tests/*.test.mjs
+      - name: The committed page is the page CI built
+        run: |
+          shasum -a 256 opener/index.html || true
+          cmp opener/index.html "$RUNNER_TEMP/opener-page/index.html"

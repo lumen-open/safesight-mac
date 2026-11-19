@@ -1,0 +1,179 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#eff1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c1222" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:,">
+<title>SafeSight Mac opener</title>
+<style>{{STYLE}}</style>
+</head>
+<body>
+<main>
+
+<header class="brand">
+  <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.75" y="10.75" width="14.5" height="9.5" rx="2.6"/><path d="M8.25 10.75V7.6a3.75 3.75 0 0 1 7.2-1.45"/><path d="M12 14.6v2"/></svg></span>
+  <span class="brand-name">SafeSight Mac <span class="brand-role">Opener</span></span>
+</header>
+
+<ol class="steps" id="steps" aria-label="Steps" hidden>
+  <li data-step="1"><span>Your copy</span></li>
+  <li data-step="2"><span>Time signal</span></li>
+  <li data-step="3"><span>Recovery Key</span></li>
+</ol>
+
+<noscript>
+  <section class="card">
+    <h1>This page needs JavaScript</h1>
+    <p>Turn JavaScript on to open your recovery copy. The page works offline and sends nothing to anyone.</p>
+  </section>
+</noscript>
+
+<section id="screen-loading" class="card quiet">
+  <p class="lead">Getting ready…</p>
+</section>
+
+<section id="screen-old" class="card" hidden>
+  <p class="eyebrow">Opener</p>
+  <h1 tabindex="-1">This browser can't run the opener</h1>
+  <p class="lead">Try a recent version of Safari, Chrome, Firefox or Edge, on any computer or phone. Nothing was sent anywhere.</p>
+</section>
+
+<section id="screen-copy" class="card" hidden>
+  <p class="eyebrow">Recovery</p>
+  <h1 tabindex="-1">Open your recovery copy</h1>
+  <p class="lead">If you can't get into your Mac any other way, this page opens its recovery copy once the wait you chose is over. Everything happens here, on this device.</p>
+
+  <h2 class="small-head">You'll need</h2>
+  <ul class="needs">
+    <li><span class="need-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3.75h6.5l4.75 4.75v11a1.75 1.75 0 0 1-1.75 1.75H7a1.75 1.75 0 0 1-1.75-1.75v-14A1.75 1.75 0 0 1 7 3.75z"/><path d="M13.25 3.75V8.5h4.75"/></svg></span><span>The <strong>recovery copy</strong>: the file saved beside this page, in the folder you chose when you set up SafeSight Mac.</span></li>
+    <li><span class="need-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.25"/><path d="M12.25 12h8.25M17.5 12v3.25M20.5 12v2.25"/></svg></span><span>Your <strong>Recovery Key</strong>, from your password manager.</span></li>
+    <li><span class="need-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 9.25a12 12 0 0 1 17 0"/><path d="M6.5 12.5a7.75 7.75 0 0 1 11 0"/><path d="M9.5 15.75a3.5 3.5 0 0 1 5 0"/><circle cx="12" cy="18.75" r="0.9"/></svg></span><span>The internet for <strong>one small download</strong>, or another device that has it.</span></li>
+  </ul>
+
+  <label class="drop" id="copy-drop" for="copy-file">
+    <span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 15.5V4.5"/><path d="M7.75 8.75 12 4.5l4.25 4.25"/><path d="M4.75 14.5v3.25A1.75 1.75 0 0 0 6.5 19.5h11a1.75 1.75 0 0 0 1.75-1.75V14.5"/></svg></span>
+    <span class="drop-title">Choose the recovery copy</span>
+    <span class="drop-hint">or drop the file here</span>
+    <input type="file" id="copy-file" class="visually-hidden">
+  </label>
+  <p id="copy-error" class="error" role="alert" hidden></p>
+</section>
+
+<section id="screen-time" class="card" hidden>
+  <p class="eyebrow">Your copy</p>
+  <h1 tabindex="-1" id="time-title">Its time has come</h1>
+  <div class="when">
+    <span class="when-label">Opens no earlier than</span>
+    <span class="when-date" id="time-when"></span>
+    <span class="when-detail" id="time-detail"></span>
+  </div>
+  <p class="lead" id="time-lead"></p>
+
+  <div id="not-yet-box" hidden>
+    <button id="check-anyway" class="ghost" type="button">This device's clock may be wrong: check anyway</button>
+  </div>
+
+  <div id="time-get">
+    <div class="actions">
+      <button id="fetch-round" class="primary" type="button">Get the time signal</button>
+    </div>
+    <p class="hint" id="fetch-note"></p>
+    <p id="fetch-status" class="status" role="status" aria-live="polite"></p>
+
+    <details id="paste-box" class="paste">
+      <summary>No internet on this device?</summary>
+      <div class="paste-body">
+        <p>On a phone or computer that has internet, open this address. Copy everything it shows, and paste it below.</p>
+        <p class="url" id="paste-url"></p>
+        <p class="hint">If that one doesn't load, this one gives the same answer:</p>
+        <p class="url" id="paste-url-2"></p>
+        <label class="field-label" for="round-text">Paste it here</label>
+        <textarea id="round-text" rows="4" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="{&quot;round&quot;:…,&quot;signature&quot;:&quot;…&quot;}"></textarea>
+        <div class="actions row">
+          <button id="check-round" class="secondary" type="button">Check it</button>
+          <label class="link" for="round-file">or choose a downloaded file</label>
+          <input type="file" id="round-file" class="visually-hidden">
+        </div>
+      </div>
+    </details>
+  </div>
+  <p id="time-error" class="error" role="alert" hidden></p>
+  <div class="actions">
+    <button id="time-back" class="ghost" type="button">Choose a different copy</button>
+  </div>
+</section>
+
+<section id="screen-key" class="card" hidden>
+  <p class="eyebrow">Time lock open</p>
+  <h1 tabindex="-1">Now your Recovery Key</h1>
+  <p class="lead">One lock is left. In your password manager, find the entry named “SafeSight Mac Recovery Key”, copy the key, and paste it here.</p>
+  <label class="field-label" for="key-input">Recovery Key</label>
+  <div class="key-field">
+    <input id="key-input" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    <button id="key-show" class="show" type="button" aria-pressed="false" aria-controls="key-input">Show</button>
+  </div>
+  <p class="hint" id="key-hint">One line that starts with AGE-SECRET-KEY-1.</p>
+  <div class="actions">
+    <button id="open-key" class="primary" type="button">Open my copy</button>
+  </div>
+  <p id="key-error" class="error" role="alert" hidden></p>
+  <p class="note"><span class="note-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5.25" y="10.75" width="13.5" height="9.5" rx="2.4"/><path d="M8.5 10.75V8a3.5 3.5 0 0 1 7 0v2.75"/></svg></span><span>Your key stays on this device. This page doesn't send it anywhere and doesn't save it.</span></p>
+</section>
+
+<section id="screen-done" class="card" hidden>
+  <p class="eyebrow">Opened</p>
+  <h1 tabindex="-1">Your Mac's admin password</h1>
+  <div class="secret-box">
+    <p class="secret" id="secret"></p>
+  </div>
+  <p class="hint center" id="secret-facts"></p>
+  <div class="actions center">
+    <button id="spell" class="ghost" type="button" aria-expanded="false" aria-controls="spelled">Spell it out</button>
+  </div>
+  <ol id="spelled" class="spelled" hidden></ol>
+
+  <div class="callout">
+    <span class="callout-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.75 20.25 18.5H3.75z"/><path d="M12 9.5v4.25"/><circle cx="12" cy="16.4" r="0.9"/></svg></span>
+    <p><strong>Keep it private.</strong> Whoever has this password can use your Mac as an administrator until SafeSight Mac replaces it. This page keeps no copy.</p>
+  </div>
+
+  <h2>What to do next</h2>
+  <ol class="next">
+    <li>Start your Mac.</li>
+    <li>At the login window, choose the account named <strong id="next-account">SafeSight Mac administrator</strong> and type this password. If it isn't in the list, choose <strong>Other…</strong> and type that name.</li>
+    <li>The SafeSight Mac app will offer <strong>Finish leaving</strong> and <strong>Stay</strong>.</li>
+    <li>You have <strong id="next-days">7 days</strong> from the Mac's first start to choose. After that, this password stops working and SafeSight Mac goes on protecting the Mac.</li>
+  </ol>
+  <div class="actions">
+    <button id="clear" class="secondary" type="button">Clear the password</button>
+  </div>
+</section>
+
+<section id="screen-cleared" class="card" hidden>
+  <p class="eyebrow">Done</p>
+  <h1 tabindex="-1">Cleared</h1>
+  <p class="lead">The password is gone from this page. You can close it now. If you need it again, open your recovery copy again with your Recovery Key.</p>
+  <div class="actions">
+    <button id="again" class="secondary" type="button">Start again</button>
+  </div>
+</section>
+
+<footer class="foot">
+  <p><span id="foot-version">SafeSight Mac opener</span> · Works offline. It sends nothing, except one request for the time signal when you ask for it.</p>
+  <p>Use the copy of this page saved beside your recovery copy, or the one from the SafeSight Mac release page. Never use one that someone sent you.</p>
+</footer>
+
+</main>
+<script type="application/octet-stream" id="core-wasm">
+{{WASM}}
+</script>
+<script>{{CORE_JS}}</script>
+<script>{{PAGE_JS}}</script>
+</body>
+</html>

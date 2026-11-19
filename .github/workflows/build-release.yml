@@ -22,9 +22,12 @@ jobs:
         run: |
           swift build -c release --product safesightmac-hello
           (cd keeper && cargo build --release)
+          (cd keeper && cargo build --release --locked --features opener --bin safesightmac-opener)
           mkdir -p out
           cp "$(swift build -c release --show-bin-path)/safesightmac-hello" out/
           cp keeper/target/release/safesightmac-keeper out/
+          cp keeper/target/release/safesightmac-opener out/
+          cp opener/index.html out/safesightmac-opener.html
           (cd out && shasum -a 256 * > SHA256SUMS && cat SHA256SUMS)
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

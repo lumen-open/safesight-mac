@@ -29,6 +29,13 @@ zeroize = "=1.8.1"
 # The opener's core (SD-066): opening a capsule. Never in the keeper, which only seals.
 opener = []
 
+# The command-line opener (SD-066). Built only with the opener feature, so a plain
+# `cargo build` makes the keeper alone:
+#   cargo build --release --features opener --bin safesightmac-opener
+[[bin]]
+name = "safesightmac-opener"
+required-features = ["opener"]
+
 [profile.release]
 panic = "abort"
 lto = true
