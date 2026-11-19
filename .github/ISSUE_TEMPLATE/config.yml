@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+blank_issues_enabled: false
+contact_links:
+  - name: "Found a way around the lock? Don't post it here"
+    url: https://github.com/lumen-open/safesight-mac/security/advisories/new
+    about: Report it privately. Public posts describing a way around the lock are hidden. Thank you for helping keep people safe.
+  - name: Questions and ideas
+    url: https://github.com/lumen-open/safesight-mac/discussions
+    about: Ask a question or share an idea in Discussions.

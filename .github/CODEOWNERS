@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Every change needs a maintainer's review. Lock code also needs a second reader before it merges (CONTRIBUTING.md).
+*                     @hilarius-bookbinder
+/keeper/              @hilarius-bookbinder
+/opener/              @hilarius-bookbinder
+/.github/             @hilarius-bookbinder
+/tools/               @hilarius-bookbinder

@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Something isn't working
+description: A bug in the app, the website, the keyholder page or the opener.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Two things first:
+        - **If this is a way around the lock, stop here** and report it privately instead: Security tab, then "Report a vulnerability".
+        - **Never include explicit material,** not even in a screenshot. Describe it in words, or use a harmless example.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we see it happen?
+      description: Steps, if you know them.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: SafeSight Mac version and macOS version (for example, 0.0.1 on macOS 26.3).
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: Logs or harmless screenshots that help.
