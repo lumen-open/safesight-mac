@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Testing report (SafeSight Mac Testing)
+description: Something the Testing edition covered that it shouldn't, missed, slowed down or got in the way of.
+labels: ["testing-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing. Before you start:
+        - **Never test with explicit material, and never include any,** not even in a screenshot. Words only.
+        - **A way around the cover? Don't post it here.** Report it privately: Security tab, then "Report a vulnerability".
+        - **Don't include** window titles, website addresses or anything private. The app's report holds none of these.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of report is it?
+      options:
+        - It covered or blurred something harmless
+        - It was slow, used a lot of battery, or the fan ran
+        - Something with displays (external, mirrored, sleep and wake, full screen, Spaces)
+        - It got in the way of work, or I couldn't quit or leave a page
+        - Something was left behind after Remove
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: In words. What kind of app or page (for example "a chart in a slide app"), what you were doing, what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: The Testing report
+      description: From the app's menu, choose "Testing report…", type your note there if you like, then select all of its text and paste it here.
+      render: text
+  - type: dropdown
+    id: again
+    attributes:
+      label: Does it happen again?
+      options:
+        - Every time
+        - Sometimes
+        - Only once so far
