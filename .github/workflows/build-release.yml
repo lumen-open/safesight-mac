@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-# On a pushed version tag: builds every part unsigned, lists hashes, uploads them,
-# and publishes a signed build-provenance statement for each artifact.
-# CI never signs or notarizes; the founder signs from a hardware token (register SD-168).
+# On a pushed version tag: checks that the tagged commit is on main, runs every check the check workflow runs,
+# then builds every part unsigned, lists hashes, uploads them, and publishes a signed build-provenance statement for
+# each artifact. CI never signs or notarizes; the founder signs from a hardware token (register SD-168).
 name: build-release
 on:
   push:
@@ -14,14 +14,65 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    env:
+      # The same Xcode as check.yml.
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: The tagged commit is on main
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "$GITHUB_SHA is on main"
+          else
+            echo "Refusing to build: $GITHUB_SHA is not on main. Only reviewed, merged code is released."; exit 1
+          fi
+      - name: Record toolchain
+        run: |
+          [ -d "$DEVELOPER_DIR" ] || { echo "No Xcode at $DEVELOPER_DIR. This runner has:"; ls -d /Applications/Xcode*; exit 1; }
+          sw_vers
+          xcodebuild -version
+          xcode-select -p
+          swift --version
+          cargo --version
+      - name: Sign-off (DCO)
+        run: tools/check-signoff.sh HEAD
+      - name: The checks fail when they should
+        run: tools/check-the-checks.sh
+      - name: SPDX lines
+        run: tools/check-spdx.sh
+      - name: No secrets in workflows
+        run: tools/check-no-secrets.sh
+      - name: No networking code, in the sources or what is built
+        run: tools/check-no-network.sh
+      - name: Dependency licences
+        run: tools/check-licences.sh
+      - name: Keyholder page tests
+        run: node --test keyholder/tests/*.test.mjs
+      - name: Website check
+        run: node site/check.mjs
+      - name: Swift build and test
+        run: |
+          swift build -c release
+          swift test
+      - name: No lab stand-in in release builds
+        run: tools/check-no-standin.sh
+      - name: Testing edition (modules, sources, binary and bundle)
+        run: tools/check-testing-edition.sh
+      - name: Testing edition tests
+        run: SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing
+      - name: Covers vanish with their process
+        run: tools/check-covers-vanish.sh
+      - name: Keeper tests
+        working-directory: keeper
+        run: cargo test --locked
       - name: Build unsigned
         run: |
           swift build -c release --product safesightmac-hello
-          (cd keeper && cargo build --release)
+          (cd keeper && cargo build --release --locked)
           mkdir -p out
           cp "$(swift build -c release --show-bin-path)/safesightmac-hello" out/
           cp keeper/target/release/safesightmac-keeper out/

@@ -75,6 +75,15 @@ fi
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/safesight-mac" "$app/Contents/MacOS/"
+# What goes into the app is checked, not only what the build folder holds: no lab stand-in and no lab event log. A lab
+# Testing build takes the explicit lab path instead, which requires it to be a lab build.
+if [ "$lab" = 1 ]; then
+  tools/check-no-standin.sh --lab "$app/Contents/MacOS/safesight-mac" \
+    || { rm -rf "$app"; echo "the lab app is not a lab build; nothing was assembled"; exit 1; }
+else
+  tools/check-no-standin.sh "$app/Contents/MacOS/safesight-mac" \
+    || { rm -rf "$app"; echo "the built app contains the lab stand-in; nothing was assembled"; exit 1; }
+fi
 sed -e "s/BUNDLE_ID/$bundle_id/" -e "s/VERSION/$version/g" "$plist" > "$app/Contents/Info.plist"
 # A lab build says so in its name wherever macOS shows it (System Settings' Screen Recording list, Finder).
 if [ "$lab" = 1 ]; then
@@ -91,7 +100,10 @@ if [ "$models_wanted" = 1 ]; then
     mkdir -p "$packages/$(dirname "$p")"
     cp -R "$models/$p" "$packages/$p"
   done
-  # The packages must match the hash list sealed in the build before anything is compiled from them.
+  # The packages must hold only the files the hash list sealed in the build names, and match it, before anything is
+  # compiled from them.
+  tools/check-model-files.sh models/watcher-models.sha256 "$packages" \
+    || { echo "the model packages hold files models/watcher-models.sha256 doesn't list"; exit 1; }
   (cd "$packages" && shasum -a 256 -c "$here/models/watcher-models.sha256" >/dev/null) \
     || { echo "the model packages do not match models/watcher-models.sha256"; exit 1; }
   for p in marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage \

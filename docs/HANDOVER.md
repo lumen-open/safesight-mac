@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Taking SafeSight Mac on
 
-What an organization adopting SafeSight Mac needs to know: the licence and its paperwork, the third-party pieces, how to rebrand it, what has to be set up again under your own accounts, what isn't in this repository yet, how it fits an existing privacy policy, and the open questions that come with it. For how the parts work, read [ARCHITECTURE.md](../ARCHITECTURE.md) first.
+What any team or organization taking SafeSight Mac on needs to know: the licence and its paperwork, the third-party pieces, how to rebrand it, what has to be set up again under your own accounts, what isn't in this repository yet, how it fits your own privacy policy, and the open questions that come with it. For how the parts work, read [ARCHITECTURE.md](../ARCHITECTURE.md) first. For what isn't built or proven yet, read [KNOWN-GAPS.md](KNOWN-GAPS.md).
 
-Written 19 November 2026, while the project is an early preview: the screen cover is built and tested in the lab, the lock's core logic is built and tested on CI, and nothing has been signed, shipped or reviewed by anyone independent.
+Written 19 November 2026, while the project is an early preview. On `main`: the screen cover, built and tested in the lab; the Testing edition for helpers, the only thing helpers are offered; the keyholder page; the website, live at <https://lumen-open.github.io/safesight-mac/>; and the terms. The lock's core logic is built and tested on CI, but only on the `keeper-core` branch and the pull requests stacked with it (#1, #3 and #22), which aren't merged and wait for a second reader; `main`'s `keeper/` is a stub. Nothing has been signed, shipped or reviewed by anyone independent.
 
 ## 1. Licence and sign-off
 
@@ -11,7 +11,7 @@ Written 19 November 2026, while the project is an early preview: the screen cove
 - **The name is not licensed.** Apache-2.0 grants no trademark rights, and the project's rule is that a fork uses its own name, identifiers and signing keys. The name "SafeSight Mac" has not had a trademark check.
 - **Every commit is signed off** under the [Developer Certificate of Origin](../DCO). On 19 November 2026 `tools/check-signoff.sh` passed for every commit on `main` and on every open branch, and CI refuses any commit without a `Signed-off-by` line.
 - **Copyright** is held by "The SafeSight Mac authors". So far every commit comes from one contributor account. Apache-2.0 is enough to adopt and ship the project. Owning the copyright outright, or relicensing, would need a separate written agreement with the contributors.
-- **Built with AI help.** Most of the code was written by AI agents at the maintainer's direction, and the README says so. How that bears on copyright differs by country, so it's worth a line in your lawyer's review.
+- **Built with AI help.** Most of the code was written by AI agents at the maintainers' direction, and the README says so. How that bears on copyright differs by country, so it's worth a line in your lawyer's review.
 - **The free-forever core** ([CORE.md](../CORE.md)) is a public promise, not a licence term: the screen cover, the lock, the keyholder and updates stay free, and payment can never weaken or unlock anything. Anyone continuing under this name should keep it.
 
 ## 2. Third-party pieces
@@ -42,8 +42,10 @@ The licence policy for new dependencies: Apache-2.0, MIT, BSD, ISC or similar; n
 | `Sources/SafeSightMacCore/AppText.swift` | `productName`. Every piece of the app's own text reads the name from here, and a test fails if the name is written anywhere else in the Swift code |
 | `README.md` | The promise must match `AppText.honestPromise` word for word; a test compares them |
 | `packaging/Info.plist` | `CFBundleName`, `CFBundleDisplayName`, the copyright line |
-| `keyholder/core.js`, `keyholder/src/page.html`, `keyholder/src/page.js` (on the `keyholder-page` branch) | The name the passkey shows, the title and the page's sentences. Rebuild `index.html` afterwards; its published hash changes |
-| `site/index.html`, `site/terms.html`, `site/check.mjs` (on the `website` branch) | The pages, and the check's list of allowed link hosts |
+| `keyholder/core.js`, `keyholder/src/page.html`, `keyholder/src/page.js` | The name the passkey shows, the title and the page's sentences. Rebuild `index.html` afterwards; its published hash changes |
+| `site/index.html`, `site/terms.html`, `site/check.mjs` | The pages, and the check's list of allowed link hosts |
+| `packaging/Testing-Info.plist`, `docs/TESTING-EDITION.md` | The Testing edition's name. Its identifier must still end in `.testing`, and `tools/check-testing-edition.sh` checks its name |
+| `README.md`, `site/index.html` | They recommend SHIFT's free Content Filter for phones, a product the authors aren't affiliated with. Keep it or change it as you see fit; `site/check.mjs` lists the link's host |
 | `NOTICE`, `CORE.md`, `SECURITY.md`, `TERMS-AND-RISKS.md`, `docs/PRIVACY.md` | The name and "The SafeSight Mac authors" |
 
 ### Identifiers
@@ -74,7 +76,7 @@ Nothing has shipped and no Mac holds the lock, so today every identity below can
 | **Two hardware signing tokens**, a working one and a backup kept elsewhere, each with a Developer ID certificate and a release-manifest key | A maintainer signs only what public CI built; CI never holds a signing secret | Both manifest keys are built into the lock from version 1.0 |
 | **GitHub organization and repository** | Today `lumen-open/safesight-mac`. Turn on private vulnerability reporting, protect `main` (the `check` workflow must pass) and `v*` tags, and allow Actions. Releases and their build-provenance statements come from here | The app's release host name is an ordinary change |
 | **The keyholder page's web address** | Not chosen. A passkey belongs to one host name, and on a shared `github.io` host every site of the same account shares it, so use a dedicated host name you control and set `PINNED_ORIGIN` in `keyholder/core.js` | Once built into the lock, a new address makes every keyholder enrol again |
-| **Website domain and hosting** | Not published yet | Ordinary |
+| **Website domain and hosting** | Live on GitHub Pages at `lumen-open.github.io/safesight-mac`, published by `.github/workflows/pages.yml`; no custom domain | Ordinary |
 | **Browser extension stores**, if the extension is built | Chrome Web Store, Edge Add-ons, Mozilla's add-on signing; Safari's copy ships inside the app | Ordinary |
 | **Security contact** | GitHub's private vulnerability reporting today; a project mailbox is planned | Ordinary |
 | **Time-signal mirrors** | No account, but the list (at least two independent operators) must be chosen before the lock ships | Built into the lock |
@@ -83,30 +85,29 @@ Nothing has shipped and no Mac holds the lock, so today every identity below can
 
 ## 5. What isn't in this repository yet
 
-- **The detector lab.** Converting the models to Core ML with parity checks, the converted model files the sealed hash list expects (`models/watcher-models.sha256`), and the harmless-screen sets behind the false-cover and speed results all live in the project's separate detector lab. Code comments call it `v3-detector`, and some commands in `docs/STEP-1-STATUS.md` read it from a sibling folder. Without it you can fetch the pinned upstream models but can't rebuild the exact converted files. Ask for it in the handover, or vendor the conversion tools here.
+- **The lock.** `main`'s `keeper/` is a stub. The keeper is on the `keeper-core` branch (pull requests #1, #3 and #22), and the opener on the `opener` branch (#6). None is merged: lock code needs a second human reader first.
+- **The detector lab.** Converting the models to Core ML with parity checks, the converted model files the sealed hash list expects (`models/watcher-models.sha256`), and the harmless-screen sets behind the false-cover and speed results all live in the project's separate detector lab, which isn't public yet. Code comments call it `v3-detector`; the commands in `docs/STEP-1-STATUS.md` that need it name it `LAB` and `MODELS_DIR`. Without it you can fetch the pinned upstream models but can't rebuild the exact converted files. Ask for it in the handover, or vendor the conversion tools here.
 - **The design record.** The decision register, its chapters, three red-team reviews and the research behind the Hardcore lock are in a separate planning repository. Code comments cite its decision numbers (`SD-018` and so on). It comes with the project.
-- **Step documents written for one person.** `docs/STEP-0-OWNER.md` and "What needs the founder" in `docs/STEP-1-STATUS.md` describe one maintainer's setup and accounts. Rewrite them for your team.
+- **Step documents written for the current maintainers.** `docs/STEP-0-OWNER.md` and "What needs the maintainers" in `docs/STEP-1-STATUS.md` list accounts and steps under today's names. Rewrite them for your team.
 
-## 6. How SafeSight Mac fits SHIFT's privacy policy
+## 6. How SafeSight Mac fits your privacy policy
 
-[docs/PRIVACY.md](PRIVACY.md) follows the same shape as SHIFT's privacy policy (last updated 26 October 2026), so the two can be read side by side.
+[docs/PRIVACY.md](PRIVACY.md) is SafeSight Mac's own policy. It's written so it can stand alone or become one section of a larger organization's policy.
 
-**Where they already agree:** collect as little as possible, never sell data, no advertising use, list exactly what device management can do, say plainly what happens to the camera and microphone, honour deletion, keep a "Last updated" date.
+**What SafeSight Mac itself collects:** nothing. Because of how it's built:
 
-**Where SafeSight Mac goes further, because of how it's built:**
-
-- No account, no email address and no payment, so there's nothing to retain, delete within 30 days or expose in a breach.
-- No analytics of any kind, aggregated or not.
+- No account, no email address and no payment, so there's nothing to retain, delete or expose in a breach.
+- No analytics of any kind, aggregated or not, and no advertising or marketing use of anything.
 - No server. The project receives nothing, not even an internet address.
 - The part that reads the screen can't use the network.
 - In the Hardcore lock, device management runs on the owner's own Mac and nobody else holds it, with fewer rights than a typical management server: no erase, no app list, no app installs.
 
-**What SHIFT would add to its policy if it adopted SafeSight Mac:**
+**What your policy needs if you adopt it:**
 
 - **A Mac section:** what the Mac app keeps and doesn't keep (the tables in PRIVACY.md), the read-or-send rule, and the three public hosts and what each can see.
-- **The Hardcore lock's device management,** listed the way SHIFT already lists its phone management permissions, stating that the server is the keeper on the owner's Mac and that SHIFT doesn't run it or hold it.
-- **SHIFT's own flows,** if it adds them: account sign-in, payment through Stripe, its own release host, website analytics. Those are SHIFT's data and belong in its policy. They must stay outside the parts that read the screen or hold the lock, and a payment state can never weaken or unlock anything.
-- **Age and ownership:** SafeSight Mac is for people protecting their own Mac, and for parents and guardians protecting a child's account on a Mac they own (a parent setup is being designed). It collects nothing about children either, so SHIFT's children's data sections would apply only to whatever SHIFT itself adds, such as accounts. In a parent setup the parent holds the lever for the child's account; for an adult protecting themselves, nobody does.
+- **The Hardcore lock's device management,** if you ship it: that the management server is the keeper on the owner's Mac, and that you don't run it or hold it.
+- **Your own flows,** if you add them: accounts, payment, your own release host, website analytics. Those are your data and belong in your policy, described as they really work. They must stay outside the parts that read the screen or hold the lock, and a payment state can never weaken or unlock anything. Adding any of them means PRIVACY.md's "nothing" statements no longer hold for your build, so change them first.
+- **Age and ownership:** SafeSight Mac is for people protecting their own Mac, and for parents and guardians protecting a child's account on a Mac they own (a parent setup is being designed). It collects nothing about children either, so children's data rules would apply only to what you add yourself, such as accounts. In a parent setup the parent holds the lever for the child's account; for an adult protecting themselves, nobody does.
 
 ## 7. Open design questions you inherit
 
@@ -127,7 +128,6 @@ The design record lists each with its default. The ones that matter most:
 - Balanced or Either as the default rule. Balanced showed far fewer false covers on 932 harmless screens (8 against 194); what it misses is unmeasured. The shipped cut-off table differs from the values in the design record.
 - How long a picture shows before its cover on a real screen, and how long busy pages stay blurred.
 - Strict cover mode (nothing unjudged reaches the screen) isn't built.
-- Models are compiled at load; the release should ship them compiled.
 
 **The keyholder**
 - The page's web address; whether real phones make the right kind of passkey; the approval code is about 440 characters, more than twice the design's estimate.
@@ -143,9 +143,9 @@ The design record lists each with its default. The ones that matter most:
 |---|---|---|
 | **Detector** | Its own library (`DetectorCore`, with `Preprocess` and `RegionFinder`), no knowledge of the screen, a written preprocessing spec with vectors | Nothing product-specific beyond comments |
 | **Cover layer and covers** | `SafeSightMacWatcher` is pure logic, driven in tests with synthetic frames; `SafeSightMacCapture` and `SafeSightMacCover` are separate targets | Not yet exported as package products; they read their words from `SafeSightMacCore`; the practice-state check knows the keeper's launch file name |
-| **The lock** | The keeper is a Rust crate with no Swift dependency; every edge to macOS is a trait with a fake | The watcher's heartbeat and the app's messages are designed, not built |
+| **The lock** | The keeper (on the `keeper-core` branch) is a Rust crate with no Swift dependency; every edge to macOS is a trait with a fake | The watcher's heartbeat and the app's messages are designed, not built |
 | **Keyholder page** | One file, no dependencies, documented code formats | Approvals are checked by the keeper |
-| **Opener** | Built from the keeper's own core | Reads the capsule format the keeper writes |
+| **Opener** | Built from the keeper's own core (on the `opener` branch) | Reads the capsule format the keeper writes |
 
 **Recommended before a handover,** none of them done yet:
 

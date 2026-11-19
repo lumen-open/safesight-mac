@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# The reviewed places where a module on the screen path reads a URL, read by tools/check-no-network.sh.
+# Each entry is "path: the source line, trimmed", exactly. A change to the line, or a new use, fails the check until
+# someone has looked at it and updated this list; an entry that no longer matches fails too. Only local files belong
+# here: every URL below is built from a folder on disk with appendingPathComponent.
+
+# The detector bundle's signed manifest and the files it lists, read from the bundle's folder.
+Sources/DetectorCore/BundleVerifier.swift: guard let mbytes = try? Data(contentsOf: mURL), let sigHex = try? String(contentsOf: sURL, encoding: .utf8) else { throw Failure.missingFile("manifest") }
+Sources/DetectorCore/BundleVerifier.swift: guard let d = try? Data(contentsOf: u) else { throw Failure.missingFile(e.path) }
+# A cut-off table from a file; only the harness and the tests pass one (the app uses the table sealed in the build).
+Sources/DetectorCore/Thresholds.swift: try JSONDecoder().decode(ThresholdTable.self, from: Data(contentsOf: url))
+# The compiled models' hash list, inside the models folder.
+Sources/SafeSightMacWatcher/WatcherModels.swift: guard let text = try? String(contentsOf: folder.appendingPathComponent(compiledListName), encoding: .utf8) else {
+# The same list inside the app bundle, shown in a Testing report.
+Sources/SafeSightMacApp/TestingReportWindow.swift: let list = Bundle.main.resourceURL.flatMap { try? String(contentsOf: $0.appendingPathComponent("models/compiled.sha256"), encoding: .utf8) }

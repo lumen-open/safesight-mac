@@ -9,7 +9,7 @@ Step 1 is the practice state of the watcher shipped alone (register SD-223 (f)).
 
 These parts are built, and each is exercised by tests or the harness:
 
-- **The detector, vendored.** The kestrel lab build (v3-detector, commit 49ecdd9) is in `Sources/Preprocess`, `Sources/RegionFinder` and `Sources/DetectorCore`, under Apache-2.0.
+- **The detector, vendored.** The kestrel lab build (from the project's detector lab, commit 49ecdd9) is in `Sources/Preprocess`, `Sources/RegionFinder` and `Sources/DetectorCore`, under Apache-2.0.
   - Its tests pass here: 12 rule tests, and the preprocessing spec's 18 of 18 vectors bit-exact.
   - It uses the lab build's current Balanced rule (agreement plus a tie-breaker) and its committed cut-off table (`models/thresholds.json`, `agreement+referee/1`).
   - Added for step 1: the Either rule, the caller's budget, the pass of each entry and a separate `find`.
@@ -80,7 +80,7 @@ The owner's requirement: if pages get covered up, the user must be able to leave
   - A cover with too little room shows nothing, and a narrow one gets a smaller line. Picture covers stay wordless.
   - It is an image on a layer, so it cannot take a click.
 - **The repair card** repeats the line. It never takes the keyboard (non-activating, key only if a view needs typing, and none does).
-- **Look.** All colours and typefaces are in `CoverTheme`, light and dark. It follows the "desert" study (`DESIGN-desert.md` on the website branch), which the owner approved: lime plaster by day, lapis night by night, malachite for the one accent, gold only as a hairline.
+- **Look.** All colours and typefaces are in `CoverTheme`, light and dark. It follows the "desert" study (`DESIGN-desert.md`), the look chosen for the product: lime plaster by day, lapis night by night, malachite for the one accent, gold only as a hairline.
   - Covers are a calm, opaque, flat neutral with no ornament: limestone `#e5e7e1`, or lapis-black `#121828` in dark mode. A system material would show what is under them.
   - The way-out line keeps the system font. Its key caps are plain neutral caps with near-black or near-white letters, on a pill in the card colour with a hairline edge.
   - The repair card and the "How it works" window use the theme's colours. Headings are in the system serif (New York) and the rest is in the system sans. Controls stay native, and Try again is malachite.
@@ -127,7 +127,7 @@ The Testing edition ran for the first time on 19 November, in a disposable virtu
 
 ## What is tested, and how
 
-Commands, all run before the final commit:
+Commands, all run before the final commit. `MODELS_DIR` is a folder holding the three converted Core ML model packages that match `models/watcher-models.sha256`, and `LAB` is the project's detector lab. The lab is a separate repository that isn't public yet: it converts the pinned upstream models (which `tools/models/fetch_upstream.py` downloads, checking every byte) to Core ML, and holds the harmless test screens. Until it is published, the commands that name `MODELS_DIR` or `LAB` can't be rerun from this repository alone; their results are in `results/`.
 
 ```
 swift build -c release                                     # passes, no warnings in new code
@@ -139,11 +139,11 @@ tools/check-testing-edition.sh && tools/check-covers-vanish.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness wayout --out OUT --appearance light   # and dark
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness displays --out OUT --appearance light # and dark
-SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models ../v3-detector/models/converted --pages ../v3-detector/data/finder-bench-heldout/screens --json FILE
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models MODELS_DIR --pages LAB/data/finder-bench-heldout/screens --json FILE
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench ... --cases reappear --json FILE      # the clean-cache cost
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter --models ... --list ... --json FILE  # see "How far jitter moves real scores"
-swift run -c release safesightmac-harness falsecovers --models ../v3-detector/models/converted --list LIST --root ../v3-detector --rule balanced --json FILE
-swift run -c release safesightmac-harness demo --models ../v3-detector/models/converted
+swift run -c release safesightmac-harness falsecovers --models MODELS_DIR --list LIST --root LAB --rule balanced --json FILE
+swift run -c release safesightmac-harness demo --models MODELS_DIR
 ```
 
 | Area | Tests (target) | How |
@@ -180,7 +180,7 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 5. A blank frame: the whole display is covered.
 6. The next frame: covers lowered.
 
-With the real models (release build, read in place from `v3-detector`), the same synthetic page drew no cover. That is one page, not a measurement.
+With the real models (release build, read in place from the detector lab), the same synthetic page drew no cover. That is one page, not a measurement.
 
 **Display scenes** (`safesightmac-harness displays`, lab build, null models and the stand-in, synthetic desktops drawn offscreen, through the real cover coordinator and pipelines; looked at in light and dark):
 
@@ -193,7 +193,7 @@ With the real models (release build, read in place from `v3-detector`), the same
 
 ## Speed: the measured chain (lab, 18 November 2026)
 
-The owner's goal is now about **0.1 s from a new picture appearing to its cover**, with no visible lag on busy pages (the register's `TIME_TO_COVER` of 0.5 s is too loose). The lab harness now times the chain: `SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models ../v3-detector/models/converted --pages ../v3-detector/data/finder-bench-heldout/screens --json FILE`.
+The goal is now about **0.1 s from a new picture appearing to its cover**, with no visible lag on busy pages (the register's `TIME_TO_COVER` of 0.5 s is too loose). The lab harness now times the chain: `SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models MODELS_DIR --pages LAB/data/finder-bench-heldout/screens --json FILE`.
 
 - **What is timed:** from a frame handed to the cover layer to the cover plan, then the cover layer's layers built on a detached layer (no window). Stages: changed areas and window split, the picture finder, cache hashing, each model's preprocessing and inference, the rules, planning, and cover drawing. The capture callback's frame copy (BGRA to RGBA, 2880 x 1800) is timed on its own: 4.4 ms median.
 - **What is not timed:** ScreenCaptureKit's capture latency and real display time. Both need ST-031 on a test Mac, with a camera or capture device.
@@ -223,7 +223,7 @@ The hard rule for all of it: nothing judges or covers less. No model is skipped,
 
 - **Exact-match caches** (`VerdictCache.swift`, `FinderCache.swift`). The verdict cache's key is now the full 256-bit SHA-256 (it was cut to 128 bits) over fixed-width fields and every byte of the tile's pixels, all four channels, with its size, pass and bundle version. Preprocessing is a fixed function of exactly those bytes, so an exact match is an exact match of the preprocessed input. No approximate hash is used anywhere; a near copy is judged again. Memory is bounded: at most 65,536 entries, about 4 MB, in two generations close to least-recently-used (O(1); the lab build's eviction shifted a 50,000-entry array on every insert). New: the picture finder's proposals are reused when every pixel the finder can read (the area and up to `max(68, short side / 2 + 4)` pixels around it) is byte for byte the same, moved to the area's new place; at most 32 results.
 - **Covers follow scrolling** (`Motion.swift`, `DisplayPipeline.followMotion`). Each changed part is checked for a vertical, else horizontal, translation from row hashes (the last frame's are kept, so each frame is hashed once; about 6 ms for a 2880 x 1800 window). A cover moves with its picture in a plan handed out at once, before the moved area is judged again, and only when the pixels at its new place equal the pixels it covered, byte for byte; otherwise its new place is covered as well as its old one. For this update each moved cover also reaches ahead along the motion as far as the content will go before the next plan (its speed times the recent longest judging run, at least 0.25 s). The slice grid now moves with the content (`SliceAnchor`): same slice size and overlap, at most one slice more per axis, so slices over content already judged come from the cache. Covers no longer smear into long streaks while a page scrolls.
-- **Cover first on busy pages** (`DisplayPipeline`, `JudgeProgress.found`). After the finder and the caches, the detector tells the cover layer which picture regions are still to judge and about how long that will take. If the frame's time so far plus that estimate passes `COVER_GOAL` (0.1 s, the owner's goal; `TIME_TO_COVER` stays 0.5 s for the whole-window step), those regions are blurred at once, and shown when the full rule clears them. A picture that can be judged within the goal is not blurred first.
+- **Cover first on busy pages** (`DisplayPipeline`, `JudgeProgress.found`). After the finder and the caches, the detector tells the cover layer which picture regions are still to judge and about how long that will take. If the frame's time so far plus that estimate passes `COVER_GOAL` (0.1 s, the goal; `TIME_TO_COVER` stays 0.5 s for the whole-window step), those regions are blurred at once, and shown when the full rule clears them. A picture that can be judged within the goal is not blurred first.
 - **Order** (`Detector.judge`, `DisplayPipeline`). Hot windows first, as before; then the window under the pointer and those nearest it; within a window, pictures nearest the pointer first (otherwise smallest first, as before). Within one call the fastest model (by measured cost; NSFWJS here) now runs first over every picture region the call will judge, and a flag is shown at once as a blur (a cover under Either, where that flag alone covers) before the other model and the tie-breaker decide. The same entries are chosen within the same budget as before; tests check that the verdicts, the judgements and the tiles each model judges are the same with and without the fast pass.
 - **Plans handed out early** reach the screen through `process(..., provisional:)`; the app draws them on the main thread as they come. Every early plan holds every cover the last plan held, plus every cover decided so far in the frame, and none is handed out while a display is covered whole.
 
@@ -295,8 +295,8 @@ Found, not changed:
 Half the cut-off was a guess. How far the deliberate jitter moves each real model's score is now measured, with `safesightmac-harness jitter` (`JitterSpread.swift`, `LabJitter.swift`). It runs only in lab builds, the only place a score leaves the detector. Results: `results/jitter-spread.json`.
 
 ```
-SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter --models ../v3-detector/models/converted \
-    --list ../v3-detector/results/private/tiles-heldout.txt --root ../v3-detector --draws 20 --per-band 2000 --background 500 --json results/jitter-spread.json
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter --models MODELS_DIR \
+    --list LAB/results/private/tiles-heldout.txt --root LAB --draws 20 --per-band 2000 --background 500 --json results/jitter-spread.json
 ```
 
 - **Pictures.** ST-040's set, the lab's 932 held-out harmless screens. No explicit image was used.
@@ -389,15 +389,15 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **Time to cover on a real display** (ST-031). The flash length is unknown.
 - **Speed, memory and energy** (ST-038, ST-039). Each complete frame is copied into an RGBA buffer for the detector, which costs memory and energy, unmeasured. `JUDGEMENT_BUDGET` (40 per second) and `FULL_REJUDGE` (30 s) are proposals.
 - **False covers on real screens in daily use.** ST-040 re-ran through this pipeline on 932 held-out harmless screens (above); nothing has been measured on a live screen.
-- **The catch rate.** Not measurable on this Mac by design.
+- **The catch rate.** Not measured. By design, no explicit pictures are used anywhere in this work.
 - **Jitter on explicit pictures.** How far jitter moves a score was measured on harmless screens only, by design. An explicit picture near a cut-off may move more.
 - **The signed `.app`.** `tools/make-app.sh` assembles an unsigned bundle under `.build/`. That was checked once, and the bundle was then deleted. Nothing has been signed or notarized. The Testing edition's bundle is signed ad hoc (sandboxed, not notarized); `tools/check-testing-edition.sh` assembles one without models in a temporary folder, checks it and deletes it.
 
-## What needs the founder
+## What needs the maintainers
 
 1. **A bundle identifier.** The reverse-domain prefix is not chosen (the identity file is still [P]). `tools/make-app.sh BUNDLE_ID MODELS_DIR` needs one.
-2. **Sign and notarize** the app with your Developer ID, as in step 0. It is unsigned today.
-3. **Try it on a test Mac, never this one.** This Mac runs your separate personal protection, which nothing here touches. Use the virtual test Mac or the helper's test Mac:
+2. **Sign and notarize** the app with the project's Developer ID, as in step 0. It is unsigned today.
+3. **Try it on a test Mac,** never a Mac anyone relies on. Use a virtual test Mac or a helper's test Mac:
    1. build the app with the models inside;
    2. open it, choose "Open Screen Recording settings…" and grant the permission;
    3. quit and reopen it if macOS asks;
@@ -419,11 +419,11 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
    - the Either rule, restored earlier.
 
    The code is in `Sources/DetectorCore/Detector.swift`, and `RuleTests`, `ContractTests` and `CoverLayerTests` pin each change. The first two cover more harmless things; the third blurs fewer. The lab false-alarm measurements were made without these rules; ST-040 has now re-run on this build (section "False covers through the whole pipeline").
-5. **Model conversion.** The Core ML conversion tools, with their parity checks and broken controls, are still only in `v3-detector/convert/`. Vendoring them means vendoring Python tooling. Decide whether that belongs in this repository.
+5. **Model conversion.** The Core ML conversion tools, with their parity checks and broken controls, are still only in the detector lab, which isn't public yet. Vendoring them means vendoring Python tooling. Decide whether that belongs in this repository.
 
 ## Known limits
 
-- **Flashes.** In show-first mode every window is shown first and judged just after, so a picture can be seen for a moment before its cover. How long on a real display is not measured (ST-031). In the lab, from the frame to the cover layer, one new picture is covered within about 50 ms (worst 66 ms) and a busy page's new pictures are blurred after about 0.25 s; a picture scrolling into view can show for up to the time one judged frame takes (0.6 to 0.9 s on a Retina window). The owner's goal is about 0.1 s.
+- **Flashes.** In show-first mode every window is shown first and judged just after, so a picture can be seen for a moment before its cover. How long on a real display is not measured (ST-031). In the lab, from the frame to the cover layer, one new picture is covered within about 50 ms (worst 66 ms) and a busy page's new pictures are blurred after about 0.25 s; a picture scrolling into view can show for up to the time one judged frame takes (0.6 to 0.9 s on a Retina window). The goal is about 0.1 s.
 - **The catch rate is unmeasured.** Nobody knows how many explicit pictures this detector misses. The cut-offs are strict to keep false covers low, so Balanced may miss more, by an amount nobody has measured. No accuracy figure may be published (claims ledger).
 - **False covers and blurs.** The detector covers some harmless things. The picture finder grows regions to a picture's edge, so a cover can spill over neighbouring text. Small pictures it is unsure about are blurred.
 - **No lock and no shield.** This build can be paused or quit, and if it crashes or is quit, the screen is uncovered. At start, and when a display appears or wakes, the display is covered whole until its first judged frame (a few seconds when the models load).

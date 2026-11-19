@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Runs on every push and pull request. Holds no secrets and needs only read access.
+# build-release.yml runs the same checks before any release build; tools/check-the-checks.sh fails if the two drift.
 name: check
 on:
   push:
@@ -11,6 +12,10 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: read
+    env:
+      # The Xcode every build uses, named rather than left to the runner image's default. Changing it is a reviewed
+      # change to this file (and to build-release.yml, which must name the same one).
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -18,22 +23,30 @@ jobs:
           persist-credentials: false
       - name: Record toolchain
         run: |
+          [ -d "$DEVELOPER_DIR" ] || { echo "No Xcode at $DEVELOPER_DIR. This runner has:"; ls -d /Applications/Xcode*; exit 1; }
           sw_vers
           xcodebuild -version
+          xcode-select -p
           swift --version
           cargo --version
       - name: Sign-off (DCO)
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            tools/check-signoff.sh "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          if [ "$EVENT" = "pull_request" ]; then
+            tools/check-signoff.sh "$BASE..$HEAD"
           else
             tools/check-signoff.sh HEAD
           fi
+      - name: The checks fail when they should
+        run: tools/check-the-checks.sh
       - name: SPDX lines
         run: tools/check-spdx.sh
       - name: No secrets in workflows
         run: tools/check-no-secrets.sh
-      - name: No networking code
+      - name: No networking code, in the sources or what is built
         run: tools/check-no-network.sh
       - name: Dependency licences
         run: tools/check-licences.sh
@@ -41,6 +54,8 @@ jobs:
         run: |
           node --version
           node --test keyholder/tests/*.test.mjs
+      - name: Website check
+        run: node site/check.mjs
       - name: Swift build and test
         run: |
           swift build -c release
@@ -56,5 +71,5 @@ jobs:
       - name: Keeper build and test
         working-directory: keeper
         run: |
-          cargo build --release
-          cargo test
+          cargo build --release --locked
+          cargo test --locked
