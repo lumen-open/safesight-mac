@@ -49,7 +49,7 @@ These parts are built, and each is exercised by tests or the harness:
     - A tie-breaker that fails has not answered, so its dispute is covered (SD-125).
     - Each failure is counted per model: `Detector.modelFaults`, `FrameVerdict.modelFaults`, and the bench and false-cover records. Nothing trips on the count yet: this build has no run-time model self-check. SD-244's self-check pack and model ladder are not built, and SD-223 (d) leaves the fault ladder out of the practice state.
   - **Covers follow scrolling.** When content moves by a translation, its covers move with it at once, before the moved area is judged again; a cover moves only onto exactly the pixels it covered.
-  - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte, and only when they were clearly clean (the margin rule, 19 November): every model scored the picture below half its cover cut-off, and, where a blur can apply (a small picture in a hot window or a covered-start context), below half its containment cut-off too. A borderline-clean picture is judged again, with fresh jitter, each time it comes back there.
+  - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte, and only when they were clearly clean (the margin rule, 19 November): every model scored the picture below half its cover cut-off, and, where a blur can apply (a small picture in a hot window or a covered-start context), below half its containment cut-off too. A borderline-clean picture is judged again, with fresh jitter, each time it comes back there. Measured since: half is needed for every model and band, and in some it is not enough (see "How far jitter moves real scores").
 - **The practice state** (SD-223).
   - The watcher is in the practice state only while no root-owned `<rd>.safesightmac.keeper.plist` (or the lab form) exists in `/Library/LaunchDaemons`. It is read with `lstat`, so a symbolic link is judged by its own owner.
   - If the check cannot be completed, the app does not claim the practice state: covering carries on and pause is turned off.
@@ -100,12 +100,14 @@ Commands, all run before the final commit:
 ```
 swift build -c release                                     # passes, no warnings in new code
 swift test                                                 # 236 test functions: 54 XCTest + 182 Swift Testing, all pass
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 238: adds the 2 stand-in tests, all pass
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 241: adds the 2 stand-in tests and the 3 jitter-measurement tests, all pass
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness wayout --out OUT --appearance light   # and dark
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness displays --out OUT --appearance light # and dark
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models ../v3-detector/models/converted --pages ../v3-detector/data/finder-bench-heldout/screens --json FILE
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench ... --cases reappear --json FILE      # the clean-cache cost
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter --models ... --list ... --json FILE  # see "How far jitter moves real scores"
 swift run -c release safesightmac-harness falsecovers --models ../v3-detector/models/converted --list LIST --root ../v3-detector --rule balanced --json FILE
 swift run -c release safesightmac-harness demo --models ../v3-detector/models/converted
 ```
@@ -126,6 +128,7 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 | The way out | `ControlBandTests`, `MenuBarTests` (SafeSightMacWatcherTests); `WayOutLineTests`, `RepairCardTests`, `ClickThroughTests` (SafeSightMacCoverTests) | A whole-window cover never covers the control band; a flagged picture, a flagged slice and an unjudged picture in the band are still covered; full-screen windows and system surfaces keep no band; only the largest piece carries the line. A whole-display cover leaves the menu bar only while it is on screen, never more than a menu bar, and always covers the Dock. The line's words on whole-window and whole-display covers, inside the cover, in both appearances; none on picture covers or without room; the compact size; contrast; covers opaque and neutral. Cover panels are click-through, never key or main, out of window cycling, with no view to click; the repair card repeats the line and never takes the keyboard |
 | Status line | `StatusTests` | "Needs Screen Recording", "Covering: on", a whole-display cover, pause and detector failure |
 | Every display, one rule | `DisplayListTests`, `DisplayCoverageTests`, `PipelineGenerationTests`, `FrameQueueTests`, `DisplayChangeTests` (SafeSightMacWatcherTests); `CoverCoordinatorTests`, `StreamSchedulerTests`, `CaptureLinkTests` (SafeSightMacCoverTests) | Faked OS display lists, synthetic frames, the real pipeline and detector (fake marker models), and a presenter that only records what it is asked to draw. Every display the OS lists gets a canvas, main display first; a screen missing from CoreGraphics' list, a display missing from AppKit's and one only ScreenCaptureKit lists are all covered, and the capture list never removes one; mirrors get no canvas and do not count toward the limit, whether CoreGraphics lists them as active or only online, unless their source is not listed; a mirror loop is covered, never left out; a display CoreGraphics says repeats another but placed elsewhere, or with bounds that cannot be read, keeps its canvas, its judged place and its menu bar's cover, while one inside its source's bounds (a hardware matte) is still a mirror; when the main display is a mirror, the display it repeats comes first; the limit is counted from the OS's lists, so a third display stays covered even when a plan for it arrives. At start every display is covered before any stream starts. The begin callback, called through its real C entry point, draws every display covered before it returns and pushes it to the screen; a display attached by the change gets its canvas at once, before capture restarts. A display attached while another display's frame is being judged: that judgement is refused, the frame still waiting from the old stream is not judged, and each display comes down only with its own first judged frame. A display the capture layer cannot see stays covered; a stream that delivers nothing keeps its display covered; frames of a stopped stream never lower its cover again, while a late report about an older stream, or from a start that lost the race, does not cover a display a newer stream is judging; a display removed and added back with the same identifier stays covered until judged again; a plan for old bounds is refused (rearranged, rotated, clamshell); a change nobody announced is found at the next drawing or tick; an announced change that never finishes ends after 3 s; sleep holds every cover until wake, and a display change while going to sleep does not end that hold; a display with no stream is retried three times; unreadable lists keep every display covered; a failed detector covers displays attached later; Try again keeps every cover up; a new stream's first frame is judged whole; frames of two streams never merge; a display that never stops changing cannot keep another waiting; a late frame from an older stream never replaces a newer stream's frame. A display only ScreenCaptureKit lists is a change when it alters the judged displays (it needs a stream), and not one past the limit. Sleep, display-sleep and session holds end without their notification once the OS says they are over (after 10, 2 and 2 s). Streams on request, with a fake capture backend whose gates hold a request part-way: a start streams only the displays asked for, with the request's generation, and stops and reports every older stream; requests older than the newest start are ignored; a top-up only adds missing streams; every display not listed, or not listable, is reported with the request's generation; a start overtaken while it opens a stream stops and reports it; two requests for one display keep the newer stream; a stream that stops by itself, even before it is kept, is reported once and never kept; nothing starts after a stop. Through the app's own link between the coordinator and the scheduler: a restart asked for before a display change but starting its streams after it never shows their frames, and a display the next restart cannot start is covered, never left showing an old plan; pausing and covering again never shows a plan from the old streams or an old request. Only the main display's mirror set leaves its menu bar under a whole-display cover (`MenuBarTests`) |
+| Jitter measurement (lab builds) | 3 `LabJitterTests` (DetectorCoreTests) | The entries measured are the first call's entries; each is judged the asked number of times, one judgement per piece per draw, with fresh jitter; batched scores equal one-at-a-time scores; a model that fails is left out, never read as a score |
 | Stand-in (lab builds) | `StandInTests` | The stand-in through the real detector with null models is covered and placed on a 2x display at a negative origin; null models alone cover nothing |
 | Exact-match caches | 10 `CacheTests`, 12 `CleanCacheMarginTests` (DetectorCoreTests), `VerdictCacheInThePipelineTests` | The key is the full SHA-256 of every byte (all four channels), size, pass and bundle version; one changed byte in any channel is a new key; a picture one level different is judged again; a flagged picture drawn where a clean one was is judged afresh, with nothing from the cache, and is covered (cut-offs far below its score); a clean outcome is kept only when every model scored it strictly below half its cover cut-off for the band; a borderline-clean outcome and a dispute the tie-breaker declined are judged again, and can then be covered; a small picture just under its containment cut-off is reused where no blur can apply, and judged again, then blurred, in a hot window or a covered-start context; one settled for a blur is reused in a hot window too; in a call where the window turns hot, a reused small picture not settled for a blur is blurred, and judged again in the next call; a picture of 128 pixels or more and the whole pass are held to the cover cut-off only; covered outcomes are cached, under both rules; the cache refuses an outcome not marked cacheable; a moved picture comes from the cache; the cache never holds more than its bound and keeps what is used; cached finder proposals equal the finder's, at the same place and moved; a change inside the finder's reach is a new key; a reloaded page is not judged again and stays covered |
 | Slice grid moved with the content | 3 `SliceGridTests` | No anchor gives the lab build's grid exactly; 300 random areas and anchors: every slice inside the area, the grid reaches both edges, steps of at most 384 (overlap at least 128), at most one slice more per axis; a scrolled view judges fewer tiles |
@@ -229,7 +232,7 @@ The margin rule (`VerdictCache.CLEAN_CACHE_MARGIN`, `Detector.judgeTask`):
 - **How it is decided.** The decision is made where the scores are. Only a `cacheable` flag leaves `judgeTask`, and the cache refuses any outcome without it.
 - **Nothing judges or covers less.** The rule only makes caching stricter.
 
-Why 0.5: it is a wide working margin, not a measured bound. How far jitter moves a real model's score has not been measured on this build. Raising it caches more and protects less.
+Why 0.5: it was a working guess. It is now measured (next section): half is needed for every model and band, and in some it is not enough. Raising it caches more and protects less.
 
 Cost (`--cases reappear`, real models, same machine and pages, runs before and after alternated; medians, worst in brackets):
 
@@ -246,10 +249,65 @@ Results: `results/speed-clean-margin.json` (two runs each; the first "before" ru
 - **Why scrolling back shows no cost.** The bench's scrolling page is synthetic texture, which the models score low. On real photo pages, scrolling back would cost about what a reload costs.
 - **What is shown meanwhile.** Once judging them would pass `COVER_GOAL`, picture regions that are to be judged again are blurred as soon as the caches have been read. They are shown when cleared, which on a reloaded busy page takes about 1.4 s. Entries past the call cap stay blurred or covered.
 - **The budget.** This bench has no budget limit. Under `JUDGEMENT_BUDGET` the extra judgements come out of the same 40 a second.
-- **If the cost is too high** (nothing built): raise the margin, which caches more and protects less, or first measure how far jitter moves real scores and set the margin from that.
+- **If the cost is too high.** Measured since (next section): raising the margin anywhere would protect less than the measurement says is needed, so it stays at half.
 
 Found, not changed:
 - **Copies in one frame.** Two entries with the same pixels in one call still share one judgement, as before, even when it was borderline. It is not reused in later frames.
+
+### How far jitter moves real scores (19 November 2026)
+
+Half the cut-off was a guess. How far the deliberate jitter moves each real model's score is now measured, with `safesightmac-harness jitter` (`JitterSpread.swift`, `LabJitter.swift`). It runs only in lab builds, the only place a score leaves the detector. Results: `results/jitter-spread.json`.
+
+```
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter --models ../v3-detector/models/converted \
+    --list ../v3-detector/results/private/tiles-heldout.txt --root ../v3-detector --draws 20 --per-band 2000 --background 500 --json results/jitter-spread.json
+```
+
+- **Pictures.** ST-040's set, the lab's 932 held-out harmless screens. No explicit image was used.
+- **Models.** Marqo and NSFWJS, the converted models checked against the sealed hash list, and the sealed cut-off table. The tie-breaker is not measured: it is asked only about disputes, and a dispute is never cached as clean.
+- **Method.**
+  - Every entry of each screen's first call (finder regions, the whole pass and the slices: 108,738 entries) was judged once by each model, as the product judges it.
+  - 18,195 of them were then judged 20 more times each, every time with fresh jitter on every piece and the top score over the pieces, as `topScore` does. Per model and band, the sample took up to 2,000 entries whose first score reached 0.35 of the entry's lowest action cut-off, and 500 per band at random. No model failed. The run took 66 minutes.
+  - The scores were taken in batches. Batching was checked on its own: on the first screen's 40 entries, 8 draws each, batched and one-at-a-time scores were identical. Every run now checks this first.
+- **Spread.** Per entry: the highest minus the lowest of its scores (its range), and the largest distance of a score from its median. Per model and band, both are taken over the borderline entries: those whose highest score reached half the entry's lowest action cut-off. Only their caching can change with the margin.
+
+| Model | Band (px) | Borderline entries | Range: median, 99th, 99.9th percentile, largest | Distance from the median, 99.9th | Gap: twice the 99.9th range | Action cut-off; half of it |
+|---|---|---|---|---|---|---|
+| Marqo | 10-15 | 3,549 | 0.015, 0.049, 0.077, 0.106 | 0.048 | 0.155 | containment 0.278; 0.139 |
+| Marqo | 16-31 | 2,663 | 0.013, 0.058, 0.084, 0.103 | 0.051 | 0.167 | containment 0.278; 0.139 |
+| Marqo | 32-63 | 1,416 | 0.090, 0.318, 0.432, 0.517 | 0.302 | 0.864 | containment 0.461; 0.231 |
+| Marqo | 64-127 | 1,555 | 0.099, 0.367, 0.616, 0.654 | 0.343 | 1.231 | containment 0.452; 0.226 |
+| Marqo | 128+ | 372 | 0.282, 0.650, 0.731, 0.731 | 0.583 | 1.461 | cover 0.758; 0.379 |
+| NSFWJS | 10-15 | 2,340 | 0.091, 0.378, 0.469, 0.553 | 0.338 | 0.938 | containment 0.831; 0.416 |
+| NSFWJS | 16-31 | 2,132 | 0.087, 0.366, 0.514, 0.578 | 0.289 | 1.028 | containment 0.831; 0.416 |
+| NSFWJS | 32-63 | 2,323 | 0.118, 0.519, 0.650, 0.722 | 0.504 | 1.299 | containment 0.926; 0.463 |
+| NSFWJS | 64-127 | 3,114 | 0.129, 0.521, 0.714, 0.938 | 0.457 | 1.427 | containment 0.857; 0.429 |
+| NSFWJS | 128+ | 798 | 0.276, 0.660, 0.817, 0.817 | 0.598 | 1.634 | cover 0.934; 0.467 |
+
+- **The rule.** A cached clean score must sit below the entry's action cut-off by more than twice the spread. The spread is the 99.9th percentile of the borderline range (the largest, on fewer than 1,000 entries); no random borderline entry that the sample's selection could have missed had a wider range. The margin never protects more than before, so no level goes below half the cut-off.
+- **What it says: half is needed everywhere, and it is kept.** In every model and band the gap is wider than half the cut-off. So the share stays 0.5 for every model and band: the measurement changes no level and wins no speed back.
+  - For Marqo under 32 pixels the gap is only just over half (0.155 and 0.167, against 0.139). Under 34 pixels the jitter is the value noise alone, with no trim. That moves Marqo little, and NSFWJS almost as much as the trims do.
+  - Where no blur can apply, only the cover cut-off acts on those small pictures, and Marqo's gap (0.155 and 0.167) is well under half of it (0.447). But their spread was measured near the containment cut-off, not near the cover cut-off, so nothing is loosened. Measuring it there is the one place this data leaves room.
+  - Everywhere else the gap is wider than the cut-off itself. By the rule, no clean score is safely cached there at all.
+- **Half is not always enough.** In 20 draws, 63 harmless borderline entries had one score under half their action cut-off and another at or over the cut-off: Marqo 8 (32-63 px), 26 (64-127) and 19 (128 and up), and NSFWJS 10 (64-127). No other model and band had one.
+  - With the cache, such a picture is cached as clean when the score it happens to get is the low one. It is then not blurred or flagged again while its pixels stay the same. Without the cache, every judgement would draw again.
+  - Closing this needs a rule stricter than half where it was crossed. That protects more than before, which this change was not to do, so it is the owner's call. It would cost speed: those bands hold most of a photo page's pictures, which would then be judged again on every reload.
+- **Limits.** Harmless pictures only, by design. How far jitter moves an explicit picture near a cut-off is not known, and it could be more. 20 draws per entry show less than its whole spread. The entries are tiles of these screens, not every kind of picture. Crossings were counted at each entry's lowest action cut-off; for a picture under 128 pixels that is the containment cut-off, not the cover cut-off that is the only one acting on it where no blur can apply.
+
+Speed (`--cases reappear`, real models, the same machine and pages; medians over the six busy pages, worst in brackets). "Before" is commit 4a7c278: a clean outcome kept below half the cover cut-off. "Held everywhere" is the containment rule as first built (commit b265a82): every picture region under 128 pixels held to half its containment cut-off, in every window. "After" is this build: kept below half the cover cut-off, and below half the containment cut-off too where a blur can apply. The measurement changed no level. Results: `results/speed-clean-margin-measured.json`.
+
+| Case | Before (3 runs) | Held everywhere | After |
+|---|---|---|---|
+| Reload of a judged busy page | 2.28, 1.42, 1.80 s (2.84) | 2.70 s (2.81) | **1.47 s (2.44)** |
+| ... entries judged again, judgements, left for a later call | 129 to 134, 200 to 210, none | 485, 400 (the call cap), 181 | **135, 212, none** |
+| Window moved, same content | 2.92, 2.83, 2.93 s (3.47) | 2.96 s (3.09) | **2.81 s (3.66)** |
+| ... judgements, entries left for a later call | 400, 16 to 21 | 400, 321 | **400, 15** |
+| Scrolling back to places seen before | 84, 55, 54 ms (141) | 61 ms (149) | 55 ms (79) |
+| Scrolling back to other places | 626, 594, 581 ms (949) | 882 ms (1,131) | 546 ms (905) |
+
+- **The cost of "held everywhere" was a bug, now fixed.** It judged most small harmless photos again on every reload, past the call cap, and left 181 entries blurred for a later call. One bench run took 21 minutes against 6. In this build's show-first windows a small picture can be blurred only in a hot window, so that work protected nothing anywhere else. "After" does the same work as before: 135 entries judged again on a reload against 129 to 134, and 15 left after a window move against 16 to 21.
+- **Times.** The machine was shared with other work throughout (load averages 9 to 43), so times vary by up to a half between runs of the same build; the judgement counts do not. Earlier runs on a quieter machine gave 1.38 to 1.47 s for a reload and 2.70 to 2.81 s for a window move (above).
+- **No speed is won back from the margin itself.** The measurement says half is needed. The reload still costs about 1.4 s against 62 ms with no margin at all, and a window move about 2.8 s against 1.1 s.
 
 ## False covers through the whole pipeline: ST-040 re-run (18 November 2026)
 
@@ -295,6 +353,7 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **Speed, memory and energy** (ST-038, ST-039). Each complete frame is copied into an RGBA buffer for the detector, which costs memory and energy, unmeasured. `JUDGEMENT_BUDGET` (40 per second) and `FULL_REJUDGE` (30 s) are proposals.
 - **False covers on real screens in daily use.** ST-040 re-ran through this pipeline on 932 held-out harmless screens (above); nothing has been measured on a live screen.
 - **The catch rate.** Not measurable on this Mac by design.
+- **Jitter on explicit pictures.** How far jitter moves a score was measured on harmless screens only, by design. An explicit picture near a cut-off may move more.
 - **The signed `.app`.** `tools/make-app.sh` assembles an unsigned bundle under `.build/`. That was checked once, and the bundle was then deleted. Nothing has been signed or notarized.
 
 ## What needs the founder

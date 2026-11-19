@@ -121,11 +121,40 @@ final class VerdictCache {
     ///   page, in windows where no blur could apply: 485 entries against 133, past the call cap.)
     ///
     /// Why: a cached clean verdict holds for as long as the pixels stay the same, so a picture that jitter
-    /// once pushed just under a cut-off would never be judged again. Half the cut-off is a wide working
-    /// margin, not a measured bound on how far jitter moves a score (that is not measured on this build):
-    /// any picture that scores at least half a cut-off is judged afresh each time it comes back. Raising it
-    /// caches more and protects less. Its cost (docs/STEP-1-STATUS.md): on the lab's busy pages of harmless
-    /// photos, about one entry in five is judged again on every reload.
+    /// once pushed just under a cut-off would never be judged again: any picture that scores at least half a
+    /// cut-off is judged afresh each time it comes back. Raising the share caches more and protects less.
+    ///
+    /// Derivation (19 November 2026; `safesightmac-harness jitter`, results/jitter-spread.json). Half was a
+    /// working guess; how far jitter moves each real model's score is now measured. On the lab's 932 held-out
+    /// harmless screens, with the sealed models and cut-offs, every entry of each screen's first call (108,738)
+    /// was judged once; 18,195 of them were then judged 20 more times each, with fresh jitter every time (per
+    /// model and band up to 2,000 that came within 0.35 of their lowest action cut-off, and 500 at random).
+    /// Spread: the 99.9th percentile, over the borderline entries (highest score at least half the entry's lowest
+    /// action cut-off; only their caching can change with the share), of an entry's highest minus lowest
+    /// score. The level would be the action cut-off less a gap of twice the spread, but never below half the
+    /// cut-off (never more protection than before). A level under zero means no score is safely cached:
+    ///
+    ///     model   band      borderline  spread  gap    action cut-off     half   cut-off less gap
+    ///     Marqo   10-15 px     3,549    0.077   0.155  containment 0.278  0.139   0.123
+    ///     Marqo   16-31        2,663    0.084   0.167  containment 0.278  0.139   0.110
+    ///     Marqo   32-63        1,416    0.432   0.864  containment 0.461  0.231  -0.403
+    ///     Marqo   64-127       1,555    0.616   1.231  containment 0.452  0.226  -0.779
+    ///     Marqo   128+           372    0.731   1.461  cover       0.758  0.379  -0.703
+    ///     NSFWJS  10-15        2,340    0.469   0.938  containment 0.831  0.416  -0.106
+    ///     NSFWJS  16-31        2,132    0.514   1.028  containment 0.831  0.416  -0.197
+    ///     NSFWJS  32-63        2,323    0.650   1.299  containment 0.926  0.463  -0.373
+    ///     NSFWJS  64-127       3,114    0.714   1.427  containment 0.857  0.429  -0.570
+    ///     NSFWJS  128+           798    0.817   1.634  cover       0.934  0.467  -0.700
+    ///
+    /// In every model and band the gap is wider than half the cut-off, so the measurement says half is needed
+    /// everywhere, and half is kept: one share, 0.5, for every model and band. (Where no blur can apply, only
+    /// the cover cut-off acts on small pictures, and Marqo's gap under 32 px is under half of it; but that
+    /// spread was measured near the containment cut-off, not near the cover one, so nothing is loosened.)
+    /// By twice the spread even half is short, and in 20 draws it was crossed: 63 harmless borderline entries
+    /// had one score under half the action cut-off and another at or over it (Marqo 32-63: 8, 64-127: 26,
+    /// 128+: 19; NSFWJS 64-127: 10). Such a picture can still be cached as clean on its low score. Closing
+    /// that needs a stricter rule than half, which is the owner's call (docs/STEP-1-STATUS.md, "How far jitter
+    /// moves real scores").
     static let CLEAN_CACHE_MARGIN: Float = 0.5
 
     /// The lowest cut-off at which a model's score changes an entry's outcome: the cover cut-off, or the
