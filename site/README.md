@@ -32,7 +32,7 @@ The check needs Node 18 or later and nothing else. It fails if:
 
 - **Words.** The home page follows `README.md`. "Why it exists" and the promise are copied word for word, and the check compares them, so change them in the README first. The terms page follows `TERMS-AND-RISKS.md` (version 0.1, on the `terms-page` branch); when that file changes, change `terms.html` with it.
 - **Styles.** The CSP allows each page's `<style>` block by its hash. After editing the CSS, run `node site/check.mjs --print-csp` and put the new hash in that page's `Content-Security-Policy` meta tag. Until you do, the check fails and the page shows unstyled.
-- **Colours.** Both pages use the Lumen palette, set as variables at the top of each style block, with the dark theme underneath.
+- **Colours and type.** Both pages carry the desert study (`DESIGN-desert.md` at the top of the repository): lime plaster, malachite and a little gold leaf, with serif headings from the system's own fonts. The colours are variables at the top of each style block, with the dark theme underneath. The study isn't merged; Lumen is in the history if the owner keeps it.
 - **No scripts, no trackers.** The CSP blocks scripts, and the footer promises that the site sets no cookies and loads nothing from anywhere else. Keep it that way.
 
 ## Publishing

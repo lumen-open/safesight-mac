@@ -3,61 +3,74 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-YQbvSkQvAazm09uRI+rDzq4SLB/uOMaj9iC3Oipm9dA='; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-69VVbN0WESlJFyRt3g714MdY9YX73Xk4HgiI6HFwbcg='; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f3f6f6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0b1112" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eff1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c1222" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Free, open-source blocking of explicit images on your Mac. Once it’s on, it stays on.">
 <title>SafeSight Mac · Free, open-source blocking of explicit images</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230b7f73'/%3E%3Ccircle cx='16' cy='16' r='8.5' fill='none' stroke='%23fff' stroke-width='2.6'/%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 16a14 14 0 0 1 28 0v9a7 7 0 0 1-7 7H9a7 7 0 0 1-7-7Z' fill='%230b7363'/%3E%3Ccircle cx='16' cy='18' r='7.5' fill='none' stroke='%23fff' stroke-width='2.4'/%3E%3Ccircle cx='16' cy='18' r='3' fill='%23fff'/%3E%3C/svg%3E">
 <style>
+/* Desert study: lime plaster, lamp-black and malachite, with gold leaf only as a rare hairline.
+   See DESIGN-desert.md. */
 :root {
-  --bg: #f3f6f6;
-  --card: #ffffff;
-  --text: #0e1b1d;
-  --muted: #56686b;
-  --line: #dde6e6;
-  --accent: #0b7f73;
-  --accent-press: #086a60;
-  --accent-soft: #dcf1ee;
+  --bg: #eff1ec;
+  --card: #fbfbf8;
+  --text: #151c1b;
+  --muted: #45504d;
+  --line: #d8dcd3;
+  --accent: #0b7363;
+  --accent-press: #085e51;
+  --accent-soft: #e0ede7;
   --on-accent: #ffffff;
-  --accent-text: #086a60;
-  --link: #086a60;
-  --tile: #eef3f3;
-  --glyph: #d2dede;
-  --hover: rgba(14, 27, 29, .05);
-  --us-bg: #f5fbfa;
-  --head-bg: #f8fafa;
-  --glow: rgba(11, 127, 115, .11);
-  --accent-shadow: rgba(11, 127, 115, .42);
-  --shadow: 0 1px 2px rgba(14, 27, 29, .04), 0 10px 30px -12px rgba(14, 27, 29, .10);
+  --accent-text: #06594d;
+  --link: #06594d;
+  --gold: #a68338;
+  --gold-line: rgba(166, 131, 56, .5);
+  --gold-wash: rgba(196, 160, 82, .13);
+  --stone: #e4e7e0;
+  --tile: #eaece6;
+  --glyph: #d2d7cd;
+  --knot: #87908b;
+  --hover: rgba(21, 28, 27, .05);
+  --us-bg: #f3f7f4;
+  --head-bg: #f4f5f1;
+  --glow: rgba(196, 160, 82, .09);
+  --accent-shadow: rgba(11, 115, 99, .40);
+  --shadow: 0 1px 2px rgba(21, 28, 27, .04), 0 10px 30px -12px rgba(21, 28, 27, .10);
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --radius: 22px;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --radius: 20px;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b1112;
-    --card: #121a1c;
-    --text: #ecf4f3;
-    --muted: #97aaa8;
-    --line: #22322f;
-    --accent: #4fd8c4;
-    --accent-press: #3cc2ae;
-    --accent-soft: #123430;
-    --on-accent: #06201c;
-    --accent-text: #4fd8c4;
-    --link: #4fd8c4;
-    --tile: #172224;
-    --glyph: #263735;
-    --hover: rgba(236, 244, 243, .06);
-    --us-bg: #10201f;
-    --head-bg: #0f1719;
-    --glow: rgba(79, 216, 196, .09);
-    --accent-shadow: rgba(79, 216, 196, .22);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px -12px rgba(0, 0, 0, .5);
+    --bg: #0c1222;
+    --card: #131a2d;
+    --text: #eceee6;
+    --muted: #a9b1bf;
+    --line: #252e46;
+    --accent: #5cd3bc;
+    --accent-press: #49c2aa;
+    --accent-soft: #13303a;
+    --on-accent: #071d19;
+    --accent-text: #6fd9c4;
+    --link: #6fd9c4;
+    --gold: #c9a961;
+    --gold-line: rgba(201, 169, 97, .36);
+    --gold-wash: rgba(201, 169, 97, .07);
+    --stone: #182033;
+    --tile: #182035;
+    --glyph: #283250;
+    --knot: #6d7791;
+    --hover: rgba(236, 238, 230, .06);
+    --us-bg: #11222f;
+    --head-bg: #10172a;
+    --glow: rgba(201, 169, 97, .05);
+    --accent-shadow: rgba(92, 211, 188, .22);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px -12px rgba(0, 0, 0, .55);
   }
 }
 
@@ -66,7 +79,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 body {
   margin: 0;
-  background: radial-gradient(1100px 820px at 92% -14%, var(--glow), transparent) no-repeat, var(--bg);
+  background: radial-gradient(1200px 760px at 78% -18%, var(--glow), transparent) no-repeat, var(--bg);
   color: var(--text);
   font-family: var(--sans);
   font-size: 1.0625rem;
@@ -81,6 +94,7 @@ a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 [id] { scroll-margin-top: 24px; }
 strong { font-weight: 650; }
+h1, h2, h3 { font-family: var(--serif); }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -107,7 +121,7 @@ strong { font-weight: 650; }
   display: inline-flex; align-items: center; gap: 11px;
   color: var(--text); text-decoration: none; font-weight: 650; font-size: 1.0625rem; letter-spacing: -.01em;
 }
-.mark { width: 38px; height: 38px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; }
+.mark { width: 36px; height: 40px; border-radius: 18px 18px 9px 9px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; padding-top: 4px; }
 .mark svg { width: 24px; height: 24px; }
 .mk-ring { fill: none; stroke: currentColor; stroke-width: 2.4; }
 .mk-dot { fill: currentColor; }
@@ -125,7 +139,7 @@ strong { font-weight: 650; }
 /* Buttons */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  min-height: 52px; padding: 0 24px; border-radius: 14px; border: 1px solid transparent;
+  min-height: 52px; padding: 0 24px; border-radius: 12px; border: 1px solid transparent;
   font-size: 1rem; font-weight: 600; line-height: 1.2; text-decoration: none; white-space: nowrap;
 }
 .btn .ic { width: 20px; height: 20px; }
@@ -147,12 +161,12 @@ strong { font-weight: 650; }
   padding: 6px 14px 6px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line);
   color: var(--muted); font-size: .875rem; font-weight: 500; line-height: 1.4;
 }
-.pill-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); flex: none; }
+.pill-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--gold-line); flex: none; margin-inline: 2px; }
 h1 {
-  margin: 22px 0 0; font-size: clamp(2.125rem, 1.2rem + 2.9vw, 3.125rem); line-height: 1.08;
-  letter-spacing: -.03em; font-weight: 700; text-wrap: balance;
+  margin: 22px 0 0; font-size: clamp(2.25rem, 1.3rem + 3vw, 3.375rem); line-height: 1.08;
+  letter-spacing: -.016em; font-weight: 600; text-wrap: balance;
 }
-h1 .soft { color: var(--accent-text); }
+h1 .soft { color: var(--accent-text); font-style: italic; font-weight: 500; }
 .lead { margin-top: 22px; max-width: 33em; color: var(--muted); font-size: clamp(1.125rem, 1.03rem + .35vw, 1.3rem); line-height: 1.55; text-wrap: pretty; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
 .hero-note { display: flex; gap: 10px; align-items: flex-start; margin-top: 22px; color: var(--muted); font-size: .9375rem; line-height: 1.5; }
@@ -168,14 +182,18 @@ h1 .soft { color: var(--accent-text); }
   .hero-art svg { max-width: 540px; }
 }
 
-/* Hero art */
-.a-g0 { stop-color: var(--accent); stop-opacity: .26; }
-.a-g1 { stop-color: var(--accent); stop-opacity: 0; }
-.a-c0 { stop-color: var(--accent); stop-opacity: .30; }
-.a-c1 { stop-color: var(--accent); stop-opacity: 0; }
-.a-ring { fill: none; stroke: var(--accent); stroke-opacity: .24; }
-.a-ring.r2 { stroke-opacity: .14; }
-.a-ring.r3 { stroke-opacity: .08; }
+/* Hero art: a window set in an apse niche, the covered picture held in a gold halo */
+.a-wash0 { stop-color: var(--card); stop-opacity: .8; }
+.a-wash1 { stop-color: var(--card); stop-opacity: 0; }
+.a-sky0 { stop-color: var(--gold); stop-opacity: .12; }
+.a-sky1 { stop-color: var(--gold); stop-opacity: 0; }
+.a-rule0 { stop-color: var(--line); stop-opacity: 1; }
+.a-rule1 { stop-color: var(--line); stop-opacity: 0; }
+.a-leaf0 { stop-color: var(--gold); stop-opacity: .6; }
+.a-leaf1 { stop-color: var(--gold); stop-opacity: 0; }
+.a-arch { fill: none; stroke-width: 1.5; }
+.a-arch-in { fill: none; stroke-width: 1; }
+.a-halo { fill: var(--gold); fill-opacity: .08; stroke: var(--gold); stroke-opacity: .6; stroke-width: 1.25; }
 .a-win { fill: var(--card); stroke: var(--line); }
 .a-sep { stroke: var(--line); }
 .a-dot { fill: var(--line); }
@@ -183,35 +201,49 @@ h1 .soft { color: var(--accent-text); }
 .a-ln-strong { fill: var(--glyph); }
 .a-tile { fill: var(--tile); }
 .a-glyph { fill: var(--glyph); }
-.a-cover { fill: var(--accent-soft); stroke: var(--accent); stroke-opacity: .5; }
-.a-lens { fill: none; stroke: var(--accent); stroke-width: 3; }
+.a-cover { fill: var(--stone); stroke: var(--line); }
+.a-cover-ring { fill: none; stroke: var(--muted); stroke-opacity: .45; stroke-width: 2; }
+.a-cover-dot { fill: var(--muted); fill-opacity: .45; }
+.a-lens { fill: none; stroke: var(--accent); stroke-width: 2.2; }
 .a-lens-dot { fill: var(--accent); }
 .a-badge { fill: var(--accent-soft); }
-.a-flood { flood-color: #0e1b1d; flood-opacity: .10; }
+.a-flood { flood-color: #151c1b; flood-opacity: .10; }
 @media (prefers-color-scheme: dark) {
+  .a-wash0 { stop-opacity: .55; }
+  .a-sky0 { stop-opacity: .09; }
+  .a-leaf0 { stop-opacity: .45; }
+  .a-halo { fill-opacity: .05; stroke-opacity: .5; }
   .a-flood { flood-color: #000000; flood-opacity: .55; }
 }
 
 /* Sections */
 .sec { padding-block: clamp(64px, 9vw, 120px); }
-.sec-band { background: var(--card); border-block: 1px solid var(--line); }
+/* A band is edged like a fresco panel: a stone line, a gap, a second line */
+.sec-band {
+  border-block: 1px solid var(--line);
+  background:
+    linear-gradient(var(--line), var(--line)) left 0 top 4px / 100% 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) left 0 bottom 4px / 100% 1px no-repeat,
+    var(--card);
+}
 .sec-head { max-width: 46rem; }
 .eyebrow { margin: 0 0 14px; color: var(--accent-text); font-size: .8125rem; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; }
-h2 { margin: 0; font-size: clamp(1.75rem, 1.2rem + 2.1vw, 2.625rem); line-height: 1.12; letter-spacing: -.024em; font-weight: 700; text-wrap: balance; }
-h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em; font-weight: 650; }
+h2 { margin: 0; font-size: clamp(1.875rem, 1.25rem + 2.3vw, 2.75rem); line-height: 1.12; letter-spacing: -.012em; font-weight: 600; text-wrap: balance; }
+h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; font-weight: 600; }
 .sec-lead { margin-top: 18px; max-width: 38em; color: var(--muted); font-size: clamp(1.0625rem, 1rem + .3vw, 1.1875rem); text-wrap: pretty; }
 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 20px 24px; }
 @media (min-width: 820px) { .card { padding: 26px 24px 28px; } }
 .card p { color: var(--muted); }
-.badge { width: 48px; height: 48px; border-radius: 14px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; }
+/* Badges are small niches: a round arch over a short wall */
+.badge { width: 46px; height: 50px; border-radius: 23px 23px 10px 10px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; padding-top: 4px; }
 
 /* How it stays on */
 .steps { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 14px; }
 .step-head { display: grid; grid-template-columns: 48px minmax(0, 1fr); grid-template-areas: "badge title"; align-items: center; column-gap: 16px; margin-bottom: 12px; }
 .step-head .badge { grid-area: badge; }
 .step-head h3 { grid-area: title; }
-.step-num { display: none; grid-area: num; color: var(--muted); font-size: .875rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.step-num { display: none; grid-area: num; color: var(--muted); font-family: var(--serif); font-style: italic; font-size: 1.0625rem; font-weight: 400; font-variant-numeric: oldstyle-nums; letter-spacing: .02em; }
 .friend { margin-top: 14px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding: 22px 20px 24px; border-radius: var(--radius); background: var(--accent-soft); }
 .friend .badge { background: var(--card); }
 .friend p { font-size: 1.0625rem; text-wrap: pretty; }
@@ -248,9 +280,16 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 .essay p { font-size: clamp(1.125rem, 1.05rem + .3vw, 1.25rem); line-height: 1.75; text-wrap: pretty; }
 .essay p + p { margin-top: 1.15em; }
 .essay .coda {
-  margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--line);
-  font-size: clamp(1.375rem, 1.1rem + 1.1vw, 1.8rem); line-height: 1.42; letter-spacing: -.016em; font-weight: 600; text-wrap: balance;
+  font-family: var(--serif); font-size: clamp(1.5rem, 1.15rem + 1.25vw, 2rem); line-height: 1.38; letter-spacing: -.006em; font-weight: 500; text-wrap: balance;
 }
+
+/* Interlace: a two-strand braid from Coptic textile borders, one per page at most */
+.knot-rule { display: flex; align-items: center; gap: 16px; margin: 44px 0 36px; }
+.knot-rule::before, .knot-rule::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.knot { width: 87px; height: 16.5px; flex: none; overflow: visible; }
+.k-s { fill: none; stroke: var(--knot); stroke-width: 1.05; stroke-linecap: round; }
+.k-case { fill: none; stroke: var(--card); stroke-width: 3; }
+.k-dot { fill: var(--gold); }
 
 /* Comparison */
 .compare { margin-top: 44px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
@@ -321,27 +360,32 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 @media (min-width: 820px) { .two { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; } .two .card { padding: 36px 34px 38px; } }
 
 /* Promise */
+/* The promise sits in an apse: an arched top, and a gold hairline inside the stone edge */
 .promise {
-  position: relative; isolation: isolate; overflow: hidden; margin: 0;
-  padding: clamp(36px, 7vw, 88px) clamp(24px, 7vw, 96px);
-  border-radius: 30px; border: 1px solid var(--line);
-  background: linear-gradient(160deg, var(--accent-soft) 0%, var(--card) 62%);
+  --arch: clamp(112px, 24vw, 236px);
+  position: relative; isolation: isolate; margin: 0 auto; max-width: 52rem;
+  padding: calc(var(--arch) * .5 + 20px) clamp(24px, 6vw, 72px) clamp(36px, 6vw, 72px);
+  border-radius: 50% 50% 22px 22px / var(--arch) var(--arch) 22px 22px;
+  border: 1px solid var(--line);
+  background: radial-gradient(60% 75% at 50% 0%, var(--gold-wash), transparent 80%), var(--card);
   box-shadow: var(--shadow);
 }
-.promise-rings { position: absolute; z-index: -1; right: -360px; top: -360px; width: 720px; height: 720px; pointer-events: none; }
-@media (max-width: 719px) { .promise-rings { right: -250px; top: -250px; width: 500px; height: 500px; opacity: .7; } }
-.promise h2 { font-size: .875rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); font-weight: 650; line-height: 1.4; display: flex; align-items: center; gap: 12px; }
-.promise h2 .mark { width: 34px; height: 34px; border-radius: 11px; background: var(--card); }
-.promise h2 .mark svg { width: 21px; height: 21px; }
-.promise blockquote { margin: 28px 0 0; max-width: 46rem; }
-.promise blockquote p { font-size: clamp(1.25rem, 1.05rem + .9vw, 1.65rem); line-height: 1.55; letter-spacing: -.012em; font-weight: 500; text-wrap: pretty; }
+.promise::before {
+  content: ""; position: absolute; inset: 8px; z-index: -1; pointer-events: none;
+  border: 1px solid var(--gold-line);
+  border-radius: 50% 50% 14px 14px / calc(var(--arch) - 8px) calc(var(--arch) - 8px) 14px 14px;
+}
+.promise h2 { font-family: var(--sans); font-size: .875rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); font-weight: 650; line-height: 1.4; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.promise h2 .mark { background: var(--accent-soft); }
+.promise blockquote { margin: 26px auto 0; max-width: 40rem; }
+.promise blockquote p { font-family: var(--serif); font-size: clamp(1.3rem, 1.1rem + .9vw, 1.75rem); line-height: 1.5; letter-spacing: -.004em; font-weight: 400; text-wrap: pretty; }
 
 /* Get involved */
 @media (min-width: 960px) { .cards3 .card { padding: 28px 26px 30px; } }
 .code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .9em; padding: 1px 6px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
 
 /* Footer */
-.foot { border-top: 1px solid var(--line); padding-block: 40px 48px; }
+.foot { padding-block: 40px 48px; }
 .foot-in { display: grid; gap: 24px; }
 .foot p { color: var(--muted); font-size: .9375rem; }
 .foot .brand { margin-bottom: 12px; }
@@ -374,6 +418,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
   <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2 5 6v5.6c0 4.3 2.9 7.6 7 9.2 4.1-1.6 7-4.9 7-9.2V6l-7-2.8Z"/><path d="M12 9v4M12 16v.1"/></symbol>
   <symbol id="i-hand" viewBox="0 0 24 24"><path d="M12 21c4.4 0 8-3.6 8-8V9.5a1.6 1.6 0 0 0-3.2 0V12M16.8 11V6.5a1.6 1.6 0 0 0-3.2 0V11M13.6 10.5V5a1.6 1.6 0 0 0-3.2 0v6M10.4 11V7.5a1.6 1.6 0 0 0-3.2 0V14l-1.4-1.5a1.7 1.7 0 0 0-2.5 2.3L7 19c1.3 1.3 3 2 5 2Z"/></symbol>
+  <symbol id="i-knot" viewBox="-1 0 58 11"><path class="k-s" d="M0 5.5C1.304 3.451 2.552 1.5 4 1.5M0 5.5C1.304 7.549 2.552 9.5 4 9.5M4 9.5C5.448 9.5 6.696 7.549 8 5.5C9.305 3.451 10.552 1.5 12 1.5M12 9.5C13.448 9.5 14.695 7.549 16 5.5C17.305 3.451 18.552 1.5 20 1.5M20 9.5C21.448 9.5 22.695 7.549 24 5.5C25.305 3.451 26.552 1.5 28 1.5M28 9.5C29.448 9.5 30.695 7.549 32 5.5C33.304 3.451 34.552 1.5 36 1.5M36 9.5C37.448 9.5 38.696 7.549 40 5.5C41.304 3.451 42.552 1.5 44 1.5M44 9.5C45.448 9.5 46.696 7.549 48 5.5C49.304 3.451 50.552 1.5 52 1.5M52 1.5C53.448 1.5 54.696 3.451 56 5.5M52 9.5C53.448 9.5 54.696 7.549 56 5.5"/><path class="k-case" d="M4 1.5C5.448 1.5 6.696 3.451 8 5.5C9.305 7.549 10.552 9.5 12 9.5M12 1.5C13.448 1.5 14.695 3.451 16 5.5C17.305 7.549 18.552 9.5 20 9.5M20 1.5C21.448 1.5 22.695 3.451 24 5.5C25.305 7.549 26.552 9.5 28 9.5M28 1.5C29.448 1.5 30.695 3.451 32 5.5C33.304 7.549 34.552 9.5 36 9.5M36 1.5C37.448 1.5 38.696 3.451 40 5.5C41.304 7.549 42.552 9.5 44 9.5M44 1.5C45.448 1.5 46.696 3.451 48 5.5C49.304 7.549 50.552 9.5 52 9.5"/><path class="k-s" d="M4 1.5C5.448 1.5 6.696 3.451 8 5.5C9.305 7.549 10.552 9.5 12 9.5M12 1.5C13.448 1.5 14.695 3.451 16 5.5C17.305 7.549 18.552 9.5 20 9.5M20 1.5C21.448 1.5 22.695 3.451 24 5.5C25.305 7.549 26.552 9.5 28 9.5M28 1.5C29.448 1.5 30.695 3.451 32 5.5C33.304 7.549 34.552 9.5 36 9.5M36 1.5C37.448 1.5 38.696 3.451 40 5.5C41.304 7.549 42.552 9.5 44 9.5M44 1.5C45.448 1.5 46.696 3.451 48 5.5C49.304 7.549 50.552 9.5 52 9.5"/><circle class="k-dot" cx="28" cy="5.5" r="1.15"/></symbol>
   <symbol id="i-mark" viewBox="0 0 32 32"><circle class="mk-ring" cx="16" cy="16" r="9.5"/><circle class="mk-dot" cx="16" cy="16" r="3.8"/><path class="mk-glint" d="M10.2 12.6a6.8 6.8 0 0 1 3.4-3.6"/></symbol>
 </svg>
 
@@ -409,48 +454,50 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
       <p class="hero-note"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg><span>This is an early preview, and there’s no download yet. One is coming later.</span></p>
     </div>
     <figure class="hero-art" aria-hidden="true">
-      <svg viewBox="0 0 520 524" focusable="false">
+      <svg viewBox="0 0 520 540" focusable="false">
         <defs>
-          <radialGradient id="g-glow" cx="50%" cy="50%" r="50%"><stop offset="0" class="a-g0"/><stop offset="1" class="a-g1"/></radialGradient>
-          <radialGradient id="g-cover" cx="50%" cy="50%" r="50%"><stop offset="0" class="a-c0"/><stop offset="1" class="a-c1"/></radialGradient>
+          <linearGradient id="g-wash" x1="0" y1="0" x2="0" y2="1"><stop offset=".2" class="a-wash0"/><stop offset=".95" class="a-wash1"/></linearGradient>
+          <radialGradient id="g-sky" cx="50%" cy="0%" r="62%" fx="50%" fy="0%"><stop offset=".1" class="a-sky0"/><stop offset="1" class="a-sky1"/></radialGradient>
+          <linearGradient id="g-rule" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" class="a-rule0"/><stop offset="1" class="a-rule1"/></linearGradient>
+          <linearGradient id="g-leaf" x1="0" y1="0" x2="0" y2="1"><stop offset=".45" class="a-leaf0"/><stop offset="1" class="a-leaf1"/></linearGradient>
           <filter id="f-shadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow class="a-flood" dx="0" dy="14" stdDeviation="18"/></filter>
           <filter id="f-shadow-sm" x="-30%" y="-40%" width="160%" height="200%"><feDropShadow class="a-flood" dx="0" dy="8" stdDeviation="10"/></filter>
         </defs>
-        <circle cx="260" cy="262" r="250" fill="url(#g-glow)"/>
-        <circle class="a-ring r3" cx="260" cy="262" r="244"/>
-        <circle class="a-ring r2" cx="260" cy="262" r="200"/>
-        <circle class="a-ring" cx="260" cy="262" r="156"/>
+        <path d="M50 530V240a210 210 0 0 1 420 0v290Z" fill="url(#g-wash)"/>
+        <path d="M50 530V240a210 210 0 0 1 420 0v290Z" fill="url(#g-sky)"/>
+        <path class="a-arch" d="M50 530V240a210 210 0 0 1 420 0v290" stroke="url(#g-rule)"/>
+        <path class="a-arch-in" d="M60 530V240a200 200 0 0 1 400 0v290" stroke="url(#g-leaf)"/>
         <g filter="url(#f-shadow)">
-          <rect class="a-win" x="60" y="96" width="400" height="282" rx="20"/>
+          <rect class="a-win" x="78" y="186" width="364" height="256" rx="16"/>
         </g>
-        <circle class="a-dot" cx="86" cy="120" r="5.5"/>
-        <circle class="a-dot" cx="104" cy="120" r="5.5"/>
-        <circle class="a-dot" cx="122" cy="120" r="5.5"/>
-        <line class="a-sep" x1="60" y1="144.5" x2="460" y2="144.5"/>
-        <rect class="a-ln-strong" x="84" y="166" width="190" height="10" rx="5"/>
-        <rect class="a-ln" x="84" y="186" width="136" height="10" rx="5"/>
-        <rect class="a-tile" x="84" y="214" width="108" height="96" rx="12"/>
-        <path class="a-glyph" d="M96 298 124 262l18 20 14-14 26 30Z"/>
-        <circle class="a-glyph" cx="166" cy="238" r="9"/>
-        <rect class="a-tile" x="328" y="214" width="108" height="96" rx="12"/>
-        <rect class="a-glyph" x="348" y="266" width="12" height="30" rx="3"/>
-        <rect class="a-glyph" x="366" y="250" width="12" height="46" rx="3"/>
-        <rect class="a-glyph" x="384" y="274" width="12" height="22" rx="3"/>
-        <rect class="a-glyph" x="402" y="242" width="12" height="54" rx="3"/>
-        <circle cx="260" cy="262" r="104" fill="url(#g-cover)"/>
-        <rect class="a-cover" x="206.5" y="214.5" width="107" height="95" rx="12"/>
-        <circle class="a-lens" cx="260" cy="262" r="17"/>
-        <circle class="a-lens-dot" cx="260" cy="262" r="6.5"/>
-        <rect class="a-ln" x="84" y="330" width="250" height="10" rx="5"/>
-        <rect class="a-ln" x="84" y="350" width="170" height="10" rx="5"/>
+        <circle class="a-dot" cx="100" cy="208" r="4.5"/>
+        <circle class="a-dot" cx="116" cy="208" r="4.5"/>
+        <circle class="a-dot" cx="132" cy="208" r="4.5"/>
+        <line class="a-sep" x1="78" y1="228.5" x2="442" y2="228.5"/>
+        <rect class="a-ln-strong" x="100" y="246" width="172" height="9" rx="4.5"/>
+        <rect class="a-ln" x="100" y="263" width="122" height="9" rx="4.5"/>
+        <rect class="a-tile" x="100" y="288" width="96" height="86" rx="11"/>
+        <path class="a-glyph" d="M110 363 135 331l16 18 12-12 23 26Z"/>
+        <circle class="a-glyph" cx="171" cy="309" r="8"/>
+        <rect class="a-tile" x="324" y="288" width="96" height="86" rx="11"/>
+        <rect class="a-glyph" x="342" y="335" width="11" height="27" rx="3"/>
+        <rect class="a-glyph" x="358" y="320" width="11" height="42" rx="3"/>
+        <rect class="a-glyph" x="374" y="342" width="11" height="20" rx="3"/>
+        <rect class="a-glyph" x="390" y="313" width="11" height="49" rx="3"/>
+        <circle class="a-halo" cx="260" cy="331" r="62"/>
+        <rect class="a-cover" x="212.5" y="288.5" width="95" height="85" rx="11"/>
+        <circle class="a-cover-ring" cx="260" cy="331" r="11"/>
+        <circle class="a-cover-dot" cx="260" cy="331" r="4"/>
+        <rect class="a-ln" x="100" y="396" width="226" height="9" rx="4.5"/>
+        <rect class="a-ln" x="100" y="414" width="152" height="9" rx="4.5"/>
         <g filter="url(#f-shadow-sm)">
-          <rect class="a-win" x="318" y="352" width="172" height="60" rx="18"/>
+          <rect class="a-win" x="300" y="420" width="166" height="58" rx="16"/>
         </g>
-        <circle class="a-badge" cx="350" cy="382" r="16"/>
-        <circle class="a-lens" cx="350" cy="382" r="6.5" stroke-width="2.2"/>
-        <circle class="a-lens-dot" cx="350" cy="382" r="2.4"/>
-        <rect class="a-ln-strong" x="376" y="370" width="92" height="9" rx="4.5"/>
-        <rect class="a-ln" x="376" y="386" width="62" height="9" rx="4.5"/>
+        <circle class="a-badge" cx="330" cy="449" r="15"/>
+        <circle class="a-lens" cx="330" cy="449" r="6"/>
+        <circle class="a-lens-dot" cx="330" cy="449" r="2.3"/>
+        <rect class="a-ln-strong" x="355" y="437" width="88" height="8" rx="4"/>
+        <rect class="a-ln" x="355" y="453" width="58" height="8" rx="4"/>
       </svg>
     </figure>
   </div>
@@ -505,6 +552,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
       <p>Pornography is the most patient thing ever built. It’s free, it never closes, it never runs out, and every inch of it was designed by people who get paid when you stay. It doesn’t have to win the argument. It only has to wait until you’re tired, until it’s late, until the house is quiet and the part of you that knows better has gone to sleep. Then it takes a little more of the person you were trying to become.</p>
       <p>Willpower alone rarely beats that, because willpower is the first thing to leave at two in the morning. So SafeSight Mac moves the decision. You make it in daylight, clear-eyed, knowing what you want your life to look like, and it keeps that promise on the nights you can’t. The person you are on your best day gets the final word. The worst hour of your week doesn’t get a vote.</p>
       <p>Nobody is watching over your shoulder, nothing is reported to anyone, and there’s no lecture. Wanting this isn’t a confession. It’s the same instinct that makes someone leave their card at home before a night out, or pour the bottle down the sink while they still can. You’re locking a door from the inside. The key is still yours; you’ve just made the walk to it long enough to remember why you locked it.</p>
+      <div class="knot-rule" aria-hidden="true"><svg class="knot" focusable="false"><use href="#i-knot"/></svg></div>
       <p class="coda">This is about freedom. Not the thin kind, where you do whatever the next five minutes want, but the real kind: being the same person at midnight that you were at noon.</p>
     </div>
   </div>
@@ -626,11 +674,6 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 <section class="sec sec-tight" id="promise" aria-labelledby="promise-title">
   <div class="wrap">
     <figure class="promise">
-      <svg class="promise-rings" viewBox="0 0 720 720" aria-hidden="true" focusable="false">
-        <circle class="a-ring" cx="360" cy="360" r="150"/>
-        <circle class="a-ring r2" cx="360" cy="360" r="235"/>
-        <circle class="a-ring r3" cx="360" cy="360" r="320"/>
-      </svg>
       <h2 id="promise-title"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>Our promise</h2>
       <blockquote>
         <p>SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and once it’s on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn’t perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It’s an early release built with the help of AI, so keep a backup.</p>
