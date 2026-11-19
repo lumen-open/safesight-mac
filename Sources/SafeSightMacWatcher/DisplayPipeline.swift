@@ -172,7 +172,13 @@ public final class DisplayPipeline {
         let visible = visibleByTarget(snapshot)
         // A cover whose window is missing from this list stays where it last stood (see `fullRect`).
         for i in held.indices {
-            if present(held[i].target, snapshot) { held[i].missingSince = nil } else if held[i].missingSince == nil { held[i].missingSince = now }
+            if present(held[i].target, snapshot) {
+                held[i].missingSince = nil
+            } else if held[i].missingSince == nil {
+                // Clean judgements made while the window was there say nothing about its place now: they start again.
+                held[i].missingSince = now
+                held[i].clean = 0
+            }
         }
         // Windows that moved or changed size since the last snapshot.
         var moved: [(JudgeTarget, CGRect, CGRect)] = []
@@ -375,9 +381,9 @@ public final class DisplayPipeline {
 
         // 4. Lifted regions are gone; add the new covers, merging with any they overlap. A cover whose window has gone
         //    from the list stays where it stood until that place has been judged clean `VIDEO_VOTE` times, or the window
-        //    has been gone `WINDOW_GONE` and the place has been judged clean since.
+        //    has been gone `WINDOW_GONE` and the place has been judged clean `WINDOW_GONE_VOTE` times since it went.
         held.removeAll { h in
-            h.clean >= Register.VIDEO_VOTE || (h.missingSince.map { now - $0 >= Register.WINDOW_GONE } ?? false && h.clean >= 1)
+            h.clean >= Register.VIDEO_VOTE || (h.missingSince.map { now - $0 >= Register.WINDOW_GONE } ?? false && h.clean >= Register.WINDOW_GONE_VOTE)
         }
         for n in fresh { merge(n) }
         held.removeAll { fullRect($0, snapshot, visible) == nil }

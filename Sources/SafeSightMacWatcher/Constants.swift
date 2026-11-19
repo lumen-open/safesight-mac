@@ -30,9 +30,11 @@ public enum Register {
     /// "slowness covers more"). Not in the register; a working value for step 1, tied to ST-038.
     public static let JUDGING_STALL: TimeInterval = 5
     /// A cover whose window has gone from the window list stays where it last stood until that place is judged clean
-    /// `VIDEO_VOTE` times, or until the window has been gone this long and the place has been judged clean once. Not in
-    /// the register; a working value.
+    /// `VIDEO_VOTE` times, or until the window has been gone this long and the place has been judged clean
+    /// `WINDOW_GONE_VOTE` times since it went (judgements from before it went never count). Not in the register;
+    /// working values.
     public static let WINDOW_GONE: TimeInterval = 1
+    public static let WINDOW_GONE_VOTE = 2
     /// How long one frame may be judged for (one `process` call). Parts of the frame not reached by then are blurred
     /// and judged in the next call, so one busy frame cannot hold up the other display's frames or leave new pictures
     /// sharp for long. Not in the register; a working value, tied to ST-038.

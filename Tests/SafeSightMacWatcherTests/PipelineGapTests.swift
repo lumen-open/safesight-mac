@@ -142,6 +142,23 @@ final class VerdictScript: Judging {
         #expect(plan.items.isEmpty, "lifted once the place was judged clean")
     }
 
+    @Test func judgementsFromBeforeAWindowWentNeverLiftItsCover() {
+        let p = DisplayPipeline(display: d, judger: VerdictScript { VerdictScript.clean($0) }, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let w = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 300, y: 150, width: 280, height: 240))
+        let img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: [w], time: 0), now: 0)
+        let g = CGRect(x: 400, y: 250, width: 100, height: 100)
+        // A cover three clean judgements from lifting, while its window was there.
+        p.held = [DisplayPipeline.Held(target: .window(number: 1, ownerPID: 500), rel: CGRect(x: 100, y: 100, width: 100, height: 100),
+                                       whole: false, kind: .plain, clean: 3, lastGlobal: g)]
+        let gone = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: corner, t: 0.1), snapshot: .empty, now: 0.1)
+        #expect(gone.covers(g), "one fresh judgement and old ones do not lift it")
+        let later = p.process(Fixtures.frame(touched(img, 2), display: d, scale: 1, dirty: corner, t: 0.6), snapshot: .empty, now: 0.6)
+        #expect(later.covers(g), "gone under WINDOW_GONE")
+        let after = p.process(Fixtures.frame(touched(img, 3), display: d, scale: 1, dirty: corner, t: 1.2), snapshot: .empty, now: 1.2)
+        #expect(!after.covers(g), "gone long enough and judged clean since")
+    }
+
     // MARK: Windows in front
 
     @Test func aWindowInFrontNeverDropsAWholeWindowCover() {
