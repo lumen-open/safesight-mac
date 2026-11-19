@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Step 1 status: the cover-only app
 
-14 November 2026, updated 18 November (speed work, ST-040 re-run). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness only. **The app has not been run live on any Mac.** Running it needs the Screen Recording permission, which only the owner can grant, on a test Mac.
+14 November 2026, updated 18 November (speed work, ST-040 re-run) and 19 November (the way out). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness only. **The app has not been run live on any Mac.** Running it needs the Screen Recording permission, which only the owner can grant, on a test Mac.
 
 Step 1 is the practice state of the watcher shipped alone (register SD-223 (f)). It has no lock: no keeper, no root part, no plain shield, no installer, no updater, no login item. It can be paused or quit at any time, and it protects nothing against its own owner.
 
@@ -22,7 +22,7 @@ These parts are built, and each is exercised by tests or the harness:
   - When judging is busy, frames are coalesced without losing any changed area.
 - **The cover layer** (`Sources/SafeSightMacWatcher`, `Sources/SafeSightMacCover`).
   - **Show-first.** Changed areas are split by window, and each window gets one judge call with its own context and its share of the judging budget.
-  - **Classes.** `cover` draws a plain, wordless cover over the whole picture region. `contain` draws a strong blur of at most 6 colour cells; if the blur cannot be made, a plain cover is drawn instead. `clear` draws nothing.
+  - **Classes.** `cover` draws a plain, wordless cover over the whole picture region (a whole-window or whole-display cover carries the way-out line; see "Way out"). `contain` draws a strong blur of at most 6 colour cells; if the blur cannot be made, a plain cover is drawn instead. `clear` draws nothing.
   - **Placement.** Covers are clipped to the window's visible part, move with their window, and cover the old place for one update after a move.
   - **Lifting.** A cover lifts only after 4 clean judgements in a row of that region (SD-230).
   - **Every display.** Each display has its own canvas: one click-through panel per display, with every change applied in one transaction. Per-window overlays are the written fallback (`SAFESIGHTMAC_COVER_FORM=overlays`).
@@ -36,7 +36,7 @@ These parts are built, and each is exercised by tests or the harness:
     - it is past `DISPLAYS_MAX` (2);
     - the display set changes, or the Mac sleeps or switches session.
 
-    A repair card above the covers says why, in plain words, and offers Try again, Pause (in the practice state only) and Quit. Nothing ever locks the screen, logs anyone out or reports anywhere.
+    A repair card above the covers says why, in plain words, repeats the way-out shortcuts and offers Try again, Pause (in the practice state only) and Quit. Nothing ever locks the screen, logs anyone out or reports anywhere.
   - **Slowness covers more.** Unjudged entries stay blurred or covered and are judged again. When judging a window's new pictures would take longer than `COVER_GOAL` (0.1 s), they are blurred first and shown when cleared. A window still unjudged after 0.5 s is covered whole.
   - **Covers follow scrolling.** When content moves by a translation, its covers move with it at once, before the moved area is judged again; a cover moves only onto exactly the pixels it covered.
   - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte.
@@ -52,9 +52,31 @@ These parts are built, and each is exercised by tests or the harness:
   - Pause for 15 minutes or 1 hour, enabled only in the practice state;
   - "How it works", with plain words and the honest promise word for word;
   - Quit.
-- **The lab harness** (`safesightmac-harness`). It feeds image files or built-in synthetic scenes through the real pipeline without capturing the screen. It prints each cover's global rectangle, overlay window frame and canvas layer frame, and can write each frame with its covers drawn on it.
+- **The lab harness** (`safesightmac-harness`). It feeds image files or built-in synthetic scenes through the real pipeline without capturing the screen. It prints each cover's global rectangle, overlay window frame and canvas layer frame, and can write each frame with its covers drawn on it (the cover layer's own layers, rendered offscreen, in light or dark).
 - **The lab stand-in.** A synthetic magenta-and-green checker that can only force a cover. It exists only in lab builds (`SAFESIGHTMAC_LAB=1`). `tools/check-no-standin.sh`, now in CI, finds no stand-in symbol or string in any release binary.
 - **No networking code anywhere.** `tools/check-no-network.sh`, now in CI, fails if any source names a networking API.
+
+## Way out (19 November 2026)
+
+The owner's requirement: if pages get covered up, the user must be able to leave the page. Covers already let every click and key through to the app underneath (click-through, never key). But a big cover could hide the controls for leaving, and nothing said what to do. Now:
+
+- **Whole-window covers leave the control band** (`WayOut.controlBand`). The top 92 points of an ordinary window stay in sight: title bar, tab strip and toolbar. That is a working value for ST-032; Safari, Chrome and Firefox keep their tabs and back button within about 80 points. Short windows keep at most a third of their height. Full-screen windows, the Dock, menus and the desktop picture keep no band.
+  - Only the "cover the whole window" step leaves the band. Pictures in the band are still judged, and their covers and blurs are still drawn. A flagged slice that caused the whole-window cover is covered too, band included.
+- **Whole-display covers leave the menu bar**, only while the window list shows one on that display (`WayOut.menuBarHeight`). A hidden menu bar (full-screen apps) stays covered, since that strip would show unjudged content. The Dock stays covered.
+- **One plain line** sits on whole-window and whole-display covers: "Press ⌘W to close this tab, or ⌘[ to go back." (`AppText.wayOutLine`, checked by the words test).
+  - It uses the system font on a small pill-shaped card, with the shortcuts drawn as rounded key caps.
+  - It sits in the middle of a window's cover, or below the repair card on a display's cover.
+  - A cover with too little room shows nothing, and a narrow one gets a smaller line. Picture covers stay wordless.
+  - It is an image on a layer, so it cannot take a click.
+- **The repair card** repeats the line. It never takes the keyboard (non-activating, key only if a view needs typing, and none does).
+- **Look.** All colours are in `CoverTheme` (tentative Lumen palette, light and dark). Covers are a calm, opaque neutral, never teal: a system material would show what is under them. Teal marks the key caps and Try again only. Tested contrast: words at least 7:1, key letters at least 4.5:1.
+
+Seen only in the lab, never on a real screen: `safesightmac-harness wayout` draws synthetic desktops with the cover layer's own layers and the card's own views, offscreen. ST-032 still needs to check:
+- the band on real apps;
+- that macOS 26 lists the menu bar as assumed (if not, it stays covered);
+- that menus opened from the menu bar fall under a whole-display cover (their shortcuts still work).
+
+Found, not changed: a window is judged over the bounding box of its visible area, which can include a window in front of it. A flagged front window can therefore get the window behind it covered whole too (often the desktop picture). That covers more, never less.
 
 ## What is tested, and how
 
@@ -62,10 +84,11 @@ Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 112 test functions: 35 XCTest + 77 Swift Testing, all pass
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 114: adds the 2 stand-in tests, all pass
+swift test                                                 # 139 test functions: 35 XCTest + 104 Swift Testing, all pass
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 141: adds the 2 stand-in tests, all pass
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness wayout --out OUT --appearance light   # and dark
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models ../v3-detector/models/converted --pages ../v3-detector/data/finder-bench-heldout/screens --json FILE
 swift run -c release safesightmac-harness falsecovers --models ../v3-detector/models/converted --list LIST --root ../v3-detector --rule balanced --json FILE
 swift run -c release safesightmac-harness demo --models ../v3-detector/models/converted
@@ -82,7 +105,8 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 | Fault to cover | `FaultToCoverTests` | Blank, suspended or stopped frames; missing metadata; a map that does not match the pixels; a stopped stream; a failed detector; judging behind; too many displays. Each covers the whole display, and the next judged frame lowers it |
 | Practice-state signal | `PracticeSignalTests`, `PracticeMenuTests` | A fake folder: no keeper file means practice; a root-owned keeper file (release, lab, any case) ends it; a non-root file is not a keeper; similar names do not count; an unreadable folder or owner means not practice. The real `lstat` probe on a temporary folder, including a symbolic link. Pause is allowed only in practice. The menu says "no lock" |
 | Model check | `ModelCheckTests` | Changed, missing and unlisted files and a malformed list are refused. The sealed list and table match the committed files. Locally only: the lab build's converted models match the sealed list |
-| Wording | `AppTextTests` (SafeSightMacCoreTests) | The promise matches the README word for word; no forbidden claim; the mode sentence carries no figure; strict cover mode says "not in this version" |
+| Wording | `AppTextTests` (SafeSightMacCoreTests) | The promise matches the README word for word; no forbidden claim; the mode sentence carries no figure; strict cover mode says "not in this version"; the way-out line is word for word and its key caps rejoin to it |
+| The way out | `ControlBandTests`, `MenuBarTests` (SafeSightMacWatcherTests); `WayOutLineTests`, `RepairCardTests`, `ClickThroughTests` (SafeSightMacCoverTests) | A whole-window cover never covers the control band; a flagged picture, a flagged slice and an unjudged picture in the band are still covered; full-screen windows and system surfaces keep no band; only the largest piece carries the line. A whole-display cover leaves the menu bar only while it is on screen, never more than a menu bar, and always covers the Dock. The line's words on whole-window and whole-display covers, inside the cover, in both appearances; none on picture covers or without room; the compact size; contrast; covers opaque and neutral. Cover panels are click-through, never key or main, out of window cycling, with no view to click; the repair card repeats the line and never takes the keyboard |
 | Status line | `StatusTests` | "Needs Screen Recording", "Covering: on", a whole-display cover, pause and detector failure |
 | Stand-in (lab builds) | `StandInTests` | The stand-in through the real detector with null models is covered and placed on a 2x display at a negative origin; null models alone cover nothing |
 | Exact-match caches | 10 `CacheTests` (DetectorCoreTests), `VerdictCacheInThePipelineTests` | The key is the full SHA-256 of every byte (all four channels), size, pass and bundle version; one changed byte in any channel is a new key; a picture one level different is judged again; a flagged picture drawn where a clean one was is covered; a moved picture comes from the cache; the cache never holds more than its bound and keeps what is used; cached finder proposals equal the finder's, at the same place and moved; a change inside the finder's reach is a new key; a reloaded page is not judged again and stays covered |
@@ -191,7 +215,7 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 
 ## What is not tested
 
-- **The live app, end to end.** No ScreenCaptureKit stream has run, and no cover window has been drawn on a real screen. The menu, the repair card, the "How it works" window and both cover forms have not been seen.
+- **The live app, end to end.** No ScreenCaptureKit stream has run, and no cover window has been drawn on a real screen. The menu, the repair card, the "How it works" window and both cover forms have not been seen on a screen (the harness draws covers, way-out lines and the repair card offscreen only).
 - **Platform behaviours the capture code assumes,** each listed in chapter 05 as unproven:
   - the units of `dirtyRects` (read as frame pixels) and `contentRect` (read as frame points);
   - whether a still screen sends idle frames;
@@ -243,7 +267,9 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **Load.** A busy screen judged from scratch exceeds the budget. Its new pictures are blurred first; unjudged 512-pixel slices are covered; after 0.5 s of unjudged entries the window is covered whole. A busy Retina page stays blurred or covered for 13 to 21 s at `JUDGEMENT_BUDGET` (6 to 8 s with no budget limit). A third display and beyond are covered whole.
 - **Choices made where the register is silent or open.** Each is a working value tied to its test:
   - canvas window level: screen-saver level (ST-032);
-  - cover colour: neutral grey;
+  - cover colour: one calm neutral per appearance, in the theme type `CoverTheme` (Lumen, tentative);
+  - the control band a whole-window cover leaves: 92 points (`WayOut.controlBand`, ST-032);
+  - the room a cover needs around the way-out line: 24 points;
   - blur: at most 6 colour cells;
   - judging stall before a whole-display cover: 5 s (ST-038);
   - `JUDGEMENT_BURST`: 400 (ST-038);
