@@ -50,6 +50,9 @@ public final class DisplayPipeline {
     /// Cover first when judging a window's new pictures would end later than this after the frame arrived
     /// (`COVER_GOAL`; tests that run unoptimised builds raise it).
     public var coverGoalMs = Register.COVER_GOAL * 1000
+    /// The covers' window level (`CoverLevel.canvas`). Another app's window at or above it that overlaps a cover would
+    /// show over that cover: the display is then covered whole, under that window, until it goes. Nil turns this off.
+    public var canvasLevel: Int? = CoverLevel.canvas
     /// How long a judging run takes (the recent longest, fading by a fifth a run): how far ahead a moving
     /// cover must reach.
     var runEstimateMs = 0.0
@@ -333,6 +336,12 @@ public final class DisplayPipeline {
         lastBounds = [:]
         for w in snapshot.windows where w.bounds.intersects(d) { lastBounds[.window(number: w.number, ownerPID: w.ownerPID)] = w.bounds }
         lastPlan = CoverPlan(display: display, items: items)
+        if let level = canvasLevel, snapshot.windows.contains(where: { w in
+            w.layer >= level && w.shows && !ignoredPIDs.contains(w.ownerPID) && items.contains { $0.rect.intersects(w.bounds) }
+        }) {
+            // Drawn only: what is held and judged carries on as before.
+            lastPlan = .covered(display, because: .windowAboveCovers)
+        }
         return lastPlan
     }
 

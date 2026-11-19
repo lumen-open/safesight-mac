@@ -12,11 +12,12 @@ import SafeSightMacWatcher
 import QuartzCore
 
 public enum CoverLevels {
-    /// The canvas sits above full-screen apps, the menu bar, menus, the Dock and notifications.
-    /// Not specified in the register; ST-032 finds the lowest level that works per surface. Working value.
-    public static let canvas = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
-    /// The app's own windows and the repair card sit one level above the canvas (SD-229).
-    public static let appAbove = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)) + 1)
+    /// The canvas sits above full-screen apps, the menu bar, menus, the Dock, notifications and screen-saver-level
+    /// windows. Not specified in the register; ST-032 finds the lowest level that works per surface. Working value. A
+    /// window of another app at or above it, over a cover, covers the display whole (`DisplayPipeline.canvasLevel`).
+    public static let canvas = NSWindow.Level(rawValue: CoverLevel.canvas)
+    /// The app's own windows, its menu and the repair card sit one level above the canvas (SD-229).
+    public static let appAbove = NSWindow.Level(rawValue: CoverLevel.appAbove)
 }
 
 public enum CoverForm: String, Sendable {
@@ -202,7 +203,9 @@ public final class CoverCanvas: CoverPresenter {
             let scale = screen?.backingScaleFactor ?? 2
             let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
             root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar, notice: notice)
-            if !panel.isVisible { panel.orderFrontRegardless() }
+            // Ordered to the front of its level on every plan, not only when first shown: a window that came up at the
+            // same level since never stays over the covers.
+            panel.orderFrontRegardless()
         }
         CATransaction.commit()
     }
@@ -243,7 +246,7 @@ public final class OverlayCovers: CoverPresenter {
             root.frame = CGRect(origin: .zero, size: piece.frame.size)
             piece.frame.origin = .zero
             root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale, notice: notice, testingLineOn: lined ? [0] : [])
-            if !panel.isVisible { panel.orderFrontRegardless() }
+            panel.orderFrontRegardless()
         }
         CATransaction.commit()
     }

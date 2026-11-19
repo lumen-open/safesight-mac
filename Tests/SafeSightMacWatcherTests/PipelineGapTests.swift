@@ -264,6 +264,27 @@ final class VerdictScript: Judging {
                              snapshot: snap, now: 0.1)
         #expect(plan.covers(wide), "\(plan.items.map(\.rect))")
     }
+
+    // MARK: Windows above the covers
+
+    @Test func anotherAppsWindowAboveTheCoversCoversTheDisplay() {
+        let p = pipeline()
+        let img = flaggedAt(PixelRect(x: 100, y: 100, w: 100, h: 100))
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        // A window of another app at the canvas level, over the cover.
+        let high = WindowInfo(number: 5, ownerPID: 700, layer: CoverLevel.canvas, bounds: CGRect(x: 120, y: 120, width: 200, height: 200))
+        let plan = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: corner, t: 0.1),
+                             snapshot: WindowSnapshot(windows: [high, win], time: 0.1), now: 0.1)
+        #expect(plan.wholeDisplay == .windowAboveCovers)
+        // One that overlaps no cover, the app's own, or a fully transparent one changes nothing.
+        for w in [WindowInfo(number: 5, ownerPID: 700, layer: CoverLevel.canvas + 5, bounds: CGRect(x: 400, y: 300, width: 100, height: 50)),
+                  WindowInfo(number: 6, ownerPID: 42, layer: CoverLevel.appAbove, bounds: d.bounds),
+                  WindowInfo(number: 7, ownerPID: 700, layer: CoverLevel.canvas, bounds: d.bounds, alpha: 0)] {
+            let q = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [42])
+            let r = q.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: [w, win], time: 0), now: 0)
+            #expect(r.wholeDisplay == nil && r.covers(CGRect(x: 100, y: 100, width: 100, height: 100)), "\(w)")
+        }
+    }
 }
 
 extension CapturedFrame {

@@ -55,6 +55,14 @@ public struct CoverPiece: Equatable, Sendable {
     public init(frame: CGRect, kind: CoverKind, wayOut: WayOutPlacement? = nil) { self.frame = frame; self.kind = kind; self.wayOut = wayOut }
 }
 
+/// The window levels the covers use (kCGWindowLayer in the window list is the same number).
+public enum CoverLevel {
+    /// The cover canvas: one level above the screen saver's, so screen-saver-level windows of other apps stay under it.
+    public static let canvas = Int(CGWindowLevelForKey(.screenSaverWindow)) + 1
+    /// The app's own windows, its menu and the repair card: one level above the canvas.
+    public static let appAbove = canvas + 1
+}
+
 /// Everything drawn on one display, applied in one step.
 public struct CoverPlan: Equatable, Sendable {
     public var display: DisplayDescriptor
