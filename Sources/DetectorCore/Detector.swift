@@ -445,7 +445,7 @@ public final class Detector {
     /// scores into outcome flags. Scores do not outlive this function. `precomputed` holds scores already
     /// made for this task in this call (the fastest model's), so no model judges the same task twice.
     /// The outcome is marked cacheable here, where the scores are, and only a flag leaves (the margin rule,
-    /// `VerdictCache.CLEAN_CACHE_MARGIN`).
+    /// `VerdictCache.cleanLevel`).
     func judgeTask(_ frame: RGBAImage, _ t: Task, precomputed: [String: Float] = [:]) -> TileOutcome? {
         let band = Band(shortSide: t.rect.shortSide)
         var o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
@@ -453,14 +453,17 @@ public final class Detector {
         if let s = standIn, t.pieces.contains(where: { s.detects(frame, $0) }) { o.forced = true }
         #endif
         var strikeA = false, strikeB = false
-        // Clearly clean: every model's top score below the margin's share of its cover cut-off for this band.
+        // Clearly clean: every model's top score below the margin's share of its lowest action cut-off for this
+        // band. A picture region this small can be blurred (in a hot window, now or later, or a covered-start
+        // context) when a score passes the containment cut-off, so that cut-off acts on it too.
         var clearlyClean = true
+        let containable = t.pass == .region && t.rect.shortSide < max(config.containBelow, config.hotBelow)
         let small = t.rect.shortSide < config.containBelow
         let judges = models.models + (small ? models.students : [])
         for m in judges {
             let cut = table.cutoffs(model: m.id, band: band)
             guard let top = precomputed[m.id] ?? topScore(frame, t, m) else { return nil }
-            if !(top < VerdictCache.CLEAN_CACHE_MARGIN * cut.cover) { clearlyClean = false }
+            if !(top < VerdictCache.cleanLevel(cut, containable: containable)) { clearlyClean = false }
             let flag = top >= cut.cover
             if top > cut.clean { o.clean = false }
             if top >= cut.gridMember { o.gridMember = true }

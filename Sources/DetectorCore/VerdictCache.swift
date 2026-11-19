@@ -13,9 +13,10 @@
 // SHA-256 are not known to be findable. Anything approximate may only ever add covering, never clear.
 //
 // MARGIN RULE. Jitter is drawn fresh for every judgement, so a picture that scores near a cut-off can be
-// judged clean one time and flagged the next. A clean outcome is therefore kept only when it was clearly
-// clean (`CLEAN_CACHE_MARGIN`); a borderline-clean one is judged again, with new jitter, every time its
-// pixels come back, as before the cache. An outcome that covers is always kept: reusing it only ever covers.
+// judged clean one time and flagged (or blurred) the next. A clean outcome is therefore kept only when it was
+// clearly clean (`CLEAN_CACHE_MARGIN`), below the lowest cut-off that acts on the entry (cover, or containment
+// where a blur can apply); a borderline-clean one is judged again, with new jitter, every time its pixels come
+// back, as before the cache. An outcome that covers is always kept: reusing it only ever covers.
 import CryptoKit
 import Foundation
 import Preprocess
@@ -27,7 +28,7 @@ struct TileOutcome: Sendable, Equatable {
     /// The referee was asked (only for disputes) and confirmed.
     var refereeRan = false, refereeFlag = false
     /// Whether the verdict cache may keep this outcome, decided where it was judged (`Detector.judgeTask`):
-    /// it covers, or every model's score was below `CLEAN_CACHE_MARGIN` of its cover cut-off. A flag, not a
+    /// it covers, or every model's score was below `VerdictCache.cleanLevel` (the margin rule). A flag, not a
     /// score. False unless set, so an outcome nobody marked is judged again.
     var cacheable = false
     /// The covering decision: both families agree, or a dispute the referee confirmed (or the lab stand-in).
@@ -98,9 +99,16 @@ struct Generations<Value> {
 
 final class VerdictCache {
     /// `CLEAN_CACHE_MARGIN`: a clean outcome is cached only when every model's highest score for the task was
-    /// below this share of that model's cover cut-off for the task's size band (strictly below; a score that
-    /// is not a number never counts as below). With the sealed table that means below 0.38 to 0.45 for Marqo
-    /// and 0.47 to 0.50 for NSFWJS.
+    /// below this share of that model's lowest action cut-off for the task's size band (`actionCutoff`;
+    /// strictly below). An unusable score never gets here: it is a model failure (`Detector.usable`).
+    ///
+    /// The lowest action cut-off is the cover cut-off, or the containment cut-off (`clean`) where that is lower
+    /// and a blur can apply: a picture region under `max(containBelow, hotBelow)` detail pixels (64 and 128),
+    /// which a hot window, now or later, blurs when any model scores it above `clean`. The cached outcome's
+    /// `clean` flag decides that blur each time it is reused, so the flag must be as settled as the flag to
+    /// cover. With the sealed table, for those small pictures: below 0.14 (16-31 px), 0.23 (32-63) and 0.23
+    /// (64-127) for Marqo, and 0.42, 0.46 and 0.43 for NSFWJS; for every other entry, below 0.38 to 0.45 for
+    /// Marqo and 0.47 to 0.50 for NSFWJS (half the cover cut-off).
     ///
     /// Why: a cached clean verdict holds for as long as the pixels stay the same, so a picture that jitter
     /// once pushed just under a cut-off would never be judged again. Half the cut-off is a wide working
@@ -109,6 +117,13 @@ final class VerdictCache {
     /// caches more and protects less. Its cost (docs/STEP-1-STATUS.md): on the lab's busy pages of harmless
     /// photos, about one entry in five is judged again on every reload.
     static let CLEAN_CACHE_MARGIN: Float = 0.5
+
+    /// The lowest cut-off at which a model's score changes an entry's outcome: the cover cut-off, or the
+    /// containment cut-off when a blur can apply to the entry (`containable`) and it is lower.
+    static func actionCutoff(_ c: Cutoffs, containable: Bool) -> Float { containable ? min(c.cover, c.clean) : c.cover }
+
+    /// The level a model's top score must be strictly below for a clean outcome to be cached.
+    static func cleanLevel(_ c: Cutoffs, containable: Bool) -> Float { CLEAN_CACHE_MARGIN * actionCutoff(c, containable: containable) }
 
     /// About 64 bytes an entry with the dictionaries' spare room: 65,536 entries stay under about 4 MB.
     static let bytesPerEntry = 64

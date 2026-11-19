@@ -216,8 +216,9 @@ final class SetScoreModel: ScoringModel {
 }
 
 /// The margin rule for caching (SafeSight Mac): a clean outcome is cached only when every model scored it
-/// below `CLEAN_CACHE_MARGIN` of its cover cut-off for the size band; a borderline-clean one is judged again
-/// each time it comes back; an outcome that covers is cached. Synthetic patterns and set scores only.
+/// below `CLEAN_CACHE_MARGIN` of its lowest action cut-off for the size band (cover, or containment where a
+/// blur can apply); a borderline-clean one is judged again each time it comes back; an outcome that covers is
+/// cached. Synthetic patterns and set scores only.
 final class CleanCacheMarginTests: XCTestCase {
     let ctx = JudgeContext(windowID: 1, startsCovered: false)
     /// A neutral 96 x 96 picture on a 400 x 300 frame: one region (band 64-127) and the whole pass (128+).
@@ -228,12 +229,13 @@ final class CleanCacheMarginTests: XCTestCase {
         return i
     }
 
-    /// Cut-offs for "fa", "fb" and the tie-breaker "fr": `cover` in every band, or `byBand` where given.
-    func cutoffs(_ cover: Float = 0.5, byBand: [Band: Float] = [:]) -> ThresholdTable {
+    /// Cut-offs for "fa", "fb" and the tie-breaker "fr": `cover` in every band, or `byBand` where given. The
+    /// containment cut-off is `clean`, or else the cover cut-off, so that it does not lower the margin.
+    func cutoffs(_ cover: Float = 0.5, clean: Float? = nil, byBand: [Band: Float] = [:]) -> ThresholdTable {
         var m: [String: [String: Cutoffs]] = [:]
         for id in ["fa", "fb", "fr"] {
             m[id] = Dictionary(uniqueKeysWithValues: Band.allCases.map {
-                ($0.rawValue, Cutoffs(cover: byBand[$0] ?? cover, clean: 0.05, strike: 0.95, gridMember: 0.3, gridLow: 0.2))
+                ($0.rawValue, Cutoffs(cover: byBand[$0] ?? cover, clean: clean ?? byBand[$0] ?? cover, strike: 0.95, gridMember: 0.3, gridLow: 0.2))
             })
         }
         return ThresholdTable(schema: "test", models: m)
@@ -251,8 +253,58 @@ final class CleanCacheMarginTests: XCTestCase {
 
     func over(_ v: FrameVerdict) -> RegionVerdict? { v.regions.first { $0.pass == .region && $0.rect.intersects(r) } }
 
-    func testTheMarginIsHalfTheCoverCutOff() {
+    func testTheMarginIsHalfTheLowestActionCutOff() {
         XCTAssertEqual(VerdictCache.CLEAN_CACHE_MARGIN, 0.5)
+        let c = Cutoffs(cover: 0.8, clean: 0.3, strike: 0.9, gridMember: 0.8, gridLow: 0.8)
+        XCTAssertEqual(VerdictCache.actionCutoff(c, containable: true), 0.3, "where a blur can apply, containment acts first")
+        XCTAssertEqual(VerdictCache.actionCutoff(c, containable: false), 0.8)
+        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: true), 0.15)
+        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false), 0.4)
+        // A containment cut-off above the cover cut-off never raises the level.
+        let high = Cutoffs(cover: 0.5, clean: 0.7, strike: 0.9, gridMember: 0.5, gridLow: 0.5)
+        XCTAssertEqual(VerdictCache.cleanLevel(high, containable: true), 0.25)
+    }
+
+    func testASmallPictureJustUnderTheContainmentCutOffIsJudgedAgainAndCanBeBlurred() {
+        // The region (96 px) can be blurred in a hot window, and its containment cut-off (0.3) is under its cover
+        // cut-off (0.5). Family A scores 0.2: under both, so it is shown, but not under half the containment
+        // cut-off (0.15). Before, only the cover cut-off counted (0.2 < 0.25), so it was cached and never blurred.
+        let (d, fa, _, _) = scored(0.2, 0, table: cutoffs(0.5, clean: 0.3))
+        let first = d.judge(img, context: ctx)
+        XCTAssertEqual(over(first)?.display, .clear)
+        XCTAssertEqual(first.judgements, 4, "the region and the whole pass, two models each")
+        d.resetTimings()
+        let again = d.judge(img, context: ctx)
+        XCTAssertEqual(again.judgements, 2, "the region is judged again; the whole pass, which no blur applies to, is cached")
+        XCTAssertEqual(d.timings.cacheHits, 1)
+        // The window turns hot, and the next fresh judgement lands just over the containment cut-off: blurred.
+        d.hot.mark(ctx.windowID, ctx.now)
+        fa.score = 0.35
+        let hot = d.judge(img, context: ctx)
+        XCTAssertGreaterThan(hot.judgements, 0)
+        XCTAssertEqual(over(hot)?.display, .contain, "a borderline small picture gets another chance to be blurred")
+        XCTAssertEqual(over(hot)?.reason, .hotContext)
+    }
+
+    func testOnlyPictureRegionsThatCanBeBlurredAreHeldToTheContainmentCutOff() {
+        // 0.1 is under half of both cut-offs (0.3 and 0.5): the small picture is cached.
+        let (d, _, _, _) = scored(0.1, 0.1, table: cutoffs(0.5, clean: 0.3))
+        _ = d.judge(img, context: ctx)
+        XCTAssertEqual(d.judge(img, context: ctx).judgements, 0, "clearly clean for both actions: cached")
+        // A 160-pixel picture is never blurred (128 and up), so only its cover cut-off counts: 0.2 is under half
+        // of it (0.25), though over its containment cut-off (0.1). The same for the whole pass.
+        var big = canvas(400, 300)
+        let rb = PixelRect(x: 60, y: 60, w: 160, h: 160)
+        paint(&big, rb, channel: nil, seed: 5)
+        let (e, _, _, _) = scored(0.2, 0.2, table: cutoffs(0.5, clean: 0.1))
+        let first = e.judge(big, context: ctx)
+        XCTAssertEqual(first.regions.filter { $0.pass == .region }.map(\.rect), [rb], "one region, as the setup expects")
+        XCTAssertFalse(first.regions.contains { $0.display != .clear })
+        XCTAssertEqual(e.judge(big, context: ctx).judgements, 0, "cached")
+        // The same scores on the 96-pixel picture, which can be blurred: it is judged again, the whole pass is not.
+        let (f, _, _, _) = scored(0.2, 0.2, table: cutoffs(0.5, clean: 0.1))
+        _ = f.judge(img, context: ctx)
+        XCTAssertEqual(f.judge(img, context: ctx).judgements, 2)
     }
 
     func testABorderlineCleanOutcomeIsNotCachedAndIsJudgedAgain() {
