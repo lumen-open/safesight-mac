@@ -1,6 +1,10 @@
 # Contributing
 
-Thank you for helping.
+Thank you for helping. Please read the [code of conduct](CODE_OF_CONDUCT.md) first. If you use an AI coding tool, point it at [AGENTS.md](AGENTS.md). New here? [ARCHITECTURE.md](ARCHITECTURE.md) shows how the parts fit together, and [docs/HANDOVER.md](docs/HANDOVER.md) covers adopting the project as a whole.
+
+## Where to start
+
+Issues labelled **good first issue** and **help wanted** are the best places to begin: the website, the docs, tests and the app's look and wording. Changes to the lock (`keeper/`, `opener/`) are welcome too, but they need a second reader and take longer to review.
 
 ## Rules for every change
 

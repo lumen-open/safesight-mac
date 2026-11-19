@@ -45,7 +45,7 @@ These parts are built, and each is exercised by tests or the harness:
     A repair card above the covers says why, in plain words, repeats the way-out shortcuts and offers Try again, Pause (in the practice state only) and Quit. Nothing ever locks the screen, logs anyone out or reports anywhere.
   - **Slowness covers more.** Frames are judged one at a time, every display in turn, so a display whose screen never stops changing (a video, an animation) cannot keep another display's frames waiting. Unjudged entries stay blurred or covered and are judged again. When judging a window's new pictures would take longer than `COVER_GOAL` (0.1 s), they are blurred first and shown when cleared. A window still unjudged after 0.5 s is covered whole.
   - **Covers follow scrolling.** When content moves by a translation, its covers move with it at once, before the moved area is judged again; a cover moves only onto exactly the pixels it covered.
-  - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte.
+  - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte, and only when they were clearly clean: every model scored the picture below half its cover cut-off (the margin rule, 19 November). A borderline-clean picture is judged again, with fresh jitter, each time it comes back.
 - **The practice state** (SD-223).
   - The watcher is in the practice state only while no root-owned `<rd>.safesightmac.keeper.plist` (or the lab form) exists in `/Library/LaunchDaemons`. It is read with `lstat`, so a symbolic link is judged by its own owner.
   - If the check cannot be completed, the app does not claim the practice state: covering carries on and pause is turned off.
@@ -75,9 +75,14 @@ The owner's requirement: if pages get covered up, the user must be able to leave
   - A cover with too little room shows nothing, and a narrow one gets a smaller line. Picture covers stay wordless.
   - It is an image on a layer, so it cannot take a click.
 - **The repair card** repeats the line. It never takes the keyboard (non-activating, key only if a view needs typing, and none does).
-- **Look.** All colours are in `CoverTheme` (tentative Lumen palette, light and dark). Covers are a calm, opaque neutral, never teal: a system material would show what is under them. Teal marks the key caps and Try again only. Tested contrast: words at least 7:1, key letters at least 4.5:1.
+- **Look.** All colours and typefaces are in `CoverTheme`, light and dark. It follows the "desert" study (`DESIGN-desert.md` on the website branch), which the owner approved: lime plaster by day, lapis night by night, malachite for the one accent, gold only as a hairline.
+  - Covers are a calm, opaque, flat neutral with no ornament: limestone `#e5e7e1`, or lapis-black `#121828` in dark mode. A system material would show what is under them.
+  - The way-out line keeps the system font. Its key caps are plain neutral caps with near-black or near-white letters, on a pill in the card colour with a hairline edge.
+  - The repair card and the "How it works" window use the theme's colours. Headings are in the system serif (New York) and the rest is in the system sans. Controls stay native, and Try again is malachite.
+  - The arch appears only on the card's mark and on the panel holding the promise. One gold hairline sits inside the card's edge and one inside the promise panel.
+  - Tested contrast: words and quieter words at least 7:1, key letters at least 7:1, the words on Try again at least 4.5:1.
 
-Seen only in the lab, never on a real screen: `safesightmac-harness wayout` draws synthetic desktops with the cover layer's own layers and the card's own views, offscreen. ST-032 still needs to check:
+Seen only in the lab, never on a real screen: `safesightmac-harness wayout` draws synthetic desktops with the cover layer's own layers and the card's own views, offscreen, and the "How it works" window from its own views. ST-032 still needs to check:
 - the band on real apps;
 - that macOS 26 lists the menu bar as assumed (if not, it stays covered);
 - that menus opened from the menu bar fall under a whole-display cover (their shortcuts still work).
@@ -90,8 +95,8 @@ Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 207 test functions: 35 XCTest + 172 Swift Testing, all pass*
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 209: adds the 2 stand-in tests, all pass
+swift test                                                 # 221 test functions: 43 XCTest + 178 Swift Testing, all pass
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 223: adds the 2 stand-in tests, all pass
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness wayout --out OUT --appearance light   # and dark
@@ -100,8 +105,6 @@ SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-h
 swift run -c release safesightmac-harness falsecovers --models ../v3-detector/models/converted --list LIST --root ../v3-detector --rule balanced --json FILE
 swift run -c release safesightmac-harness demo --models ../v3-detector/models/converted
 ```
-
-\* The detector's cache test `testAFlaggedPictureNeverInheritsACleanVerdict` failed once in three full runs on 19 November and passed on every re-run. It depends on jitter and is being fixed separately.
 
 | Area | Tests (target) | How |
 |---|---|---|
@@ -119,10 +122,10 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 | Status line | `StatusTests` | "Needs Screen Recording", "Covering: on", a whole-display cover, pause and detector failure |
 | Every display, one rule | `DisplayListTests`, `DisplayCoverageTests`, `PipelineGenerationTests`, `FrameQueueTests`, `DisplayChangeTests` (SafeSightMacWatcherTests); `CoverCoordinatorTests`, `StreamSchedulerTests`, `CaptureLinkTests` (SafeSightMacCoverTests) | Faked OS display lists, synthetic frames, the real pipeline and detector (fake marker models), and a presenter that only records what it is asked to draw. Every display the OS lists gets a canvas, main display first; a screen missing from CoreGraphics' list, a display missing from AppKit's and one only ScreenCaptureKit lists are all covered, and the capture list never removes one; mirrors get no canvas and do not count toward the limit, whether CoreGraphics lists them as active or only online, unless their source is not listed; a mirror loop is covered, never left out; when the main display is a mirror, the display it repeats comes first; the limit is counted from the OS's lists, so a third display stays covered even when a plan for it arrives. At start every display is covered before any stream starts. The begin callback, called through its real C entry point, draws every display covered before it returns and pushes it to the screen; a display attached by the change gets its canvas at once, before capture restarts. A display attached while another display's frame is being judged: that judgement is refused, the frame still waiting from the old stream is not judged, and each display comes down only with its own first judged frame. A display the capture layer cannot see stays covered; a stream that delivers nothing keeps its display covered; frames of a stopped stream never lower its cover again, while a late report about an older stream, or from a start that lost the race, does not cover a display a newer stream is judging; a display removed and added back with the same identifier stays covered until judged again; a plan for old bounds is refused (rearranged, rotated, clamshell); a change nobody announced is found at the next drawing or tick; an announced change that never finishes ends after 3 s; sleep holds every cover until wake, and a display change while going to sleep does not end that hold; a display with no stream is retried three times; unreadable lists keep every display covered; a failed detector covers displays attached later; Try again keeps every cover up; a new stream's first frame is judged whole; frames of two streams never merge; a display that never stops changing cannot keep another waiting; a late frame from an older stream never replaces a newer stream's frame. A display only ScreenCaptureKit lists is a change when it alters the judged displays (it needs a stream), and not one past the limit. Sleep, display-sleep and session holds end without their notification once the OS says they are over (after 10, 2 and 2 s). Streams on request, with a fake capture backend whose gates hold a request part-way: a start streams only the displays asked for, with the request's generation, and stops and reports every older stream; requests older than the newest start are ignored; a top-up only adds missing streams; every display not listed, or not listable, is reported with the request's generation; a start overtaken while it opens a stream stops and reports it; two requests for one display keep the newer stream; a stream that stops by itself, even before it is kept, is reported once and never kept; nothing starts after a stop. Through the app's own link between the coordinator and the scheduler: a restart asked for before a display change but starting its streams after it never shows their frames, and a display the next restart cannot start is covered, never left showing an old plan; pausing and covering again never shows a plan from the old streams or an old request. Only the main display's mirror set leaves its menu bar under a whole-display cover (`MenuBarTests`) |
 | Stand-in (lab builds) | `StandInTests` | The stand-in through the real detector with null models is covered and placed on a 2x display at a negative origin; null models alone cover nothing |
-| Exact-match caches | 10 `CacheTests` (DetectorCoreTests), `VerdictCacheInThePipelineTests` | The key is the full SHA-256 of every byte (all four channels), size, pass and bundle version; one changed byte in any channel is a new key; a picture one level different is judged again; a flagged picture drawn where a clean one was is covered; a moved picture comes from the cache; the cache never holds more than its bound and keeps what is used; cached finder proposals equal the finder's, at the same place and moved; a change inside the finder's reach is a new key; a reloaded page is not judged again and stays covered |
+| Exact-match caches | 10 `CacheTests`, 8 `CleanCacheMarginTests` (DetectorCoreTests), `VerdictCacheInThePipelineTests` | The key is the full SHA-256 of every byte (all four channels), size, pass and bundle version; one changed byte in any channel is a new key; a picture one level different is judged again; a flagged picture drawn where a clean one was is judged afresh, with nothing from the cache, and is covered (cut-offs far below its score); a clean outcome is cached only when every model scored it strictly below half its cover cut-off for the band, and a score that is not a number never counts as below; a borderline-clean outcome and a dispute the tie-breaker declined are judged again, and can then be covered; covered outcomes are cached, under both rules; the cache refuses an outcome not marked cacheable; a moved picture comes from the cache; the cache never holds more than its bound and keeps what is used; cached finder proposals equal the finder's, at the same place and moved; a change inside the finder's reach is a new key; a reloaded page is not judged again and stays covered |
 | Slice grid moved with the content | 3 `SliceGridTests` | No anchor gives the lab build's grid exactly; 300 random areas and anchors: every slice inside the area, the grid reaches both edges, steps of at most 384 (overlap at least 128), at most one slice more per axis; a scrolled view judges fewer tiles |
 | Covers follow scrolling | `MotionTests` | Vertical and horizontal scrolls are found; nothing moved, another page and a blank page give none; the match is exact to one byte; a cover moves with its picture in a plan handed out before judging and reaches ahead along the motion, with no smear left behind; a cover whose picture did not move with the page covers both places; nothing is handed out when nothing scrolled |
-| Faster order, never less judging | 4 `FastFirstTests`, `CoverFirstTests` | With or without the fast pass: the same verdicts, judgements and tiles per model, also under a tight budget; what is left is told after the finder, and is empty once cached; a fast flag is told but the tie-breaker still decides (it can clear it); under Either it is told as a cover; pictures nearest the pointer come first and the rest are left as overload, never clear. A busy page is blurred first and shown when cleared; a picture judged in time is not blurred first; a fast flag is blurred before the full rule covers; every early plan keeps every cover already shown; no early plan while a display is covered whole; the window under the pointer is judged first, and with no pointer the order is front to back |
+| Faster order, never less judging | 4 `FastFirstTests`, `CoverFirstTests` | With or without the fast pass: the same verdicts, judgements and tiles per model, also under a tight budget; what is left is told after the finder, and once cached holds only what was not clearly clean; a fast flag is told but the tie-breaker still decides (it can clear it); under Either it is told as a cover; pictures nearest the pointer come first and the rest are left as overload, never clear. A busy page is blurred first and shown when cleared; a picture judged in time is not blurred first; a fast flag is blurred before the full rule covers; every early plan keeps every cover already shown; no early plan while a display is covered whole; the window under the pointer is judged first, and with no pointer the order is front to back |
 
 **Harness results** (lab build, null models, stand-in, an 800 x 500 point display at 2x, placed right of a 900-point-high primary):
 
@@ -207,6 +210,40 @@ Same bench, same machine, models, pages and settings. Results: `results/speed-af
 Still not measured: ScreenCaptureKit's capture latency and real display time (ST-031, test Mac, camera or capture device); energy and heat (ST-038, the Air); memory over a day with these caches (ST-039; the bounds are about 4 MB for verdicts and 32 finder results); how often a real flagged picture is flagged by the fastest model alone; scrolling inside part of a window, horizontal scrolling and zooming on real apps.
 
 Where the time still goes, and what is left (none of it built): on a full-window change the finder (about 185 ms) and exact-match hashing (about 40 ms) come before any blur, so a busy page cannot be blurred within 0.1 s; pictures scrolling into view wait for the next judged frame; `JUDGEMENT_BUDGET` (40 a second) against about 1,100 judgements for a busy Retina page from scratch, and the whole-window step at 0.5 s of unjudged entries, decide how long busy pages stay blurred or covered. Each is for ST-038 or a later design decision.
+
+### The clean-cache margin (19 November 2026)
+
+Found: `testAFlaggedPictureNeverInheritsACleanVerdict` failed about 1 run in 20 to 40, here and on CI. In the failing runs the flagged picture was judged afresh, and jitter put the fake models' scores just under the test's cut-off. The cache's rule held; the test was checking jitter luck. But it showed a real gap. A borderline picture that jitter once pushed under a cut-off was cached as clean, and it stayed clean for as long as its pixels did not change. Before the cache, each judgement drew fresh jitter.
+
+The margin rule (`VerdictCache.CLEAN_CACHE_MARGIN`, `Detector.judgeTask`):
+- **What is cached.** A clean outcome is cached only when every model's top score for the task is below 0.5 of its cover cut-off for the task's size band. With the sealed table, that is below 0.38 to 0.45 for Marqo and below 0.47 to 0.50 for NSFWJS.
+- **What is judged again.** Any other clean outcome is judged again each time its pixels come back, as before the cache. That includes a dispute the tie-breaker declined; the tie-breaker is asked again too.
+- **Covers.** An outcome that covers is still cached, since reusing it only covers.
+- **How it is decided.** The decision is made where the scores are. Only a `cacheable` flag leaves `judgeTask`, and the cache refuses any outcome without it.
+- **Nothing judges or covers less.** The rule only makes caching stricter.
+
+Why 0.5: it is a wide working margin, not a measured bound. How far jitter moves a real model's score has not been measured on this build. Raising it caches more and protects less.
+
+Cost (`--cases reappear`, real models, same machine and pages, runs before and after alternated; medians, worst in brackets):
+
+| Case | Before | After | Entries judged again |
+|---|---|---|---|
+| Reload of a judged busy page | 62, 61 ms (65) | **1.38, 1.47 s (2.32 s)** | 133 to 137 of about 635 entries (21%), 206 to 216 judgements; none before |
+| Scrolling back to places seen before | 62, 50 ms (63) | 49, 49 ms (101) | none, before or after |
+| Scrolling back to other places | 899, 535 ms (1,344) | 510, 541 ms (913) | the same 22 judgements before and after |
+| Window moved, same content | 1.22, 1.06 s (2.66 s) | **2.81, 2.70 s (3.20 s)** | 400 judgements, the per-call cap, with 13 to 17 entries left for the next call; 58 before |
+
+Results: `results/speed-clean-margin.json` (two runs each; the first "before" run was slower throughout, as the machine was busier).
+
+- **Where the cost comes from.** On the six busy pages of harmless photos, about one entry in five scored at least half a cut-off on some model, so it is judged again every time it comes back.
+- **Why scrolling back shows no cost.** The bench's scrolling page is synthetic texture, which the models score low. On real photo pages, scrolling back would cost about what a reload costs.
+- **What is shown meanwhile.** Once judging them would pass `COVER_GOAL`, picture regions that are to be judged again are blurred as soon as the caches have been read. They are shown when cleared, which on a reloaded busy page takes about 1.4 s. Entries past the call cap stay blurred or covered.
+- **The budget.** This bench has no budget limit. Under `JUDGEMENT_BUDGET` the extra judgements come out of the same 40 a second.
+- **If the cost is too high** (nothing built): raise the margin, which caches more and protects less, or first measure how far jitter moves real scores and set the margin from that.
+
+Found, not changed:
+- **Containment cut-off.** The rule guards the cover cut-off only. A small picture (under 64 detail pixels, or under 128 in a hot window) whose score sat just under the containment `clean` cut-off is still cached as clean, so it is not blurred again. This matters most for Marqo at 16-31 pixels, where `clean` (0.28) is below the margin (0.45).
+- **Copies in one frame.** Two entries with the same pixels in one call still share one judgement, as before, even when it was borderline. It is not reused in later frames.
 
 ## False covers through the whole pipeline: ST-040 re-run (18 November 2026)
 
@@ -294,7 +331,7 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **Load.** A busy screen judged from scratch exceeds the budget. Its new pictures are blurred first; unjudged 512-pixel slices are covered; after 0.5 s of unjudged entries the window is covered whole. A busy Retina page stays blurred or covered for 13 to 21 s at `JUDGEMENT_BUDGET` (6 to 8 s with no budget limit). A third display and beyond are covered whole.
 - **Choices made where the register is silent or open.** Each is a working value tied to its test:
   - canvas window level: screen-saver level (ST-032);
-  - cover colour: one calm neutral per appearance, in the theme type `CoverTheme` (Lumen, tentative);
+  - cover colour: one calm neutral per appearance, in the theme type `CoverTheme` (the desert study);
   - the control band a whole-window cover leaves: 92 points (`WayOut.controlBand`, ST-032);
   - the room a cover needs around the way-out line: 24 points;
   - blur: at most 6 colour cells;

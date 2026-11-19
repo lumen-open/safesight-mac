@@ -2,6 +2,7 @@
 // Faults (chapter 05, sections 5.9 and 5.11; CONTRIBUTING rule 5). Every fault leads to more covering:
 // a display that cannot be judged gets a whole-display cover. No fault ever locks the screen, logs
 // anyone out, changes a setting or tells anyone. There is no code path here for any of those.
+import SafeSightMacCore
 
 /// Why a display cannot be judged right now. A closed list, so the repair card can say it plainly.
 public enum FaultCause: String, Sendable, CaseIterable, Codable {
@@ -29,9 +30,9 @@ public enum FaultCause: String, Sendable, CaseIterable, Codable {
     /// The plain words for the repair card (chapter 09 owns the final wording).
     public var plainWords: String {
         switch self {
-        case .noPermissionOrNoContent: return "Screen Recording is off for SafeSight Mac, so this display cannot be checked."
+        case .noPermissionOrNoContent: return "Screen Recording is off for \(AppText.productName), so this display cannot be checked."
         case .noStream: return "This display cannot be checked, so it stays covered."
-        case .streamStopped: return "Checking this display stopped. SafeSight Mac is trying again."
+        case .streamStopped: return "Checking this display stopped. \(AppText.productName) is trying again."
         case .frameNotJudgeable: return "This display is not sending pictures that can be checked."
         case .badFrameMetadata: return "This display sent a picture that could not be placed on screen."
         case .detectorUnavailable: return "The picture checker could not start. Its model files are missing or changed."

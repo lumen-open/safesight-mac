@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // The way-out line as it is drawn: AppText.wayOutLine in the system font, with each shortcut drawn as small
-// rounded key caps, on a soft card shaped like a pill. One drawing serves the covers (as a layer's image)
-// and the repair card (without the pill). Drawn with Core Text into a bitmap: no view, no control, nothing
-// that can take a click or the keyboard.
+// plain key caps (neutral, near-black or near-white letters), on a pill in the card colour with a hairline in
+// the line colour. No ornament: no serif, no gold. One drawing serves the covers (as a layer's image) and the
+// repair card (without the pill). Drawn with Core Text into a bitmap: no view, no control, nothing that can
+// take a click or the keyboard.
 import AppKit
 import CoreGraphics
 import CoreText
@@ -108,14 +109,14 @@ public enum WayOutArt {
                 for (i, (l, ink, capW)) in caps.enumerated() {
                     if i > 0 { cx += m.keyGap }
                     let cap = CGRect(x: cx, y: mid - m.capHeight / 2 + 0.5, width: capW, height: m.capHeight)
-                    // A key: a slightly deeper edge below, the face on top, a hairline rim.
-                    ctx.setFillColor(t.keyEdge.cg())
+                    // A plain key: a slightly deeper edge below, the face on top, a hairline rim.
+                    ctx.setFillColor(t.keyBase.cg())
                     ctx.addPath(CGPath(roundedRect: cap.offsetBy(dx: 0, dy: -1), cornerWidth: m.capRadius, cornerHeight: m.capRadius, transform: nil))
                     ctx.fillPath()
                     ctx.setFillColor(t.keyFill.cg())
                     ctx.addPath(CGPath(roundedRect: cap, cornerWidth: m.capRadius, cornerHeight: m.capRadius, transform: nil))
                     ctx.fillPath()
-                    ctx.setStrokeColor(t.keyEdge.cg(0.7))
+                    ctx.setStrokeColor(t.keyEdge.cg())
                     ctx.setLineWidth(px)
                     ctx.addPath(CGPath(roundedRect: cap.insetBy(dx: px / 2, dy: px / 2), cornerWidth: m.capRadius, cornerHeight: m.capRadius, transform: nil))
                     ctx.strokePath()

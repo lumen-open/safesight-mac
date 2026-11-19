@@ -10,7 +10,8 @@
 //   safesightmac-harness falsecovers --models DIR --list FILE [--root DIR] [--rule R] [--jsonl FILE] [--json FILE]
 //            false covers on harmless screens through the whole pipeline; see FalseCovers.swift
 //   safesightmac-harness wayout --out DIR [--appearance light|dark]
-//            (lab build only) synthetic desktops whose covers leave the way out in sight; see WayOutScenes.swift
+//            (lab build only) synthetic desktops whose covers leave the way out in sight, and the "How it works"
+//            window drawn from its own views; see WayOutScenes.swift
 //   safesightmac-harness displays --out DIR [--appearance light|dark]
 //            (lab build only) a display being attached, step by step, through the display rule; see DisplayScenes.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H

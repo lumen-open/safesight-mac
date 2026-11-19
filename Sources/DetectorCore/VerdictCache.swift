@@ -11,6 +11,11 @@
 // pixel match is an exact match of the preprocessed input. No perceptual or approximate hash is ever used to
 // reuse a verdict: a near-collision would let an explicit picture inherit a clean verdict. Collisions of
 // SHA-256 are not known to be findable. Anything approximate may only ever add covering, never clear.
+//
+// MARGIN RULE. Jitter is drawn fresh for every judgement, so a picture that scores near a cut-off can be
+// judged clean one time and flagged the next. A clean outcome is therefore kept only when it was clearly
+// clean (`CLEAN_CACHE_MARGIN`); a borderline-clean one is judged again, with new jitter, every time its
+// pixels come back, as before the cache. An outcome that covers is always kept: reusing it only ever covers.
 import CryptoKit
 import Foundation
 import Preprocess
@@ -21,6 +26,10 @@ struct TileOutcome: Sendable, Equatable {
     var disputed = false
     /// The referee was asked (only for disputes) and confirmed.
     var refereeRan = false, refereeFlag = false
+    /// Whether the verdict cache may keep this outcome, decided where it was judged (`Detector.judgeTask`):
+    /// it covers, or every model's score was below `CLEAN_CACHE_MARGIN` of its cover cut-off. A flag, not a
+    /// score. False unless set, so an outcome nobody marked is judged again.
+    var cacheable = false
     /// The covering decision: both families agree, or a dispute the referee confirmed (or the lab stand-in).
     var confirmed: Bool { forced || (flagA && flagB) || (disputed && refereeFlag) }
 }
@@ -88,6 +97,19 @@ struct Generations<Value> {
 }
 
 final class VerdictCache {
+    /// `CLEAN_CACHE_MARGIN`: a clean outcome is cached only when every model's highest score for the task was
+    /// below this share of that model's cover cut-off for the task's size band (strictly below; a score that
+    /// is not a number never counts as below). With the sealed table that means below 0.38 to 0.45 for Marqo
+    /// and 0.47 to 0.50 for NSFWJS.
+    ///
+    /// Why: a cached clean verdict holds for as long as the pixels stay the same, so a picture that jitter
+    /// once pushed just under a cut-off would never be judged again. Half the cut-off is a wide working
+    /// margin, not a measured bound on how far jitter moves a score (that is not measured on this build):
+    /// any picture that scores at least half a cut-off is judged afresh each time it comes back. Raising it
+    /// caches more and protects less. Its cost (docs/STEP-1-STATUS.md): on the lab's busy pages of harmless
+    /// photos, about one entry in five is judged again on every reload.
+    static let CLEAN_CACHE_MARGIN: Float = 0.5
+
     /// About 64 bytes an entry with the dictionaries' spare room: 65,536 entries stay under about 4 MB.
     static let bytesPerEntry = 64
     static let defaultCapacity = 65_536
@@ -114,5 +136,9 @@ final class VerdictCache {
 
     func removeAll() { store.removeAll() }
 
-    func put(_ k: ExactKey, _ v: TileOutcome) { store.put(k, v) }
+    /// Keeps `v` only if it is marked cacheable (the margin rule); anything else is judged again next time.
+    func put(_ k: ExactKey, _ v: TileOutcome) {
+        guard v.cacheable else { return }
+        store.put(k, v)
+    }
 }

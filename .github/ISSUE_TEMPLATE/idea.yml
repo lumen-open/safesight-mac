@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+name: An idea or improvement
+description: Suggest something that would make SafeSight Mac better.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. Please keep in mind what the project is for: covering explicit sexual content, and nothing else, with a lock that stays on until the wait you chose has passed. Ideas that would make it easier to get around the lock can't be accepted.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What's the idea?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Who would it help, and how?

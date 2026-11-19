@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: "SafeSight Mac")
+        statusItem.button?.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: AppText.productName)
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
@@ -155,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .paused: symbol = "pause.rectangle"
         case .needsScreenRecording, .detectorUnavailable, .displayCovered: symbol = "exclamationmark.triangle"
         }
-        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "SafeSight Mac: " + status.title)
+        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: AppText.productName + ": " + status.title)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {

@@ -5,8 +5,12 @@
 // "nobody can ever unlock it").
 
 public enum AppText {
+    /// The product's name. Every piece of the app's own text that names the product reads it from here, so a
+    /// rebrand changes this line, the README's promise (a test compares them) and `packaging/Info.plist`.
+    public static let productName = "SafeSight Mac"
+
     /// The only promise the project may make (README, blueprint chapter 01).
-    public static let honestPromise = "SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup."
+    public static let honestPromise = "\(productName) is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. If you choose to add a friend, they can shorten that wait, but never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup."
 
     // MARK: Practice state (SD-223)
 
@@ -15,14 +19,14 @@ public enum AppText {
     public static let practiceDetail = "This is the cover-only build. It has no lock: you can pause it or quit it at any time, and it protects nothing against you. The lock comes in a later version."
     /// When a keeper launch file is present, or the check could not be completed.
     public static let notPracticeTitle = "Not in practice: pause is off"
-    public static let keeperFoundDetail = "A SafeSight Mac keeper is installed on this Mac. This cover-only build has no lock and cannot work with a keeper, so pausing is turned off. Covering carries on as usual."
-    public static let practiceUnknownDetail = "This build could not check whether a SafeSight Mac keeper is installed, so pausing is turned off. Covering carries on as usual."
+    public static let keeperFoundDetail = "A \(productName) keeper is installed on this Mac. This cover-only build has no lock and cannot work with a keeper, so pausing is turned off. Covering carries on as usual."
+    public static let practiceUnknownDetail = "This build could not check whether a \(productName) keeper is installed, so pausing is turned off. Covering carries on as usual."
 
     // MARK: Status
 
     public static let statusOn = "Covering: on"
     public static let statusNeedsPermission = "Needs Screen Recording"
-    public static let needsPermissionDetail = "SafeSight Mac needs the Screen Recording permission to check what your displays show. Until you grant it, nothing is checked or covered."
+    public static let needsPermissionDetail = "\(productName) needs the Screen Recording permission to check what your displays show. Until you grant it, nothing is checked or covered."
     public static let grantPermission = "Open Screen Recording settings…"
     public static let statusPaused = "Paused: nothing is checked or covered"
     public static let statusStarting = "Starting…"
@@ -48,11 +52,13 @@ public enum AppText {
     public static let resume = "Resume covering"
 
     public static let howItWorks = "How it works…"
-    public static let quit = "Quit SafeSight Mac"
+    public static let quit = "Quit \(productName)"
 
+    /// The "How it works" window's title.
+    public static let howItWorksTitle = "How \(productName) works"
     /// The "How it works" screen.
     public static let howItWorksBody: [String] = [
-        "SafeSight Mac checks what your displays show, on this Mac only. When it finds an explicit image or video, it puts a plain cover over it. Everything else keeps working: your windows, calls, music and code.",
+        "\(productName) checks what your displays show, on this Mac only. When it finds an explicit image or video, it puts a plain cover over it. Everything else keeps working: your windows, calls, music and code.",
         "It shows every window first and checks it just after. A picture can be seen for a moment before its cover. How long is not measured; the target is under half a second.",
         "Small pictures it is unsure about are blurred instead of covered. When it cannot check a display at all, it covers the whole display and tells you why.",
         "It misses some pictures and wrongly covers others. How many it misses has not been measured, so no accuracy figure is given.",
@@ -85,7 +91,7 @@ public enum AppText {
 
     // MARK: The repair card
 
-    public static let repairHeading = "SafeSight Mac is covering a display."
+    public static let repairHeading = "\(productName) is covering a display."
     public static let repairDetail = "While it is covered you cannot see other apps on it. Nothing is locked, and nobody is told."
     public static let repairTryAgain = "Try again"
     public static let repairPause = "Pause"
@@ -99,7 +105,7 @@ public enum AppText {
         [honestPromise, practiceTitle, practiceDetail, notPracticeTitle, keeperFoundDetail, practiceUnknownDetail, statusOn,
          statusNeedsPermission, needsPermissionDetail, grantPermission, statusPaused, statusStarting, statusFault, statusModelsMissing,
          modeHeader, modeBalanced, modeEither, modeSentence, strictCoverMode, pauseFor15, pauseFor60, resume, howItWorks, quit,
-         wayOutLine, repairHeading, repairDetail, repairTryAgain, repairPause, repairQuit]
+         howItWorksTitle, wayOutLine, repairHeading, repairDetail, repairTryAgain, repairPause, repairQuit]
             + howItWorksBody
     }
 }

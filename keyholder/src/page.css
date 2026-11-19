@@ -1,0 +1,207 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Calm, phone-first, one column. System fonts only; nothing is loaded from anywhere.
+   Desert study: lime plaster, lamp-black and malachite, gold leaf only as a hairline.
+   The card is an arched niche; headings use the system serif. See DESIGN-desert.md on the website branch. */
+:root {
+  --bg: #eff1ec;
+  --bg-glow: #f7f7f1;
+  --card: #fbfbf8;
+  --card-edge: rgba(21,28,27,0.08);
+  --shadow: 0 1px 2px rgba(21,28,27,0.05), 0 12px 32px -12px rgba(21,28,27,0.16);
+  --text: #151c1b;
+  --muted: #45504d;
+  --line: #d8dcd3;
+  --soft: #eceee8;
+  --accent: #0b7363;
+  --accent-press: #085e51;
+  --accent-text: #ffffff;
+  --accent-soft: #e0ede7;
+  --accent-ink: #06594d;
+  --tick: #06594d;
+  --gold-line: rgba(166,131,56,0.42);
+  --gold: #a68338;
+  --knot: #87908b;
+  --error: #a3261b;
+  --error-soft: #f9e7e3;
+  --radius: 22px;
+  --arch: 56px;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1222;
+    --bg-glow: #151d34;
+    --card: #131a2d;
+    --card-edge: rgba(190,205,255,0.07);
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 16px 40px -16px rgba(0,0,0,0.7);
+    --text: #eceee6;
+    --muted: #a9b1bf;
+    --line: #252e46;
+    --soft: #182035;
+    --accent: #5cd3bc;
+    --accent-press: #49c2aa;
+    --accent-text: #071d19;
+    --accent-soft: #13303a;
+    --accent-ink: #6fd9c4;
+    --tick: #6fd9c4;
+    --gold-line: rgba(201,169,97,0.30);
+    --gold: #c9a961;
+    --knot: #6d7791;
+    --error: #ff9b8c;
+    --error-soft: #3a1d22;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: radial-gradient(120% 60% at 50% 0%, var(--bg-glow), var(--bg) 70%) fixed, var(--bg);
+  color: var(--text);
+  font: 17px/1.55 -apple-system, "SF Pro Text", "SF Pro", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+main {
+  max-width: 30rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; margin: 4px 4px 18px; color: var(--muted); font-size: 15px; }
+.brand-mark {
+  display: inline-grid; place-items: center;
+  width: 30px; height: 34px; border-radius: 15px 15px 8px 8px; padding-top: 3px;
+  background: var(--accent-soft); color: var(--accent-ink);
+}
+.brand-mark svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.brand-name { font-weight: 600; color: var(--text); letter-spacing: -0.005em; }
+.brand-role { font-weight: 500; color: var(--muted); margin-left: 4px; }
+
+/* The card is a niche: an arched top, and a gold hairline just inside its edge */
+.card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 50% 50% var(--radius) var(--radius) / var(--arch) var(--arch) var(--radius) var(--radius);
+  box-shadow: var(--shadow);
+  padding: calc(var(--arch) * 0.5 + 24px) 22px 24px;
+  animation: enter 280ms var(--ease) both;
+}
+.card::before {
+  content: ""; position: absolute; inset: 6px; pointer-events: none;
+  border: 1px solid var(--gold-line);
+  border-radius: 50% 50% 16px 16px / calc(var(--arch) - 6px) calc(var(--arch) - 6px) 16px 16px;
+}
+@keyframes enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.995); }
+  to { opacity: 1; transform: none; }
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent-ink);
+}
+h1 { font-family: var(--serif); font-size: 29px; line-height: 1.18; letter-spacing: -0.008em; font-weight: 600; margin: 0 0 12px; }
+h1:focus { outline: none; }
+p { margin: 0 0 14px; }
+.lead { color: var(--muted); font-size: 17.5px; }
+.lead strong { color: var(--text); }
+.quiet, .hint { color: var(--muted); }
+.ask { font-family: var(--serif); font-size: 21px; line-height: 1.4; font-weight: 500; letter-spacing: -0.004em; margin-bottom: 16px; }
+
+.facts { list-style: none; margin: 20px 0 6px; padding: 0; }
+.facts li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); }
+.facts li:first-child { border-top: 0; padding-top: 4px; }
+.tick {
+  flex: none; display: inline-grid; place-items: center;
+  width: 24px; height: 24px; margin-top: 1px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--tick);
+}
+.tick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+.panel, .next { background: var(--soft); border-radius: 16px; padding: 16px 16px 2px; margin: 0 0 16px; }
+
+.field { margin: 22px 0 4px; }
+label { display: block; font-weight: 600; font-size: 15px; margin: 0 0 8px; }
+.optional { font-weight: 500; color: var(--muted); margin-left: 6px; }
+.hint { font-size: 14px; margin: 8px 2px 0; }
+input, textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--soft);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 13px 14px;
+  transition: border-color 160ms var(--ease), background-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
+input:focus, textarea:focus { outline: none; border-color: var(--accent); background: var(--card); box-shadow: 0 0 0 4px var(--accent-soft); }
+textarea.code {
+  font: 13.5px/1.5 ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+  resize: none;
+}
+
+.actions { display: flex; flex-direction: column; gap: 10px; margin: 22px 0 2px; }
+button {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; min-height: 52px; padding: 14px 20px;
+  font: inherit; font-weight: 600; letter-spacing: -0.005em;
+  border-radius: 12px; border: 1px solid transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms var(--ease), background-color 160ms var(--ease), border-color 160ms var(--ease), opacity 160ms var(--ease);
+}
+button:active { transform: scale(0.985); }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+button.primary { background: var(--accent); color: var(--accent-text); box-shadow: 0 6px 16px -8px var(--accent); }
+button.primary:active { background: var(--accent-press); }
+button.secondary { background: transparent; color: var(--text); border-color: var(--line); }
+button.ghost { width: auto; min-height: 40px; padding: 8px 14px; font-size: 15px; background: var(--card); color: var(--accent-ink); border-color: var(--line); }
+button:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+.qr {
+  margin: 20px auto 16px; max-width: 18.5rem;
+  padding: 10px; background: #ffffff; border-radius: 18px;
+  border: 1px solid var(--line);
+}
+.qr svg { display: block; width: 100%; height: auto; border-radius: 10px; }
+.code-box { position: relative; }
+.code-box textarea { padding-bottom: 54px; }
+.code-box button { position: absolute; right: 8px; bottom: 8px; }
+
+.status { color: var(--muted); font-size: 14px; min-height: 1.5em; margin: 8px 2px 12px; }
+.error {
+  color: var(--error); background: var(--error-soft);
+  border-radius: 14px; padding: 12px 14px; margin: 16px 0 0;
+  font-size: 15px; font-weight: 500;
+}
+
+.foot { margin: 18px 4px 0; text-align: center; font-size: 13px; color: var(--muted); }
+/* A two-strand braid from Coptic textile borders: the page's one ornament */
+.knot { display: block; width: 70px; height: 13.3px; margin: 4px auto 10px; overflow: visible; }
+.k-s { fill: none; stroke: var(--knot); stroke-width: 1.1; stroke-linecap: round; }
+.k-case { fill: none; stroke: var(--bg); stroke-width: 3; }
+.k-dot { fill: var(--gold); }
+
+@media (min-width: 560px) {
+  :root { --arch: 84px; }
+  .card { padding: calc(var(--arch) * 0.5 + 26px) 34px 30px; }
+  h1 { font-size: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card { animation: none; }
+  * { transition: none !important; }
+}
+[hidden] { display: none !important; }

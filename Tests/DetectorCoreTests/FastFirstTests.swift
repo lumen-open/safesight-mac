@@ -53,7 +53,7 @@ final class FastFirstTests: XCTestCase {
         XCTAssertEqual(classes(v3), classes(v4))
     }
 
-    func testWhatIsLeftIsToldAfterTheFinderAndEmptyOnceCached() {
+    func testWhatIsLeftIsToldAfterTheFinderAndOnlyTheUncachedOnceCached() {
         let (img, red, both, clean) = page()
         let (d, _, _, _) = refereed()
         var pending: [PixelRect] = [], estimate = 0.0
@@ -66,7 +66,10 @@ final class FastFirstTests: XCTestCase {
         _ = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)) { e in
             if case let .found(p, c, _) = e { again = p; cachedCovers = c }
         }
-        XCTAssertEqual(again, [], "everything comes from the cache")
+        // Everything comes from the cache except the red picture: a dispute the tie-breaker declined is not
+        // clearly clean, so it is judged again (the margin rule).
+        XCTAssertEqual(again?.isEmpty, false)
+        XCTAssertTrue(again?.allSatisfy { $0.intersects(red) } ?? false, "only the declined dispute is left: \(again ?? [])")
         XCTAssertTrue(cachedCovers.contains { $0.intersects(both) }, "cached covers are told at once")
     }
 
