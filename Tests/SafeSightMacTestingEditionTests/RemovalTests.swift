@@ -110,6 +110,29 @@ final class FakeSettings: SettingsDomains {
         #expect(settings.removed == [id])
     }
 
+    @Test func theSystemsFoldersAreClearedOnlyWhenTheyAreTheAppsOwn() throws {
+        let p = try makeContainer()
+        defer { try? fm.removeItem(at: p.root) }
+        // As the sandbox gives them: folders named after the bundle identifier. And a shared one, as outside it.
+        let ownCache = p.root.appendingPathComponent("var/folders/xy/C/\(id)")
+        let shared = p.root.appendingPathComponent("var/folders/xy/T")
+        try file(ownCache.appendingPathComponent("com.apple.metal/shader.bin"))
+        try file(shared.appendingPathComponent("someone-elses.tmp"))
+        try fm.createSymbolicLink(at: ownCache.appendingPathComponent("link"), withDestinationURL: p.outside.appendingPathComponent("keep.txt"))
+        let report = Removal.run(bundleID: id, home: p.home.path, settings: FakeSettings(), system: [ownCache.path + "/", shared.path])
+        #expect(!exists(ownCache.appendingPathComponent("com.apple.metal")))
+        #expect(exists(ownCache), "the folder itself stays")
+        #expect(exists(shared.appendingPathComponent("someone-elses.tmp")), "a shared folder is never emptied")
+        #expect(linkExists(ownCache.appendingPathComponent("link")) && exists(p.outside.appendingPathComponent("keep.txt")))
+        #expect(report.removed.contains("com.apple.metal"))
+    }
+
+    @Test func thisProcessesSystemFoldersAreShared() {
+        // A test run is not sandboxed: its folders are the shared ones (…/C/ and …/T/), so nothing in them is touched.
+        #expect(!Removal.systemFolders().isEmpty)
+        #expect(Removal.systemFolders().allSatisfy { URL(fileURLWithPath: $0).lastPathComponent.count == 1 })
+    }
+
     @Test func anotherAppsContainerIsNeverEmptied() throws {
         // A home that is a sandbox container, but not this app's: nothing in it is removed.
         let root = fm.temporaryDirectory.appendingPathComponent("safesightmac-removal-other-\(UUID().uuidString)")

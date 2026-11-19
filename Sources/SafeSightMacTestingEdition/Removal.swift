@@ -10,6 +10,9 @@
 // - the folders themselves stay (macOS made them, and makes them again at the next start);
 // - a symbolic link is never followed (a container holds links to the person's own folders): a link directly in
 //   a cleared folder is left alone, and one inside a removed folder goes as a link, never what it points to.
+// Outside the container, macOS gives a sandboxed app its own cache and temporary folders under /var/folders, named
+// after its bundle identifier (graphics and model caches can land there). Their contents are removed too, but only
+// when the folder's own name is the bundle identifier: outside the sandbox those folders are shared, and are left alone.
 import Darwin
 import Foundation
 
@@ -34,10 +37,20 @@ public enum Removal {
         public var onlySettings = false
     }
 
-    /// Removes the settings of `bundleID` and the contents of `folders` inside `home`.
+    /// The system's cache and temporary folders for this process (`DARWIN_USER_CACHE_DIR`, `DARWIN_USER_TEMP_DIR`).
+    public static func systemFolders() -> [String] {
+        [_CS_DARWIN_USER_CACHE_DIR, _CS_DARWIN_USER_TEMP_DIR].compactMap { name in
+            var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+            guard confstr(name, &buffer, buffer.count) > 0 else { return nil }
+            return String(cString: buffer)
+        }
+    }
+
+    /// Removes the settings of `bundleID`, the contents of `folders` inside `home`, and the contents of those
+    /// `system` folders that are this app's own.
     @discardableResult
     public static func run(bundleID: String, home: String = NSHomeDirectory(),
-                           settings: SettingsDomains = UserDefaults.standard) -> Report {
+                           settings: SettingsDomains = UserDefaults.standard, system: [String] = systemFolders()) -> Report {
         var report = Report()
         settings.removePersistentDomain(forName: bundleID)
         (settings as? UserDefaults)?.synchronize()
@@ -55,6 +68,12 @@ public enum Removal {
             let dir = root.appendingPathComponent(folder, isDirectory: true)
             guard isRealFolder(dir.path), let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { continue }
             for name in names.sorted() { remove(folder + "/" + name, in: root, into: &report) }
+        }
+        for folder in system {
+            let dir = URL(fileURLWithPath: folder, isDirectory: true).standardizedFileURL
+            guard dir.lastPathComponent == bundleID, isRealFolder(dir.path),
+                  let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { continue }
+            for name in names.sorted() { remove(name, in: dir, into: &report) }
         }
         return report
     }
