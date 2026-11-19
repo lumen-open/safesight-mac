@@ -4,7 +4,7 @@
 
 SafeSight Mac covers explicit images and video as soon as they appear on your screen: in any app, in any browser, on every display. Everything else is left alone. Your work, your calls, your music and your code carry on as normal.
 
-What makes it different is that it stays on. There's no off switch for a bad night, no password to beg for, and nobody who can unlock it early, not even us. When you set it up, you choose how long getting out should take, anywhere from a week to a year, and you can always make it longer. If you ever ask to leave, the countdown starts; change your mind, press **Stay**, and it's as if you never asked. The only shortcut is a friend you choose, who can bring the wait down to a day but can never stop you leaving.
+What makes it different is that it stays on. There's no off switch for a bad night, no password to beg for, and nobody who can unlock it early, not even us. When you set it up, you choose how long getting out should take, anywhere from a week to a year, and you can always make it longer. If you ever ask to leave, the countdown starts; change your mind, press **Stay**, and it's as if you never asked. The only shortcut is an optional friend you choose to add, who can bring the wait down to a day but can never stop you leaving.
 
 **Going all in?** We're working on a Hardcore lock, where even wiping your Mac won't get you out early. The only way around it is Apple's own proof-of-purchase check, which takes weeks.
 
@@ -31,7 +31,7 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 | Find it on a "safe" site: social media, image search, a chat app | Blocklists can't see it | Covered wherever it shows up |
 | Use an app instead of a browser | Usually not filtered | Covered in every app |
 | Delete the extension or quit the app | Done in seconds | You're not an admin any more, and leaving takes the wait you chose |
-| Ask whoever holds the password | One weak moment, one text | Nobody holds a password. Only the friend you chose can shorten your wait, and only to a day. Not even we can |
+| Ask whoever holds the password | One weak moment, one text | Nobody holds a password. Only a friend you chose to add, if you added one, can shorten your wait, and only to a day. Not even we can |
 | Change your Mac's clock | Fools some timers | The wait is checked against a public time signal |
 | Wipe the Mac | Works | Works here too. That's an evening of work, not a click |
 
@@ -56,7 +56,7 @@ This is an early preview, and there's no download yet. The screen cover is built
 
 ## Our promise
 
-> SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
+> SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. If you choose to add a friend, they can shorten that wait, but never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
 
 ## Found a weakness?
 
