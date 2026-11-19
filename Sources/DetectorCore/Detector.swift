@@ -124,6 +124,8 @@ public final class Detector {
         var key: ExactKey
         var outcome: TileOutcome?
         var judged = false
+        /// The outcome came from the verdict cache in this call.
+        var fromCache = false
     }
 
     /// Splits a rectangle into overlapping pieces whose aspect ratio is at most 2:1 (spec section 4).
@@ -225,15 +227,26 @@ public final class Detector {
             tasks.append(Task(rect: s, pieces: [s], pass: .slice, gridMember: false, key: VerdictCache.key(frame, s, pass: "slice", version: v)))
         }
 
+        // Where a blur can apply to a picture region in this call: a small picture in a covered-start context
+        // or on an untrusted display, or a picture under `hotBelow` in a hot window.
+        let smallContain = ctx.startsCovered || ctx.display != .trusted
+        func blurCanApply(_ t: Task) -> Bool {
+            t.pass == .region && ((smallContain && t.rect.shortSide < config.containBelow) || (wasHot && t.rect.shortSide < config.hotBelow))
+        }
+
         // Cache, then choose what to judge within the budget: in task order, every uncached task whose cost
         // still fits (as the lab build did, judging as it went). A task with the same pixels as one chosen
-        // earlier in this call takes that task's outcome, as the cache would have given it.
+        // earlier in this call takes that task's outcome, as the cache would have given it. Where a blur can
+        // apply, a cached clean outcome is used only if it was settled for the blur too (the margin rule,
+        // `TileOutcome.settledForBlur`); otherwise the picture is judged again, with fresh jitter.
         var budget = min(config.maxJudgementsPerCall, max(0, callerBudget ?? config.maxJudgementsPerCall))
         var judgements = 0
         var chosen: [Int] = [], sameAs: [Int: Int] = [:], firstWithKey: [ExactKey: Int] = [:]
         var pendingCost = 0
         for i in tasks.indices {
-            if let o = cache.get(tasks[i].key) { tasks[i].outcome = o; tasks[i].judged = true; timings.cacheHits += 1; continue }
+            if let o = cache.get(tasks[i].key), o.settledForBlur || !blurCanApply(tasks[i]) {
+                tasks[i].outcome = o; tasks[i].judged = true; tasks[i].fromCache = true; timings.cacheHits += 1; continue
+            }
             timings.cacheMisses += 1
             if let j = firstWithKey[tasks[i].key] { sameAs[i] = j; continue }
             let cost = tasks[i].pieces.count * (models.models.count + (tasks[i].rect.shortSide < config.containBelow ? models.students.count : 0))
@@ -291,7 +304,6 @@ public final class Detector {
 
         var out: [RegionVerdict] = []
         var coverWindow = false, strike = false, overloaded = 0
-        let smallContain = ctx.startsCovered || ctx.display != .trusted
         for t in tasks {
             guard t.judged, let o = t.outcome else {
                 overloaded += 1
@@ -328,7 +340,10 @@ public final class Detector {
             } else if o.strikeBoth && t.rect.shortSide >= config.strikeMinSide && !o.forced {
                 strike = true
             }
-            if display == .clear && t.pass == .region && !o.clean {
+            // A cached clean outcome not settled for a blur counts as not clean wherever a blur applies. It can
+            // reach here only when the window turned hot in this call; it is blurred until judged again.
+            let clean = o.clean && (o.settledForBlur || !t.fromCache)
+            if display == .clear && t.pass == .region && !clean {
                 if t.rect.shortSide < config.containBelow && smallContain { display = .contain; reason = .containedSmall }
                 else if (wasHot || becameHot) && t.rect.shortSide < config.hotBelow { display = .contain; reason = .hotContext }
             }
@@ -453,17 +468,18 @@ public final class Detector {
         if let s = standIn, t.pieces.contains(where: { s.detects(frame, $0) }) { o.forced = true }
         #endif
         var strikeA = false, strikeB = false
-        // Clearly clean: every model's top score below the margin's share of its lowest action cut-off for this
-        // band. A picture region this small can be blurred (in a hot window, now or later, or a covered-start
-        // context) when a score passes the containment cut-off, so that cut-off acts on it too.
-        var clearlyClean = true
+        // Clearly clean: every model's top score below half its cover cut-off for this band. Settled for a blur
+        // too: below half its lowest action cut-off. A picture region this small can be blurred (in a hot window
+        // or a covered-start context) when a score passes the containment cut-off, so that cut-off acts on it.
+        var clearlyClean = true, settledForBlur = true
         let containable = t.pass == .region && t.rect.shortSide < max(config.containBelow, config.hotBelow)
         let small = t.rect.shortSide < config.containBelow
         let judges = models.models + (small ? models.students : [])
         for m in judges {
             let cut = table.cutoffs(model: m.id, band: band)
             guard let top = precomputed[m.id] ?? topScore(frame, t, m) else { return nil }
-            if !(top < VerdictCache.cleanLevel(cut, containable: containable)) { clearlyClean = false }
+            if !(top < VerdictCache.cleanLevel(cut, containable: false)) { clearlyClean = false }
+            if !(top < VerdictCache.cleanLevel(cut, containable: containable)) { settledForBlur = false }
             let flag = top >= cut.cover
             if top > cut.clean { o.clean = false }
             if top >= cut.gridMember { o.gridMember = true }
@@ -497,8 +513,11 @@ public final class Detector {
             }
         }
         // Cache a cover (reusing it only ever covers) or a clearly clean outcome. A borderline-clean one, a
-        // dispute the tie-breaker declined among them, is judged again with fresh jitter when it comes back.
-        o.cacheable = covers(o) || clearlyClean
+        // dispute the tie-breaker declined among them, is judged again with fresh jitter when it comes back; one
+        // not settled for a blur is judged again wherever a blur can apply.
+        let c = covers(o)
+        o.cacheable = c || clearlyClean
+        o.settledForBlur = c || (clearlyClean && settledForBlur)
         return o
     }
 }

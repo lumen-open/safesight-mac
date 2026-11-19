@@ -14,9 +14,10 @@
 //
 // MARGIN RULE. Jitter is drawn fresh for every judgement, so a picture that scores near a cut-off can be
 // judged clean one time and flagged (or blurred) the next. A clean outcome is therefore kept only when it was
-// clearly clean (`CLEAN_CACHE_MARGIN`), below the lowest cut-off that acts on the entry (cover, or containment
-// where a blur can apply); a borderline-clean one is judged again, with new jitter, every time its pixels come
-// back, as before the cache. An outcome that covers is always kept: reusing it only ever covers.
+// clearly clean (`CLEAN_CACHE_MARGIN`) for the cut-off that acts on the entry where it is reused: the cover
+// cut-off everywhere, and the containment cut-off too where a blur can apply. A borderline-clean one is judged
+// again, with new jitter, every time its pixels come back there, as before the cache. An outcome that covers
+// is always kept: reusing it only ever covers.
 import CryptoKit
 import Foundation
 import Preprocess
@@ -28,9 +29,14 @@ struct TileOutcome: Sendable, Equatable {
     /// The referee was asked (only for disputes) and confirmed.
     var refereeRan = false, refereeFlag = false
     /// Whether the verdict cache may keep this outcome, decided where it was judged (`Detector.judgeTask`):
-    /// it covers, or every model's score was below `VerdictCache.cleanLevel` (the margin rule). A flag, not a
+    /// it covers, or every model's score was below half its cover cut-off (the margin rule). A flag, not a
     /// score. False unless set, so an outcome nobody marked is judged again.
     var cacheable = false
+    /// Whether a kept clean outcome may also be reused where a blur can apply (a small picture in a hot window
+    /// or a covered-start context): every model's score was also below half the entry's containment cut-off
+    /// (`VerdictCache.cleanLevel`). An outcome that covers is settled. False unless set: where a blur can
+    /// apply, an outcome nobody marked is judged again.
+    var settledForBlur = false
     /// The covering decision: both families agree, or a dispute the referee confirmed (or the lab stand-in).
     var confirmed: Bool { forced || (flagA && flagB) || (disputed && refereeFlag) }
 }
@@ -98,17 +104,21 @@ struct Generations<Value> {
 }
 
 final class VerdictCache {
-    /// `CLEAN_CACHE_MARGIN`: a clean outcome is cached only when every model's highest score for the task was
-    /// below this share of that model's lowest action cut-off for the task's size band (`actionCutoff`;
-    /// strictly below). An unusable score never gets here: it is a model failure (`Detector.usable`).
+    /// `CLEAN_CACHE_MARGIN`: a clean outcome is reused only when every model's highest score for the task was
+    /// below this share of that model's cut-off for the action that can apply where it is reused, for the
+    /// task's size band (strictly below). An unusable score never gets here: it is a model failure
+    /// (`Detector.usable`).
     ///
-    /// The lowest action cut-off is the cover cut-off, or the containment cut-off (`clean`) where that is lower
-    /// and a blur can apply: a picture region under `max(containBelow, hotBelow)` detail pixels (64 and 128),
-    /// which a hot window, now or later, blurs when any model scores it above `clean`. The cached outcome's
-    /// `clean` flag decides that blur each time it is reused, so the flag must be as settled as the flag to
-    /// cover. With the sealed table, for those small pictures: below 0.14 (16-31 px), 0.23 (32-63) and 0.23
-    /// (64-127) for Marqo, and 0.42, 0.46 and 0.43 for NSFWJS; for every other entry, below 0.38 to 0.45 for
-    /// Marqo and 0.47 to 0.50 for NSFWJS (half the cover cut-off).
+    /// - Everywhere, the cover cut-off: the outcome is kept (`cacheable`). With the sealed table, below 0.38 to
+    ///   0.45 for Marqo and 0.47 to 0.50 for NSFWJS.
+    /// - Where a blur can apply, also the containment cut-off (`clean`) where that is lower (`actionCutoff`): a
+    ///   picture region under `max(containBelow, hotBelow)` detail pixels (64 and 128) in a hot window, or under
+    ///   `containBelow` in a covered-start context, is blurred when any model scores it above `clean`, and the
+    ///   reused outcome's `clean` flag decides that blur (`settledForBlur`). With the sealed table, below 0.14
+    ///   (10-31 px), 0.23 (32-63) and 0.23 (64-127) for Marqo, and 0.42, 0.46 and 0.43 for NSFWJS. A kept outcome
+    ///   not settled for a blur is judged again there; in a call where the window turns hot, it is blurred.
+    ///   (Held to that cut-off everywhere, small harmless photos were judged again on every reload of a busy
+    ///   page, in windows where no blur could apply: 485 entries against 133, past the call cap.)
     ///
     /// Why: a cached clean verdict holds for as long as the pixels stay the same, so a picture that jitter
     /// once pushed just under a cut-off would never be judged again. Half the cut-off is a wide working
