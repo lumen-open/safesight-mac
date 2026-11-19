@@ -11,6 +11,7 @@ import DetectorCore
 import Foundation
 import LabStandIn
 import Preprocess
+import SafeSightMacCore
 import SafeSightMacCover
 import SafeSightMacWatcher
 
