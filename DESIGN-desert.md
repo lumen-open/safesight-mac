@@ -39,6 +39,9 @@ Keep the token names and swap the values. The accent stays in Lumen's teal famil
 | `--glow` | dawn light behind the top of the page | teal `.11` | **`rgba(196,160,82,.09)`** | teal `.09` | **`rgba(201,169,97,.05)`** |
 | `--stone` | the covered picture in the hero drawing | (accent-soft) | **`#e4e7e0`** | (accent-soft) | **`#182033`** |
 | `--knot` | interlace strand | (none) | **`#87908b`** | (none) | **`#6d7791`** |
+| `--ill` | outline in the home page's drawings | (none) | **`#7c8681`** | (none) | **`#75809b`** |
+| `--night` | the night niche (step 3): pale Egyptian blue / deep lapis | (none) | **`#dce5eb`** | (none) | **`#121c3a`** |
+| `--moon` | the moon in step 3 | (none) | **`#fbfbf8`** | (none) | **`#dcdfd4`** |
 | `--soft` (keyholder) | fields and panels | `#ecf2f2` | **`#eceee8`** | `#16231f` | **`#182035`** |
 | `--radius` | cards | `22px` | **`20px`** (keyholder stays `22px`) | | |
 
@@ -81,6 +84,7 @@ A round arch over a straight wall. On small marks the top is a full half-circle 
 - **Brand mark:** the 36×40 tile in the site header and footer, and the 30×34 tile on the keyholder page. The favicon has the same shape.
 - **Feature badges:** the icon tiles on the home page (46×50) and the terms page (42×46).
 - **Hero drawing:** the window stands in a niche whose sides fade out below.
+- **The walkthrough:** five small niches in "How it stays on", one per step, each holding a drawing. A row of five on wide screens (true half-circle tops), alternating left and right on tablets, and a wide shallow arch on phones. No border and no gold rule; the plain plaster ground, except step 3 (night) and step 5 (a dawn wash rising from the floor).
 - **The promise:** one centred panel, at most 52rem wide, with `--arch` set to `clamp(112px, 24vw, 236px)`.
 - **The keyholder card:** a gentle arch (`--arch` 56px on phones, 84px from 560px up).
 - **Never** on buttons, fields, tables, list rows, pills, the QR frame, covers or the way-out line. Never on more than one large panel per screen.
@@ -115,7 +119,18 @@ A short braid from Coptic textile borders: two strands with real over-and-under 
 Gold is a highlight, not a colour of the theme.
 
 - Allowed: the hairlines named above (the hero niche's inner arch, the halo ring, the pill ring, the promise rule, the keyholder card rule), the interlace's one dot, and a wash of 13% or less at the top of an arch or the page.
+- In the walkthrough, gold belongs to step 5 alone: the doorway's inner hairline, the low sun's outline and rays, and the dawn light in the doorway and on the floor, all as hairlines or washes of 13% or less.
 - **Never** gold text, gold buttons, gold icons, gold fills or gold focus rings.
+
+### 6. Drawings (home page)
+
+The owner asked for more pictures and a simpler walkthrough, so the home page now has a small set of line drawings. They are inline SVG, coloured only from the tokens, so both themes work and nothing is downloaded.
+
+- **Style:** warm, plain line drawings. Every outline is 1.5px (`vector-effect: non-scaling-stroke`, so the weight holds at any size) in `--ill`, with flat fills from the page's own colours: `--card` for paper, `--tile` and `--glyph` for content, `--stone` for covers, `--accent-soft` and malachite for the one thing that matters in each drawing. No shading, no gradients except the dawn, no texture, and no motion.
+- **Where:** the five walkthrough steps (a calendar and dial; a window with a covered picture and a covered video; a quiet desk at night with a locked screen; a countdown ring with a Stay button and a small friend badge; dawn through an arched doorway), the three parts in "How it works" (the screen cover, the lock, the menu-bar app), three overlapping windows beside "Hard to get around, by design", and "only this Mac" beside "What it can't do".
+- **Covers in drawings** follow the real covers: plain `--stone` with the faint seal (ring and dot), never a halo, gold or ornament.
+- **Shared parts** are `<symbol>`s: the seal (`s-seal`) and the existing icons (`i-friend`, `i-clock`, `i-refresh`).
+- **Never** people's faces or figures (the friend icon has heads and shoulders only), religious symbols, stars beside the moon, crossed window bars, or anything that looks like clip art. The moon is a plain crescent, alone.
 
 ## What never changes
 
@@ -125,7 +140,7 @@ Gold is a highlight, not a colour of the theme.
 - **Body text, buttons and fields** stay in the system sans with the same sizes, weights and hit areas.
 - **No new motion.** Reduced motion is respected as before.
 - **Nothing loads from another origin.** All shapes are CSS or inline SVG, so the keyholder page keeps its byte-for-byte hash rule and both CSPs stay as strict as before.
-- The words don't change. (The website's new "stays on" wording came from the owner, in a separate commit.)
+- The words don't change. (The website's new "stays on" wording came from the owner, in a separate commit.) The five-step walkthrough and the "How it works" picture came from the owner's request for more illustrations and a simpler walkthrough; "Why it exists" and the promise still match the README word for word.
 
 ## Sources for the research
 
