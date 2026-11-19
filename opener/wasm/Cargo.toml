@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+# The opener page's core (SD-066): the keeper crate's opener core, compiled to WebAssembly
+# for opener/index.html. Built by `node opener/build.mjs` with the toolchain pinned in
+# rust-toolchain.toml. It adds no crate: every one it uses is the keeper's, at the keeper's
+# versions (the build checks Cargo.lock against keeper/Cargo.lock).
+[package]
+name = "safesightmac-opener-wasm"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+safesightmac-keeper = { path = "../../keeper", features = ["opener"] }
+zeroize = "=1.8.1"
+
+# Small, and the same bytes on every build.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true
+incremental = false
+
+# The pairing code is very slow without optimisation, so tests are built optimised too.
+[profile.dev]
+opt-level = 2
+
+[profile.dev.package."*"]
+opt-level = 3
