@@ -447,7 +447,7 @@ public final class DisplayPipeline {
         func inChanged(_ r: PixelRect) -> Bool {
             reported.reduce([map.toGlobal(r)]) { $0.subtracting($1) }.allSatisfy { $0.width < 0.5 || $0.height < 0.5 }
         }
-        var lead: [Held] = [], copies: [Held] = []
+        var lead: [Held] = [], copies: [Held] = [], split: [Held] = []
         let ppx = map.pointsPerPixel
         for p in parts {
             guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
@@ -466,23 +466,32 @@ public final class DisplayPipeline {
             let ahead = frameInterval > 0 ? min(2, (max(runEstimateMs, 250) + 50) / 1000) / frameInterval : 1
             let reach = (dx: step.dx * max(1, CGFloat(ahead)), dy: step.dy * max(1, CGFloat(ahead)))
             for i in held.indices where held[i].target == p.target && !held[i].whole {
-                guard let px = map.toPixels(held[i].rel.offsetBy(dx: o.x, dy: o.y)), px.intersects(area) else { continue }
-                let movedRel = held[i].rel.offsetBy(dx: step.dx, dy: step.dy)
-                // It moves only when all of it, and all of where it goes, lie in the changed area and the pixels there
-                // match: a cover merged over content that moved only in part stays, with a copy where that part went.
-                let dest = PixelRect(x: px.x + t.dx, y: px.y + t.dy, w: px.w, h: px.h)
-                if px.intersection(area) == px, dest.intersection(area) == dest, inChanged(px), inChanged(dest),
+                let g = held[i].rel.offsetBy(dx: o.x, dy: o.y)
+                guard let px = map.toPixels(g), px.intersects(area) else { continue }
+                // Only the part of a cover inside what the frame reports as changed can have moved; the rest stays put.
+                guard let inside = reported.map({ $0.intersection(g) }).filter(\.hasArea).boundingBox,
+                      let insidePx = map.toPixels(inside) else { continue }
+                let dest = PixelRect(x: insidePx.x + t.dx, y: insidePx.y + t.dy, w: insidePx.w, h: insidePx.h)
+                let movedInside = inside.offsetBy(dx: step.dx - o.x, dy: step.dy - o.y)
+                if insidePx.intersection(area) == insidePx, dest.intersection(area) == dest, inChanged(insidePx), inChanged(dest),
                    MotionFinder.matches(old: prev, new: img, r: dest, t: t) {
-                    held[i].rel = movedRel
+                    // The part that moved goes with its content; each part that did not stays, as a cover of its own.
+                    for rest in [g].subtracting(inside) where rest.width >= 0.5 && rest.height >= 0.5 {
+                        var c = held[i]; c.rel = rest.offsetBy(dx: -o.x, dy: -o.y); c.clean = 0; split.append(c)
+                    }
+                    held[i].rel = movedInside
                 } else {
-                    var c = held[i]; c.rel = movedRel; copies.append(c)
+                    // The content did not simply move: its new place is covered too (at most one copy per cover per frame,
+                    // merged with what it overlaps, starting with no clean judgements).
+                    var c = held[i]; c.rel = movedInside; c.clean = 0; copies.append(c)
                 }
                 var l = held[i]
-                l.rel = movedRel.union(movedRel.offsetBy(dx: reach.dx, dy: reach.dy))
+                l.rel = movedInside.union(movedInside.offsetBy(dx: reach.dx, dy: reach.dy))
                 lead.append(l)
             }
         }
-        held += copies
+        held += split
+        for c in copies { merge(c) }
         return lead
     }
 

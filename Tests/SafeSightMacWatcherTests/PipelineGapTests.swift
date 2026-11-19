@@ -245,7 +245,7 @@ final class VerdictScript: Judging {
         #expect(box.take()?.windows == b, "the list read with the newest pixels")
     }
 
-    @Test func aMergedCoverMovesOnlyWhenAllOfItMoved() {
+    @Test func onlyThePartOfACoverThatMovedGoesWithTheContent() {
         // Textured content in one column scrolls up 16 points; the rest of the window stays still. A cover reaching
         // beyond the column must not move with it.
         let p = pipeline()
@@ -262,7 +262,42 @@ final class VerdictScript: Judging {
         p.held = [DisplayPipeline.Held(target: .window(number: 1, ownerPID: 500), rel: wide, whole: false, kind: .plain, clean: 0)]
         let plan = p.process(Fixtures.frame(view(16), display: d, scale: 1, dirty: [PixelRect(x: 64, y: 0, w: 200, h: 400)], t: 0.1),
                              snapshot: snap, now: 0.1)
-        #expect(plan.covers(wide), "\(plan.items.map(\.rect))")
+        // The part in the column goes with its content; the part outside it, where nothing moved, stays.
+        #expect(plan.covers(CGRect(x: 264, y: 100, width: 136, height: 100)), "\(plan.items.map(\.rect))")
+        #expect(plan.covers(CGRect(x: 100, y: 84, width: 164, height: 100)), "\(plan.items.map(\.rect))")
+    }
+
+    @Test func coversNeverMultiplyWhileContentScrolls() {
+        // A cover straddles the edge of a column that keeps scrolling, 16 points a frame, for twelve frames.
+        let p = pipeline()
+        p.coverGoalMs = 1e9
+        var tall = Fixtures.blank(600, 400 + 16 * 14)
+        Fixtures.paint(&tall, PixelRect(x: 64, y: 0, w: 200, h: tall.height), channel: nil, seed: 11)
+        func view(_ off: Int) -> RGBAImage {
+            var img = Fixtures.blank(600, 400)
+            for y in 0..<400 { for x in 64..<264 { for c in 0..<4 { img.pixels[(y * 600 + x) * 4 + c] = tall.pixels[((y + off) * 600 + x) * 4 + c] } } }
+            return img
+        }
+        _ = p.process(Fixtures.frame(view(0), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        let wide = CGRect(x: 100, y: 200, width: 300, height: 100)
+        p.held = [DisplayPipeline.Held(target: .window(number: 1, ownerPID: 500), rel: wide, whole: false, kind: .plain, clean: 0)]
+        var t = 0.0
+        for k in 1...12 {
+            t += 0.1
+            let plan = p.process(Fixtures.frame(view(16 * k), display: d, scale: 1, dirty: [PixelRect(x: 64, y: 0, w: 200, h: 400)], t: t),
+                                 snapshot: snap, now: t)
+            #expect(p.held.count <= 4, "frame \(k): \(p.held.count) covers")
+            // Until it has earned its clean judgements (the content under it is harmless), the part outside stays.
+            if k < Register.VIDEO_VOTE { #expect(plan.covers(CGRect(x: 264, y: 200, width: 136, height: 100)), "the part outside the column stays") }
+        }
+        // The scrolling stops; every place is judged clean: nothing is left behind.
+        let still = view(16 * 12)
+        for k in 1...8 {
+            t += 0.1
+            var f = still; f.pixels[(395 * 600 + 595) * 4] = UInt8(k)
+            _ = p.process(Fixtures.frame(f, display: d, scale: 1, dirty: corner, t: t), snapshot: snap, now: t)
+        }
+        #expect(p.held.isEmpty, "\(p.held.map(\.rel))")
     }
 
     // MARK: Windows above the covers
