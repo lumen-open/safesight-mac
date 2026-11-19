@@ -41,7 +41,7 @@ public struct ScreenCaptureBackend: CaptureBackend {
     }
 }
 
-enum ScreenCaptureFailure: Error { case notListed }
+enum ScreenCaptureFailure: Error { case notListed, ownWindowsNotListed }
 
 /// One ScreenCaptureKit content list: its displays, and the app's own windows to leave out of every stream.
 struct ScreenCaptureListing: CaptureListing, @unchecked Sendable {
@@ -53,7 +53,10 @@ struct ScreenCaptureListing: CaptureListing, @unchecked Sendable {
 
     func open(_ id: UInt32, generation: Int, stoppedByItself: @escaping @Sendable () -> Void) async throws -> any CaptureStream {
         guard let display = content.displays.first(where: { $0.displayID == id }) else { throw ScreenCaptureFailure.notListed }
-        let own = content.applications.filter { $0.processID == ownPID }
+        // The app's own windows (the covers) must be left out, or the stream would see the covers instead of what they hide.
+        guard let own = CaptureExclusion.own(content.applications, pid: { $0.processID }, ownPID: ownPID) else {
+            throw ScreenCaptureFailure.ownWindowsNotListed
+        }
         let s = DisplayStream(display: display, excluding: own, sink: sink, generation: generation, stoppedByItself: stoppedByItself)
         try await s.start()
         return s

@@ -55,6 +55,27 @@ public struct CoverPiece: Equatable, Sendable {
     public init(frame: CGRect, kind: CoverKind, wayOut: WayOutPlacement? = nil) { self.frame = frame; self.kind = kind; self.wayOut = wayOut }
 }
 
+/// The covers' own plain colours (the light and dark themes' `cover`). Covers are left out of capture, so the watcher
+/// should never see them; if it does (capture that failed to leave the app's windows out), a cover would look like a
+/// clean picture of itself. A place whose captured pixels are all one of these colours never counts as judged clean.
+public enum OwnCoverColours {
+    public static let rgb: [UInt32] = [0xE5E7E1, 0x121828]
+
+    /// True when every sampled pixel of `r` is within a few levels of one of the covers' colours.
+    public static func shown(in img: RGBAImage, _ r: PixelRect) -> Bool {
+        guard let c = r.clamped(width: img.width, height: img.height), c.w > 0, c.h > 0 else { return false }
+        let n = 12
+        return rgb.contains { hex in
+            let want = [Int(hex >> 16 & 0xFF), Int(hex >> 8 & 0xFF), Int(hex & 0xFF)]
+            for i in 0..<n { for j in 0..<n {
+                let x = c.x + (c.w - 1) * i / (n - 1), y = c.y + (c.h - 1) * j / (n - 1), p = (y * img.width + x) * 4
+                for k in 0..<3 where abs(Int(img.pixels[p + k]) - want[k]) > 3 { return false }
+            } }
+            return true
+        }
+    }
+}
+
 /// The window levels the covers use (kCGWindowLayer in the window list is the same number).
 public enum CoverLevel {
     /// The cover canvas: one level above the screen saver's, so screen-saver-level windows of other apps stay under it.

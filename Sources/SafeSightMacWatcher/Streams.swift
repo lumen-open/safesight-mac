@@ -11,6 +11,17 @@
 // Pure: no ScreenCaptureKit. The app's backend is ScreenCaptureKit (SafeSightMacCapture); tests use a fake.
 import Foundation
 
+/// What a display stream leaves out of capture: the app's own windows (its covers). With none listed, a stream would
+/// capture the covers themselves, and a cover would look like a clean picture of what it hides: no stream is started,
+/// and the display stays covered whole.
+public enum CaptureExclusion {
+    /// The apps to leave out (those of `ownPID`), or nil when there are none and no stream may start.
+    public static func own<App>(_ apps: [App], pid: (App) -> Int32, ownPID: Int32) -> [App]? {
+        let own = apps.filter { pid($0) == ownPID }
+        return own.isEmpty ? nil : own
+    }
+}
+
 /// One running capture stream.
 public protocol CaptureStream: AnyObject, Sendable {
     /// Stops the stream. Its frames stop coming, apart from any already on their way.

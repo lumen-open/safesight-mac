@@ -46,6 +46,10 @@ public final class DisplayPipeline {
     /// The last complete frame's row hashes per target, for finding motion (valid for the next frame only).
     var rowCache: [JudgeTarget: (serial: Int, area: PixelRect, rows: [UInt64?])] = [:]
     var frameSerial = 0
+    /// When the reported changed areas were last checked against the pixels (`DIRTY_CHECK_EVERY`), and how often they
+    /// were found wrong (a count only).
+    var lastDirtyCheck: TimeInterval?
+    public private(set) var dirtyMismatches = 0
     var lastFrameTime: TimeInterval?
     /// Cover first when judging a window's new pictures would end later than this after the frame arrived
     /// (`COVER_GOAL`; tests that run unoptimised builds raise it).
@@ -97,7 +101,7 @@ public final class DisplayPipeline {
     public func reset() {
         held = []; pending = []; lastImage = nil; lastMap = nil; lastFullPass = nil
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
-        judgedGeneration = nil
+        judgedGeneration = nil; lastDirtyCheck = nil
         cover(because: .notYetJudged)
     }
 
@@ -136,11 +140,18 @@ public final class DisplayPipeline {
             // The first frame of another stream is judged whole, with no motion carried over from the old stream.
             let sameStream = judgedGeneration == f.generation
             let previous = sameStream && lastMap.map { $0 == map } == true ? lastImage : nil
+            // The reported changed areas are checked against the pixels now and then: a change anywhere else means they
+            // cannot be trusted, and the whole frame is judged.
+            var dirty = sameStream ? f.dirty : nil
+            if let reported = dirty, let prev = previous, f.time - (lastDirtyCheck ?? -.infinity) >= Register.DIRTY_CHECK_EVERY {
+                lastDirtyCheck = f.time
+                if DirtyRegions.changedOutside(old: prev, new: img, reported: reported) { dirty = nil; dirtyMismatches += 1 }
+            }
             let dt = lastFrameTime.map { f.time - $0 } ?? 0
             lastImage = img; lastMap = map; lastFrameTime = f.time
             judgedGeneration = f.generation
             frameSerial += 1
-            return run(img, previous: previous, frameInterval: dt, map: map, dirty: sameStream ? f.dirty : nil, snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
+            return run(img, previous: previous, frameInterval: dt, map: map, dirty: dirty, snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
         }
     }
 
@@ -320,7 +331,7 @@ public final class DisplayPipeline {
             if v.hot && !wasHot { pending += p.visible }
 
             let o = origin(of: p.target, snapshot)
-            countCleanJudgements(p.target, judgedArea: map.toGlobal(area).intersection(visBox), verdict: v, map: map, snapshot, visible)
+            countCleanJudgements(p.target, judgedArea: map.toGlobal(area).intersection(visBox), verdict: v, map: map, img: img, snapshot, visible)
             fresh += covers(from: v, target: p.target, origin: o, img: img, map: map,
                             callArea: map.toGlobal(area), visibleBox: visBox)
 
@@ -354,7 +365,7 @@ public final class DisplayPipeline {
             if judged { bucket.spend(v.judgements) }
             if v.coverWindow || v.regions.contains(where: { $0.display != .clear && $0.reason != .overload }) {
                 held[i].clean = 0
-            } else if !v.regions.isEmpty && v.overloaded == 0 {
+            } else if !v.regions.isEmpty && v.overloaded == 0, !OwnCoverColours.shown(in: img, area) {
                 held[i].clean += 1
             }
         }
@@ -569,7 +580,7 @@ public final class DisplayPipeline {
     /// SD-230: a held region counts one clean judgement when a call that includes it returns only
     /// `clear` entries over it. Any `cover` or `contain` over it resets the count. Calls that do not
     /// include the region, and entries left unjudged, do not count.
-    func countCleanJudgements(_ t: JudgeTarget, judgedArea: CGRect, verdict v: FrameVerdict, map: CaptureMap,
+    func countCleanJudgements(_ t: JudgeTarget, judgedArea: CGRect, verdict v: FrameVerdict, map: CaptureMap, img: RGBAImage,
                               _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) {
         let slack = judgedArea.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel)
         // Covers not all on show as this target's are counted by their own judge call (step 3b).
@@ -579,7 +590,8 @@ public final class DisplayPipeline {
             let over = v.regions.filter { map.toGlobal($0.rect).intersects(g) }
             if over.contains(where: { $0.display != .clear && $0.reason != .overload }) {
                 held[i].clean = 0
-            } else if !over.isEmpty && !over.contains(where: { $0.reason == .overload }) {
+            } else if !over.isEmpty && !over.contains(where: { $0.reason == .overload }),
+                      !(map.toPixels(g).map { OwnCoverColours.shown(in: img, $0) } ?? true) {
                 held[i].clean += 1
             }
         }

@@ -379,6 +379,53 @@ final class VerdictScript: Judging {
         let shown = c.shown(unjudged: w.areas).first { $0.display.id == 1 }
         #expect(shown?.covers(CGRect(x: 100, y: 100, width: 50, height: 50)) == true)
     }
+
+    // MARK: Trusting what capture reports
+
+    @Test func aChangeOutsideTheReportedAreasIsFound() {
+        let a = Fixtures.blank(600, 400)
+        var b = a
+        #expect(!DirtyRegions.changedOutside(old: a, new: b, reported: []))
+        b.pixels[(50 * 600 + 50) * 4] = 1
+        #expect(!DirtyRegions.changedOutside(old: a, new: b, reported: [PixelRect(x: 40, y: 40, w: 20, h: 20)]))
+        #expect(DirtyRegions.changedOutside(old: a, new: b, reported: [PixelRect(x: 60, y: 40, w: 20, h: 20)]))
+        #expect(DirtyRegions.changedOutside(old: a, new: b, reported: []))
+    }
+
+    @Test func aPictureOutsideTheReportedChangeIsStillJudged() {
+        let p = pipeline()
+        let img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        // A flagged picture appears, but the frame reports only a change in the corner.
+        var lie = touched(img, 1)
+        Fixtures.paintFlagged(&lie, PixelRect(x: 300, y: 150, w: 120, h: 120))
+        let plan = p.process(Fixtures.frame(lie, display: d, scale: 1, dirty: corner, t: 1.1), snapshot: snap, now: 1.1)
+        #expect(plan.covers(CGRect(x: 300, y: 150, width: 120, height: 120)))
+        #expect(p.dirtyMismatches == 1)
+    }
+
+    @Test func noStreamStartsWithoutTheAppsOwnWindowsLeftOut() {
+        #expect(CaptureExclusion.own([Int32(10), 11], pid: { $0 }, ownPID: 42) == nil)
+        #expect(CaptureExclusion.own([Int32](), pid: { $0 }, ownPID: 42) == nil)
+        #expect(CaptureExclusion.own([Int32(10), 42], pid: { $0 }, ownPID: 42) == [42])
+    }
+
+    @Test func aPlaceShowingTheCoversOwnColourNeverCountsAsClean() {
+        // As if capture saw the covers: the covered place shows the light cover colour, and every judgement is clean.
+        let p = DisplayPipeline(display: d, judger: VerdictScript { VerdictScript.clean($0) }, budgetShare: 1e6, ignoredPIDs: [])
+        var img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        let r = CGRect(x: 100, y: 100, width: 80, height: 80)
+        p.held = [DisplayPipeline.Held(target: .window(number: 1, ownerPID: 500), rel: r, whole: false, kind: .plain, clean: 0)]
+        for y in 100..<180 { for x in 100..<180 { let q = (y * 600 + x) * 4; img.pixels[q] = 0xE5; img.pixels[q + 1] = 0xE7; img.pixels[q + 2] = 0xE1 } }
+        for k in 1...8 {
+            _ = p.process(Fixtures.frame(touched(img, UInt8(k)), display: d, scale: 1, dirty: [PixelRect(x: 96, y: 96, w: 88, h: 88)], t: 0.1 * Double(k)),
+                          snapshot: snap, now: 0.1 * Double(k))
+        }
+        #expect(p.held.count == 1 && p.held[0].clean == 0)
+        #expect(OwnCoverColours.shown(in: img, PixelRect(x: 100, y: 100, w: 80, h: 80)))
+        #expect(!OwnCoverColours.shown(in: img, PixelRect(x: 300, y: 100, w: 80, h: 80)))
+    }
 }
 
 extension CapturedFrame {

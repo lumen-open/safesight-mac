@@ -39,4 +39,7 @@ public enum Register {
     public static let JUDGE_CALL_WALL: TimeInterval = 0.25
     /// A display's frame left waiting this long has its changed areas covered until it is judged (`TIME_TO_COVER`).
     public static let WAITING_FRAME_COVER: TimeInterval = TIME_TO_COVER
+    /// How often the changed areas a frame reports are checked against its pixels (a comparison of every row outside
+    /// them with the last frame's). Not in the register; a working value.
+    public static let DIRTY_CHECK_EVERY: TimeInterval = 1
 }

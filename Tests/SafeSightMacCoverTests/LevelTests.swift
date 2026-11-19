@@ -36,4 +36,11 @@ import Testing
         }
         #expect(a.count == 3)
     }
+
+    @Test func theCoverLayerKnowsTheCoversOwnColours() {
+        for t in [CoverTheme.light, .dark] {
+            let hex = UInt32(t.cover.r) << 16 | UInt32(t.cover.g) << 8 | UInt32(t.cover.b)
+            #expect(OwnCoverColours.rgb.contains(hex))
+        }
+    }
 }

@@ -91,6 +91,29 @@ public enum DirtyRegions {
         return out.sorted { ($0.y, $0.x) < ($1.y, $1.x) }
     }
 
+    /// True when any pixel outside the reported changed areas differs between two frames of the same size (each row is
+    /// compared outside the areas that cross it). Frames of different sizes always count as changed.
+    public static func changedOutside(old: RGBAImage, new: RGBAImage, reported: [PixelRect]) -> Bool {
+        guard old.width == new.width, old.height == new.height, old.pixels.count == new.pixels.count else { return true }
+        let w = new.width, rects = reported.compactMap { $0.clamped(width: w, height: new.height) }.filter { $0.w > 0 && $0.h > 0 }
+        return old.pixels.withUnsafeBufferPointer { a in
+            new.pixels.withUnsafeBufferPointer { b in
+                for y in 0..<new.height {
+                    let spans = rects.filter { $0.y <= y && y < $0.maxY }.map { ($0.x, $0.maxX) }.sorted { $0.0 < $1.0 }
+                    var x = 0
+                    for (s, e) in spans + [(w, w)] {
+                        if s > x {
+                            let o = (y * w + x) * 4
+                            if memcmp(a.baseAddress! + o, b.baseAddress! + o, (s - x) * 4) != 0 { return true }
+                        }
+                        x = max(x, e)
+                    }
+                }
+                return false
+            }
+        }
+    }
+
     static func touches(_ a: PixelRect, _ b: PixelRect) -> Bool {
         a.x <= b.maxX && b.x <= a.maxX && a.y <= b.maxY && b.y <= a.maxY
     }
