@@ -68,6 +68,8 @@ public final class DisplayPipeline {
     /// How long a judging run takes (the recent longest, fading by a fifth a run): how far ahead a moving
     /// cover must reach.
     var runEstimateMs = 0.0
+    /// Frames in a row whose judging took longer than the goal.
+    var overrunFrames = 0
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
     public private(set) var judged = false
     /// Frames from streams older than this generation are never judged here: the display has changed since they
@@ -178,6 +180,7 @@ public final class DisplayPipeline {
         defer {
             timing.totalMs = PipelineTimings.ms(since: tRun); lastTimings = timing
             runEstimateMs = max(timing.totalMs, 0.8 * runEstimateMs)
+            overrunFrames = timing.totalMs > coverGoalMs ? overrunFrames + 1 : 0
         }
         var tStage = tRun
         let d = display.bounds
@@ -261,17 +264,43 @@ public final class DisplayPipeline {
             provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead + fresh) + early))
             timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
         }
-        // Cover first, for the whole frame: when recent frames took longer than the goal to judge, every changed part is
-        // blurred now, before any judging, and shown as its verdicts come in.
-        if judged, provisional != nil, runEstimateMs > coverGoalMs {
-            for p in parts {
-                for r in p.changed { if let px = map.toPixels(r) {
-                    let kind: CoverKind = ContainBlur.make(img, px).map { .blur($0) } ?? .plain
-                    early.append(CoverItem(rect: CoordinateSpace.snapOutward(r, pointsPerPixel: map.pointsPerPixel), kind: kind))
-                    timing.blurredAtOnce += 1
-                } }
+        // Cover first, for the whole frame, on pictures only. When recent frames took longer than the goal, a large changed
+        // part (a quarter of the display or more, where the picture finder itself takes a while) is blurred whole at once,
+        // and only until the finder has looked at it: then only the pictures it found stay blurred, until judged, and text
+        // and other areas without pictures are sharp again. When judging has overrun the goal `OVERRUN_FRAMES` frames in a
+        // row, the pictures in every changed part are found and blurred before any judging. (Each judge call's own cover
+        // first still blurs its pictures when it runs.)
+        if judged, provisional != nil {
+            func px(_ p: TargetArea) -> PixelRect? {
+                guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox else { return nil }
+                return map.toPixels(changedBox.intersection(visBox))
             }
-            publishEarly()
+            func blurItems(_ r: PixelRect, _ vis: [CGRect]) -> [CoverItem] {
+                let kind: CoverKind = ContainBlur.make(img, r).map { .blur($0) } ?? .plain
+                return vis.clipped(to: map.toGlobal(r)).map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: kind) }
+            }
+            let quarter = img.width * img.height / 4
+            let large = runEstimateMs > coverGoalMs ? parts.filter { (px($0)?.area ?? 0) >= quarter } : []
+            let look = overrunFrames >= Register.OVERRUN_FRAMES ? parts : large
+            if !large.isEmpty {
+                early = large.flatMap { p in px(p).map { blurItems($0, p.visible) } ?? [] }
+                timing.blurredAtOnce += large.count
+                publishEarly()
+            }
+            if !look.isEmpty {
+                var found: [CoverItem] = [], unknown: [CoverItem] = []
+                for p in look {
+                    guard let a = px(p) else { continue }
+                    if let pics = judger.pictureRegions(img, within: a) {
+                        for r in pics { found += blurItems(r, p.visible) }
+                    } else if large.contains(where: { $0.target == p.target }) {
+                        unknown += blurItems(a, p.visible)   // this judge cannot say where its pictures are: stays blurred
+                    }
+                }
+                timing.blurredAtOnce += found.count
+                early = found + unknown
+                publishEarly()
+            }
         }
         // Parts this call had no time for: blurred in this plan, and judged in the next call.
         var leftOver: [CoverItem] = []

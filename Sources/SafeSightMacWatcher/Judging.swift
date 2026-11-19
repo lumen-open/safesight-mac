@@ -12,9 +12,13 @@ public protocol Judging: AnyObject {
     func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
                    progress: ((JudgeProgress) -> Void)?) -> FrameVerdict
     func setRule(_ rule: DetectorRule)
+    /// The pictures the finder sees in an area (no model runs), or nil when this judge cannot say.
+    func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]?
 }
 
 extension Judging {
+    public func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { nil }
+
     public func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict {
         judgeArea(frame, context: context, within: area, budget: budget, progress: nil)
     }
@@ -25,6 +29,8 @@ extension Detector: Judging {
                           progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
         judge(frame, context: context, within: area, budget: budget, progress: progress)
     }
+
+    public func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { pictures(frame, within: area) }
 }
 
 /// A token bucket per display: filled at `JUDGEMENT_BUDGET` divided by the number of active displays,

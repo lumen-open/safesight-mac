@@ -102,6 +102,17 @@ public final class Detector {
         }
     }
 
+    /// The picture regions the finder sees in `area`, through the finder cache, so the judge call that follows on the same
+    /// pixels finds them there. No model runs.
+    public func pictures(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect] {
+        let A = area.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
+        let key = FinderCache.key(frame, A)
+        if let hit = finderCache.get(key, for: A) { return hit.regions.map(\.rect) }
+        let found = finder.find(frame, within: A)
+        finderCache.put(key, A, found)
+        return found.regions.map(\.rect)
+    }
+
     /// The picture finder alone (the contract's `find`). Cheap; no model.
     public func find(_ frame: RGBAImage, within area: PixelRect? = nil) -> RegionFinder.Output {
         finder.find(frame, within: area)

@@ -297,6 +297,7 @@ final class Bench {
         var nearShown: [Double] = [], provisionalFirst: [Double] = [], coveredFirst: [Double] = [], fastFlags: [Double] = []
         var firstPlan: [Double] = [], standIn: [Double] = [], fully: [Double] = [], clearAt: [Double] = []
         var lateMedian: [Double] = [], lateWorst: [Double] = [], sharpUnjudged: [Double] = [], blurredShare: [Double] = []
+        var textHidden: [Double] = [], textHiddenPlans: [Double] = []
         var firstSteps: [BenchStep] = []
         for page in busyPages() {
             let p = primed(unlimited: unlimited)
@@ -359,6 +360,22 @@ final class Bench {
             clearAt.append(clearTime - appear)
             lateMedian.append(median(late)); lateWorst.append(worst(late))
             sharpUnjudged.append(median(unjudged)); blurredShare.append(photos.isEmpty ? 0 : Double(blurred) / Double(photos.count))
+            // The page's text (everything that is not a photo or the stand-in): the largest share of it under a cover or
+            // blur in any plan shown after the page appeared, and the share of those plans that hide a tenth of it or more.
+            let notText = (photos + [spot]).map(toGlobal)
+            var textPoints: [CGPoint] = []
+            for i in 0..<48 { for j in 0..<30 {
+                let q = CGPoint(x: display.bounds.minX + (CGFloat(i) + 0.5) * display.bounds.width / 48,
+                                y: display.bounds.minY + (CGFloat(j) + 0.5) * display.bounds.height / 30)
+                if !notText.contains(where: { $0.insetBy(dx: -8, dy: -8).contains(q) }) { textPoints.append(q) }
+            } }
+            let hiddenShares = tl.shown.filter { $0.t >= appear }.map { sp -> Double in
+                if sp.plan.wholeDisplay != nil { return 1 }
+                let hit = textPoints.filter { q in sp.plan.items.contains { $0.rect.contains(q) } }.count
+                return textPoints.isEmpty ? 0 : Double(hit) / Double(textPoints.count)
+            }
+            textHidden.append(hiddenShares.max() ?? 0)
+            textHiddenPlans.append(hiddenShares.isEmpty ? 0 : Double(hiddenShares.filter { $0 >= 0.1 }.count) / Double(hiddenShares.count))
             perPage.append(["page": page.name, "photos": photos.count, "firstCallMs": r1(firstSteps.last!.totalMs),
                             "firstCallJudgements": firstSteps.last!.pipe.judgements, "firstCallOverloaded": firstSteps.last!.pipe.overloaded,
                             "standInCoveredAfterMs": standInCovered.map { r1(($0 - appear) * 1000) } ?? NSNull(),
@@ -366,7 +383,7 @@ final class Bench {
                             "harmlessClearAfterS": r1(clearTime - appear), "calls": calls, "computeMs": r1(computeMs),
                             "photosCoveredOrBlurredAtSomePoint": blurred,
                             "photoShownLateS": ["median": r1(median(late)), "worst": r1(worst(late))]])
-            print("busy \(unlimited ? "unlimited" : "register") \(page.name): first call \(Int(firstSteps.last!.totalMs)) ms (\(firstSteps.last!.pipe.overloaded) overloaded), stand-in covered after \(standInCovered.map { Int(($0 - appear) * 1000) } ?? -1) ms, fully judged after \(fullyAt.map { r1($0 - appear) } ?? -1) s, all harmless shown after \(r1(clearTime - appear)) s")
+            print("busy \(unlimited ? "unlimited" : "register") \(page.name): first call \(Int(firstSteps.last!.totalMs)) ms (\(firstSteps.last!.pipe.overloaded) overloaded), stand-in covered after \(standInCovered.map { Int(($0 - appear) * 1000) } ?? -1) ms, fully judged after \(fullyAt.map { r1($0 - appear) } ?? -1) s, all harmless shown after \(r1(clearTime - appear)) s, text hidden at most \(r1((textHidden.last ?? 0) * 100)) %, plans hiding a tenth of the text \(r1((textHiddenPlans.last ?? 0) * 100)) %")
         }
         return ["budget": unlimited ? "unlimited (compute-bound; DETECTOR_CALL_CAP still applies)" : "register (JUDGEMENT_BUDGET 40/s, JUDGEMENT_BURST 400)",
                 "pointer": pointer.map { "at \(Int($0.x)), \(Int($0.y)) points" } ?? "none",
@@ -376,6 +393,7 @@ final class Bench {
                 "fullyJudgedAfterS": stat(fully), "allHarmlessShownAfterS": stat(clearAt),
                 "photoShownLateMedianS": stat(lateMedian), "photoShownLateWorstS": stat(lateWorst),
                 "photoShownSharpBeforeFirstCoverS": stat(sharpUnjudged), "photosCoveredOrBlurredShare": stat(blurredShare),
+                "textHiddenMaxShare": stat(textHidden), "plansHidingATenthOfTheText": stat(textHiddenPlans),
                 "firstCallStages": stages(firstSteps), "perPage": perPage,
                 "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)"]
     }

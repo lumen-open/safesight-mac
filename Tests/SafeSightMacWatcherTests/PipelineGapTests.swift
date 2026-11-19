@@ -395,9 +395,10 @@ final class VerdictScript: Judging {
         #expect(p.lastTimings.judgements <= Register.DETECTOR_CALL_CAP, "\(j.budgets)")
     }
 
-    @Test func whenFramesRunLongEveryChangeIsBlurredBeforeJudging() {
+    @Test func whenJudgingKeepsOverrunningPicturesAreBlurredBeforeJudgingButTextIsNot() {
         final class Watch: Judging {
             var early: [CoverPlan] = [], seen: [CoverPlan]?
+            let picture = PixelRect(x: 120, y: 120, w: 60, h: 60)
             func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
                            progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
                 if seen == nil { seen = early }
@@ -405,16 +406,53 @@ final class VerdictScript: Judging {
                 return VerdictScript.clean(area)
             }
             func setRule(_ rule: DetectorRule) {}
+            func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { area.intersects(picture) ? [picture] : [] }
         }
         let j = Watch()
         let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
-        p.callWallMs = .infinity
         let img = Fixtures.blank(600, 400)
-        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)   // 150 ms: over the goal
-        j.seen = nil
         let changed = PixelRect(x: 100, y: 100, w: 200, h: 120)
-        _ = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: [changed], t: 0.2), snapshot: snap, now: 0.2) { j.early.append($0) }
-        #expect((j.seen ?? []).contains { $0.covers(CGRect(x: 100, y: 100, width: 200, height: 120)) }, "blurred before the first judge call")
+        var t = 0.0
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: t), snapshot: snap, now: t)   // 150 ms: over the goal
+        // One slow frame is not enough for the rule: nothing is blurred before judging yet.
+        t += 0.2; j.seen = nil; j.early = []
+        _ = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: [changed], t: t), snapshot: snap, now: t) { j.early.append($0) }
+        #expect((j.seen ?? []).isEmpty)
+        t += 0.2
+        _ = p.process(Fixtures.frame(touched(img, 2), display: d, scale: 1, dirty: [changed], t: t), snapshot: snap, now: t)
+        // Three slow frames in a row: the picture in the change is blurred before judging; the rest of the change is not.
+        t += 0.2; j.seen = nil; j.early = []
+        _ = p.process(Fixtures.frame(touched(img, 3), display: d, scale: 1, dirty: [changed], t: t), snapshot: snap, now: t) { j.early.append($0) }
+        let early = j.seen ?? []
+        #expect(early.contains { $0.covers(CGRect(x: 120, y: 120, width: 60, height: 60)) }, "the picture, before the first judge call")
+        #expect(!early.contains { $0.items.contains { $0.rect.intersects(CGRect(x: 200, y: 190, width: 90, height: 25)) } }, "text stays sharp")
+    }
+
+    @Test func aLargeChangeIsBlurredOnlyUntilItsPicturesAreFound() {
+        final class Watch: Judging {
+            var early: [CoverPlan] = [], seen: [CoverPlan]?
+            let picture = PixelRect(x: 120, y: 120, w: 60, h: 60)
+            func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                           progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+                if seen == nil { seen = early }
+                usleep(150_000)
+                return VerdictScript.clean(area)
+            }
+            func setRule(_ rule: DetectorRule) {}
+            func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { area.intersects(picture) ? [picture] : [] }
+        }
+        let j = Watch()
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)   // slow: over the goal
+        j.seen = nil; j.early = []
+        _ = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 600, h: 400)], t: 0.2),
+                      snapshot: snap, now: 0.2) { j.early.append($0) }
+        let early = j.seen ?? []
+        #expect(early.count >= 2)
+        #expect(early.first?.covers(CGRect(x: 0, y: 0, width: 600, height: 400)) == true, "the whole change at once")
+        #expect(early.last?.covers(CGRect(x: 120, y: 120, width: 60, height: 60)) == true, "then the picture only")
+        #expect(early.last?.items.contains { $0.rect.intersects(CGRect(x: 300, y: 250, width: 100, height: 50)) } == false, "text sharp again")
     }
 
     @Test func aFrameLeftWaitingHasItsChangesCovered() {

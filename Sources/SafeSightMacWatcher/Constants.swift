@@ -44,4 +44,7 @@ public enum Register {
     /// How often the changed areas a frame reports are checked against its pixels (a comparison of every row outside
     /// them with the last frame's). Not in the register; a working value.
     public static let DIRTY_CHECK_EVERY: TimeInterval = 1
+    /// After this many frames in a row judged slower than `COVER_GOAL`, the pictures in each new frame's changed parts are
+    /// blurred before judging. Not in the register; a working value.
+    public static let OVERRUN_FRAMES = 3
 }
