@@ -479,6 +479,8 @@ extension DisplayCoverage {
 
         let sameStream = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 40, ignoredPIDs: [])
         _ = sameStream.process(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, t: 0, generation: 1), snapshot: window, now: 0)
+        // An honest frame first, so the once-a-second check of the reported areas against the pixels is not due next.
+        _ = sameStream.process(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, dirty: tiny, t: 0.05, generation: 1), snapshot: window, now: 0.05)
         let same = sameStream.process(Fixtures.frame(img, display: d, scale: 1, dirty: tiny, t: 0.1, generation: 1), snapshot: window, now: 0.1)
         #expect(!same.covers(g), "within one stream only the changed areas are judged (the control case)")
 
