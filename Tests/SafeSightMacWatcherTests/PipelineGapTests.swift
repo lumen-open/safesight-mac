@@ -430,8 +430,8 @@ final class VerdictScript: Judging {
     }
 
     @Test func aCoverJudgedOnItsOwnStillGetsItsTurnOnABusyScreen() {
-        let j = Recorder(); j.ms = 40
-        let (p, list, own) = coveredUnderAWindow(j, wall: 100)
+        let j = Recorder(); j.ms = 60
+        let (p, list, own) = coveredUnderAWindow(j, wall: 50)   // every window's own call alone overruns the time
         j.calls = []
         // The whole screen keeps changing: the windows' own calls would use all the time.
         let plan = p.process(Fixtures.frame(touched(Fixtures.blank(600, 400), 1), display: d, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 600, h: 400)], t: 0.1),

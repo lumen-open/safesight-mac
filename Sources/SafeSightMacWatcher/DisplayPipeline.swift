@@ -72,6 +72,8 @@ public final class DisplayPipeline {
     var runEstimateMs = 0.0
     /// Where the covers judged on their own (step 3b) take their turn from.
     var recheckTurn = 0
+    /// The judgements a cover judged on its own gets even when the frame's time is used up.
+    static let recheckFloor = 16
     /// Frames in a row whose judging took longer than the goal.
     var overrunFrames = 0
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
@@ -410,13 +412,14 @@ public final class DisplayPipeline {
         var checked = 0
         for k in waiting.indices {
             let i = waiting[(k + recheckTurn) % waiting.count]
+            // At least one takes its turn every frame, however long the rest took, so none waits for ever.
             let spent = PipelineTimings.ms(since: tRun)
-            guard spent < callWallMs else { break }
+            guard spent < callWallMs || checked == 0 else { break }
             guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
             if held[i].flaggedAt == g && !reported.contains(where: { $0.intersects(g) }) && !moved.contains(where: { $0.0 == held[i].target }) { continue }
             bucket.refill(now: now)
             var budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
-            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (callWallMs - spent) / msPerJudgement))))
+            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(Double(Self.recheckFloor), (callWallMs - spent) / msPerJudgement))))
             let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
             tStage = PipelineTimings.now()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: nil)
