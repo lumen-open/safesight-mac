@@ -21,20 +21,32 @@ const KeyholderCore = (() => {
   const TYPE = Object.freeze({ ENROLMENT: 1, REQUEST: 2, APPROVAL: 3 });
   const TYPE_NAMES = Object.freeze({ 1: 'enrolment', 2: 'request', 3: 'approval' });
 
-  // OPEN: kind codes. The register lists exit, lower wait, loosen setting and admin batch; it
+  // OPEN: kind codes. The register lists exit, lower wait, loosen setting and admin window; it
   // names no kind for the test approval at enrolment (SD-195), so the test gets kind 0.
-  const KIND = Object.freeze({ TEST: 0, EXIT: 1, LOWER_WAIT: 2, LOOSEN_SETTING: 3, ADMIN_BATCH: 4 });
-  const KIND_NAMES = Object.freeze(['test', 'exit', 'lower-wait', 'loosen-setting', 'admin-batch']);
+  const KIND = Object.freeze({ TEST: 0, EXIT: 1, LOWER_WAIT: 2, LOOSEN_SETTING: 3, ADMIN_WINDOW: 4 });
+  const KIND_NAMES = Object.freeze(['test', 'exit', 'lower-wait', 'loosen-setting', 'admin-window']);
+
+  // The detail field (SD-306). Lower wait: the new wait in days, one of these (a year is the
+  // longest wait, so it can never be a lowering). Loosen setting: which setting. Every other
+  // kind: zero.
+  const WAIT_DAYS = Object.freeze([7, 30, 90, 182]);
+  const SETTING = Object.freeze({ BROWSER_PROFILE: 1, STRICT_COVER_OFF: 2, DETECTOR_BALANCED: 3 });
+
+  // The challenge's domain tags (SD-306). A test approval is signed under its own tag, so it can
+  // never stand for a real one.
+  const APPROVAL_TAG = 'SafeSightMac keyholder approval';
+  const TEST_TAG = 'SafeSightMac keyholder test approval';
 
   // OPEN: field sizes. The page's codes are carried forms with hard caps; the app pads them into
   // the keeper's fixed layouts (register 8a: "converted by the app to the fixed layout").
   const LIMITS = Object.freeze({
     text: 4096, // characters accepted in a pasted or linked code, separators included
     body: 2048, // bytes in a record body
-    requestId: 16, // OPEN: the register gives no size for a request or batch ID
-    challenge: 32, // chapter 03 section 8: 32 random bytes
+    requestId: 16, // OPEN: the register gives no size for a request ID
+    nonce: 32, // the keeper's random bytes for one request
+    challenge: 32, // SHA-256 of the signed fields (SD-306)
     labelBytes: 32, // OPEN: "a short label"; UTF-8 bytes
-    batchItems: 16, // OPEN: no batch size is in the register
+    items: 16, // OPEN: the most items one admin window can name
     itemHash: 32, // SHA-256
     credentialId: 128, // OPEN: the keeper pins a fixed-size, zero-padded field
     publicKey: 65, // P-256, uncompressed (chapter 03 section 8)
@@ -494,60 +506,112 @@ const KeyholderCore = (() => {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Request code (register 8a: format version; request or batch ID; Mac label; kind; a random
-  // challenge bound to this request; for a batch, the item hashes). Made by the keeper.
-  // Body: kind (1) | request ID (16) | challenge (32) | label length (1) | label (1..32)
-  //       | item count (1) | item hashes (32 each; 1..16 for a batch, none otherwise)
-  // OPEN: the code always carries the challenge, even for a batch, and the page signs it as given.
-  // The page does not re-derive a batch's challenge from its ID and items; that rule is the
-  // keeper's and is not yet written down. The item hashes are carried as the register says.
+  // Request code (register 8a: format version; request ID; Mac label; kind; for an admin window,
+  // the item hashes; SD-306: the detail and the keeper's nonce). Made by the keeper.
+  // Body: kind (1) | request ID (16) | nonce (32) | detail (2, big-endian) | label length (1)
+  //       | label (1..32) | item count (1) | item hashes (32 each; 1..16 for an admin window,
+  //       none otherwise)
+  // The code carries no challenge. The page derives it from these fields (deriveChallenge), so
+  // the passkey signs exactly what the keyholder is shown.
   // ---------------------------------------------------------------------------------------------
 
+  function checkKind(kind) {
+    if (!Number.isInteger(kind) || kind < 0 || kind >= KIND_NAMES.length) fail('malformed', 'unknown kind');
+    return kind;
+  }
+
+  function checkDetail(kind, detail) {
+    if (!Number.isInteger(detail) || detail < 0 || detail > 0xffff) fail('malformed', 'detail out of range');
+    if (kind === KIND.LOWER_WAIT) {
+      if (!WAIT_DAYS.includes(detail)) fail('malformed', 'not a wait that can be lowered to');
+    } else if (kind === KIND.LOOSEN_SETTING) {
+      if (!Object.values(SETTING).includes(detail)) fail('malformed', 'unknown setting');
+    } else if (detail !== 0) fail('malformed', 'this kind carries no detail');
+    return detail;
+  }
+
   function checkItems(kind, items) {
-    if (kind === KIND.ADMIN_BATCH) {
-      if (items.length < 1 || items.length > LIMITS.batchItems) fail('malformed', 'batch item count');
-    } else if (items.length !== 0) fail('malformed', 'only a batch carries items');
+    if (kind === KIND.ADMIN_WINDOW) {
+      if (items.length < 1 || items.length > LIMITS.items) fail('malformed', 'item count');
+    } else if (items.length !== 0) fail('malformed', 'only an admin window carries items');
+  }
+
+  // Every field of a request, checked by the one set of rules the decoder uses. Returns the
+  // fields as bytes, ready to be encoded or hashed.
+  function requestFields(fields) {
+    const kind = checkKind(fields.kind);
+    const requestId = fixed(fields.requestId, LIMITS.requestId, 'request ID');
+    const nonce = fixed(fields.nonce, LIMITS.nonce, 'nonce');
+    const detail = checkDetail(kind, fields.detail);
+    const label = utf8Encode(checkLabel(fields.label));
+    const items = Array.from(fields.items || [], h => fixed(h, LIMITS.itemHash, 'item hash'));
+    checkItems(kind, items);
+    return { kind, requestId, nonce, detail, label, items };
   }
 
   function encodeRequestCode(fields) {
-    const kind = fields.kind;
-    if (!Number.isInteger(kind) || kind < 0 || kind >= KIND_NAMES.length) fail('malformed', 'unknown kind');
-    const requestId = fixed(fields.requestId, LIMITS.requestId, 'request ID');
-    const challenge = fixed(fields.challenge, LIMITS.challenge, 'challenge');
-    const label = utf8Encode(checkLabel(fields.label));
-    const items = (fields.items || []).map(h => fixed(h, LIMITS.itemHash, 'item hash'));
-    checkItems(kind, items);
+    const f = requestFields(fields);
     const body = concat([
-      new Uint8Array([kind]),
-      requestId,
-      challenge,
-      new Uint8Array([label.length]),
-      label,
-      new Uint8Array([items.length]),
-      ...items,
+      new Uint8Array([f.kind]),
+      f.requestId,
+      f.nonce,
+      new Uint8Array([f.detail >>> 8, f.detail & 0xff]),
+      new Uint8Array([f.label.length]),
+      f.label,
+      new Uint8Array([f.items.length]),
+      ...f.items,
     ]);
     return base32Encode(encodeRecord(TYPE.REQUEST, body));
   }
 
   function decodeRequestCode(text) {
     const r = reader(decodeRecord(base32Decode(text), TYPE.REQUEST));
-    const kind = r.u8('kind');
-    if (kind >= KIND_NAMES.length) fail('malformed', 'unknown kind');
+    const kind = checkKind(r.u8('kind'));
     const requestId = r.take(LIMITS.requestId, 'request ID');
-    const challenge = r.take(LIMITS.challenge, 'challenge');
+    const nonce = r.take(LIMITS.nonce, 'nonce');
+    const detail = checkDetail(kind, r.u16('detail'));
     const labelLen = r.u8('label length');
     if (labelLen < 1 || labelLen > LIMITS.labelBytes) fail('malformed', 'label length');
     const label = checkLabel(utf8Decode(r.take(labelLen, 'label')));
     const count = r.u8('item count');
+    if (count > LIMITS.items) fail('malformed', 'item count');
     const items = [];
     for (let i = 0; i < count; i++) items.push(r.take(LIMITS.itemHash, 'item hash'));
     checkItems(kind, items);
     r.end();
-    return { version: FORMAT_VERSION, kind, kindName: KIND_NAMES[kind], requestId, challenge, label, items };
+    return Object.freeze({
+      version: FORMAT_VERSION, kind, kindName: KIND_NAMES[kind], requestId, nonce, detail, label, items: Object.freeze(items),
+    });
+  }
+
+  // The challenge the passkey signs (SD-306): SHA-256 of
+  //   tag length (1) | tag (ASCII) | format version (1) | kind (1) | request ID (16)
+  //   | detail (2, big-endian) | label length (1) | label (UTF-8) | item count (1)
+  //   | item hashes (32 each) | nonce (32)
+  // with TEST_TAG for kind 0 and APPROVAL_TAG for every other kind. Every field the keyholder is
+  // shown is in it, so an approval stands only for what was on their screen. The keeper builds
+  // the same bytes from its own record of the request. Shared vectors:
+  // spec/vectors/keyholder-challenge-v1.txt.
+  async function deriveChallenge(request) {
+    const f = requestFields(request);
+    const tag = utf8Encode(f.kind === KIND.TEST ? TEST_TAG : APPROVAL_TAG);
+    const input = concat([
+      new Uint8Array([tag.length]),
+      tag,
+      new Uint8Array([FORMAT_VERSION, f.kind]),
+      f.requestId,
+      new Uint8Array([f.detail >>> 8, f.detail & 0xff]),
+      new Uint8Array([f.label.length]),
+      f.label,
+      new Uint8Array([f.items.length]),
+      ...f.items,
+      f.nonce,
+    ]);
+    return sha256(input);
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Approval code (register 8a: format version; request or batch ID; authenticator data; the
+  // Approval code (register 8a: format version; request ID; authenticator data; the
   // client-data bytes; ES256 signature). Made by the page.
   // Body: request ID (16) | authenticator data (37) | client data length (2) | client data
   //       | signature length (1) | signature (DER, 8..72)
@@ -620,8 +684,8 @@ const KeyholderCore = (() => {
     };
   }
 
-  // navigator.credentials.get: the challenge is the request code's 32 bytes exactly as carried,
-  // with no hashing or wrapping (chapter 03 section 8).
+  // navigator.credentials.get: the challenge is the one deriveChallenge gives for the request on
+  // screen (SD-306), passed as it is.
   // OPEN: chapter 09 says allowCredentials holds the one credential ID, but the request code
   // carries none and the page keeps nothing, so the list is empty and the phone offers its
   // keyholder keys for this site. Picking the wrong key gives an approval the keeper refuses.
@@ -686,14 +750,16 @@ const KeyholderCore = (() => {
 
   // From navigator.credentials.get's result to the approval code. Runs the checks the keeper
   // will run that need no pinned key (chapter 03 section 8, steps 3 to 5), so the keyholder is
-  // told at once if their phone signs in a form the Mac cannot accept.
+  // told at once if their phone signs in a form the Mac cannot accept. The prefix is built from
+  // the challenge derived again here from the request's own fields, never from anything carried.
   async function approvalFromGet({ authenticatorData, clientDataJSON, signature, request, origin, rpId }) {
     const a = bytesOf(authenticatorData, 'authenticator data');
     if (a.length !== LIMITS.authenticatorData) fail('passkey', `authenticator data is ${a.length} bytes, not 37`);
     if (!equalBytes(a.subarray(0, 32), await sha256(utf8Encode(rpId)))) fail('passkey', 'signed for another site');
     if (!(a[32] & FLAG_UP) || !(a[32] & FLAG_UV)) fail('passkey', 'user not verified');
     const cd = bytesOf(clientDataJSON, 'client data');
-    if (!startsWith(cd, clientDataPrefix(request.challenge, origin))) fail('passkey', 'client data does not start as the Mac expects');
+    const challenge = await deriveChallenge(request);
+    if (!startsWith(cd, clientDataPrefix(challenge, origin))) fail('passkey', 'client data does not start as the Mac expects');
     try {
       return encodeApprovalCode({ requestId: request.requestId, authenticatorData: a, clientData: cd, signature });
     } catch (e) {
@@ -701,21 +767,28 @@ const KeyholderCore = (() => {
     }
   }
 
-  // What the keyholder is asked, in plain words (SD-196: request ID, Mac label, what is asked).
+  // What approving does, in plain words, built only from the signed fields (SD-196, SD-306):
+  // the kind, the Mac label, the detail and the item count. One effect, stated once.
+  const SETTING_TEXT = Object.freeze({
+    [SETTING.BROWSER_PROFILE]: 'remove its browser profile',
+    [SETTING.STRICT_COVER_OFF]: 'turn strict cover mode off',
+    [SETTING.DETECTOR_BALANCED]: 'set its detector rule to Balanced',
+  });
+
   function askText(request) {
-    switch (request.kind) {
+    const f = requestFields(request);
+    const label = request.label;
+    switch (f.kind) {
       case KIND.TEST:
-        return 'This just checks that your key works with their Mac. Approving it changes nothing.';
+        return `This only checks that your key works with ${label}. Approving it changes nothing.`;
       case KIND.EXIT:
-        return "They've asked to leave. If you approve, their wait becomes 24 hours.";
+        return `Approving ends protection on ${label} 24 hours from now.`;
       case KIND.LOWER_WAIT:
-        return "They're asking to make their wait shorter.";
+        return `Approving lets ${label} lower its wait to ${f.detail} days, 24 hours from now.`;
       case KIND.LOOSEN_SETTING:
-        return "They're asking to relax one of the lock's settings.";
-      case KIND.ADMIN_BATCH:
-        return request.items.length === 1
-          ? "They're asking to make an admin change on their Mac."
-          : `They're asking to make ${request.items.length} admin changes on their Mac.`;
+        return `Approving lets ${label} ${SETTING_TEXT[f.detail]}, 24 hours from now.`;
+      case KIND.ADMIN_WINDOW:
+        return `Approving gives ${label} administrator time 24 hours from now, for ${f.items.length === 1 ? '1 item' : `${f.items.length} items`}.`;
       default:
         return fail('malformed', 'unknown kind');
     }
@@ -1054,6 +1127,10 @@ const KeyholderCore = (() => {
     TYPE,
     KIND,
     KIND_NAMES,
+    WAIT_DAYS,
+    SETTING,
+    APPROVAL_TAG,
+    TEST_TAG,
     LIMITS,
     PINNED_ORIGIN,
     CodeError,
@@ -1074,6 +1151,7 @@ const KeyholderCore = (() => {
     decodeEnrolmentCode,
     encodeRequestCode,
     decodeRequestCode,
+    deriveChallenge,
     encodeApprovalCode,
     decodeApprovalCode,
     createOptions,

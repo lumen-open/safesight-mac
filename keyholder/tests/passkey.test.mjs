@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// The passkey side: the options the page gives the browser, the challenge exactly as chapter 03
-// section 8 defines it, the enrolment and approval checks, and full round trips through a keeper
+// The passkey side: the options the page gives the browser, the challenge derived from the
+// request's fields (SD-306), the enrolment and approval checks, and full round trips through a keeper
 // check written independently in helpers.mjs. Real passkeys need a phone and a browser; here a
 // P-256 key in Node stands in for the phone, built the way WebAuthn defines its output.
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import {
-  K, ROOT, assertionFor, attestationFor, cbor, concat, hex, keeperCheck, makeAuthenticator, random,
+  K, ROOT, assertionFor, attestationFor, cbor, challengeOf, concat, hex, keeperCheck, makeAuthenticator, random,
 } from './helpers.mjs';
 
 const vectors = JSON.parse(readFileSync(join(ROOT, 'tests', 'vectors.json'), 'utf8'));
@@ -24,8 +24,9 @@ async function rejects(promise, reason, detailPattern) {
   });
 }
 
+const DETAIL = { 0: 0, 1: 0, 2: 7, 3: 2, 4: 0 };
 function newRequest(kind = K.KIND.EXIT, items = []) {
-  const fields = { kind, requestId: random(16), challenge: random(32), label: "Sam's Mac", items };
+  const fields = { kind, requestId: random(16), nonce: random(32), detail: DETAIL[kind], label: "Sam's Mac", items };
   return K.decodeRequestCode(K.encodeRequestCode(fields));
 }
 
@@ -36,7 +37,7 @@ async function enrol(auth) {
 }
 
 async function approveWith(auth, request, options = {}) {
-  const a = assertionFor(auth, { rpId, origin, challenge: request.challenge, ...options });
+  const a = assertionFor(auth, { rpId, origin, challenge: await K.deriveChallenge(request), ...options });
   return K.approvalFromGet({ ...a, request, origin, rpId });
 }
 
@@ -61,13 +62,14 @@ describe('passkey options', () => {
     assert.throws(() => K.createOptions({ rpId, userId: random(8), challenge }), { name: 'CodeError' });
   });
 
-  test("get: the challenge is the request code's 32 bytes exactly, and nothing else is asked", () => {
+  test("get: the challenge is the request's derived 32 bytes exactly, and nothing else is asked", async () => {
     const request = newRequest();
-    const o = K.getOptions({ rpId, challenge: request.challenge });
+    const challenge = await K.deriveChallenge(request);
+    const o = K.getOptions({ rpId, challenge });
     assert.ok(o.challenge instanceof Uint8Array);
     assert.equal(o.challenge.length, 32);
-    assert.deepEqual(o.challenge, request.challenge);
-    assert.notEqual(o.challenge, request.challenge, 'a copy, not the same buffer');
+    assert.deepEqual(o.challenge, challenge);
+    assert.notEqual(o.challenge, challenge, 'a copy, not the same buffer');
     assert.equal(o.userVerification, 'required');
     assert.deepEqual(o.allowCredentials, []);
     assert.equal(o.rpId, rpId);
@@ -75,9 +77,13 @@ describe('passkey options', () => {
     assert.throws(() => K.getOptions({ rpId, challenge: random(31) }), { name: 'CodeError' });
   });
 
-  test('a batch is signed over the challenge its code carries, as carried', () => {
-    const request = newRequest(K.KIND.ADMIN_BATCH, [random(32), random(32)]);
-    assert.deepEqual(K.getOptions({ rpId, challenge: request.challenge }).challenge, request.challenge);
+  test("an admin window's challenge covers its items", async () => {
+    const items = [random(32), random(32)];
+    const request = newRequest(K.KIND.ADMIN_WINDOW, items);
+    const challenge = await K.deriveChallenge(request);
+    assert.deepEqual(challenge, challengeOf(request));
+    assert.notDeepEqual(challenge, await K.deriveChallenge({ ...request, items: [items[1], items[0]] }));
+    assert.notDeepEqual(challenge, await K.deriveChallenge({ ...request, items: [items[0]] }));
   });
 });
 
@@ -162,7 +168,7 @@ describe('approval from a passkey signature (SD-196)', () => {
     const auth = makeAuthenticator();
     const pin = await enrol(auth);
     for (const kind of Object.values(K.KIND)) {
-      const request = newRequest(kind, kind === K.KIND.ADMIN_BATCH ? [random(32)] : []);
+      const request = newRequest(kind, kind === K.KIND.ADMIN_WINDOW ? [random(32)] : []);
       const text = await approveWith(auth, request);
       const a = K.decodeApprovalCode(text);
       assert.deepEqual(a.requestId, request.requestId);
@@ -178,7 +184,7 @@ describe('approval from a passkey signature (SD-196)', () => {
       const text = await approveWith(auth, request, { extra });
       assert.equal(keeperCheck({ approvalText: text, pin, request, origin, rpId }), 'ok');
     }
-    const noCrossOrigin = `{"type":"webauthn.get","challenge":"${Buffer.from(request.challenge).toString('base64url')}","origin":"${origin}"}`;
+    const noCrossOrigin = `{"type":"webauthn.get","challenge":"${Buffer.from(challengeOf(request)).toString('base64url')}","origin":"${origin}"}`;
     const text = await approveWith(auth, request, { clientDataText: noCrossOrigin });
     assert.equal(keeperCheck({ approvalText: text, pin, request, origin, rpId }), 'ok');
   });
@@ -186,7 +192,8 @@ describe('approval from a passkey signature (SD-196)', () => {
   test('the page refuses to hand over what the keeper would refuse', async () => {
     const auth = makeAuthenticator();
     const request = newRequest();
-    const b64 = Buffer.from(request.challenge).toString('base64url');
+    const challenge = challengeOf(request);
+    const b64 = Buffer.from(challenge).toString('base64url');
     const wrongChallenge = `{"type":"webauthn.get","challenge":"${Buffer.from(random(32)).toString('base64url')}","origin":"${origin}"}`;
     const wrongOrigin = `{"type":"webauthn.get","challenge":"${b64}","origin":"https://keyholder.example.evil"}`;
     const wrongType = `{"type":"webauthn.create","challenge":"${b64}","origin":"${origin}"}`;
@@ -195,9 +202,9 @@ describe('approval from a passkey signature (SD-196)', () => {
       await rejects(approveWith(auth, request, { clientDataText }), 'passkey', /client data/);
     }
     await rejects(approveWith(auth, request, { flags: 0x01 }), 'passkey', /not verified/);
-    const a = assertionFor(auth, { rpId: 'other.example', origin, challenge: request.challenge });
+    const a = assertionFor(auth, { rpId: 'other.example', origin, challenge });
     await rejects(K.approvalFromGet({ ...a, request, origin, rpId }), 'passkey', /another site/);
-    const b = assertionFor(auth, { rpId, origin, challenge: request.challenge });
+    const b = assertionFor(auth, { rpId, origin, challenge });
     await rejects(K.approvalFromGet({ ...b, authenticatorData: concat(b.authenticatorData, new Uint8Array([0xa0])), request, origin, rpId }), 'passkey', /38 bytes/);
     await rejects(K.approvalFromGet({ ...b, signature: hex('3006020101020100'), request, origin, rpId }), 'passkey');
   });
@@ -209,8 +216,8 @@ describe('approval from a passkey signature (SD-196)', () => {
     const other = newRequest();
     const text = await approveWith(auth, request);
     assert.equal(keeperCheck({ approvalText: text, pin, request: other, origin, rpId }), 'request');
-    // Same ID, new challenge (an old approval against a fresh request code): the prefix fails.
-    assert.equal(keeperCheck({ approvalText: text, pin, request: { ...request, challenge: random(32) }, origin, rpId }), 'prefix');
+    // Same ID, new nonce (an old approval against a fresh request code): the prefix fails.
+    assert.equal(keeperCheck({ approvalText: text, pin, request: { ...request, nonce: random(32) }, origin, rpId }), 'prefix');
     // Another pinned key: the signature fails.
     const otherPin = await enrol(makeAuthenticator());
     assert.equal(keeperCheck({ approvalText: text, pin: otherPin, request, origin, rpId }), 'signature');
