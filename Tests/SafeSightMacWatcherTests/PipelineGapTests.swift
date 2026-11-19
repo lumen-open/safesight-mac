@@ -409,9 +409,14 @@ final class VerdictScript: Judging {
 
     /// Six windows side by side, each 200 x 200 points.
     var six: WindowSnapshot {
-        WindowSnapshot(windows: (0..<6).map { i in
-            WindowInfo(number: UInt32(i + 1), ownerPID: 500, layer: 0, bounds: CGRect(x: (i % 3) * 200, y: (i / 3) * 200, width: 200, height: 200))
-        }, time: 0)
+        var windows: [WindowInfo] = []
+        for i in 0..<6 {
+            let x: Int = (i % 3) * 200
+            let y: Int = (i / 3) * 200
+            let bounds = CGRect(x: x, y: y, width: 200, height: 200)
+            windows.append(WindowInfo(number: UInt32(i + 1), ownerPID: 500, layer: 0, bounds: bounds))
+        }
+        return WindowSnapshot(windows: windows, time: 0)
     }
 
     @Test func oneFrameIsJudgedForAtMostTheTimeLimitAndTheRestIsBlurredMeanwhile() {
