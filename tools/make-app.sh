@@ -1,8 +1,12 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Assembles an UNSIGNED SafeSight Mac.app from the release build, with the watcher's models copied
-# inside it (Resources/models: the practice state's model folder, SD-223 (b)). It writes only under
-# .build/, installs nothing and adds no login item. Signing and notarizing are the founder's (step 0).
+# Assembles an UNSIGNED SafeSight Mac.app from the release build, with the watcher's models inside it
+# (Resources/models: the practice state's model folder, SD-223 (b)), compiled. The model packages are checked
+# against the hash list sealed in the build, then compiled with Core ML's compiler, so the app never compiles at
+# a new place at every start (each new place grew Core ML's own cache by about 200 MB). The compiled files are
+# listed in Resources/models/compiled.sha256, which begins with a stamp of the sealed list; the app checks both.
+# It writes only under .build/ and a temporary folder it removes, installs nothing and adds no login item.
+# Signing and notarizing are the founder's (step 0).
 #
 # With --testing it assembles the Testing edition instead (docs/TESTING-EDITION.md): "SafeSight Mac Testing.app"
 # under .build-testing/, built with SAFESIGHTMAC_TESTING=1, named and identified as its own app (the identifier
@@ -55,16 +59,30 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/safesight-mac" "$app/Contents/MacOS/"
 sed -e "s/BUNDLE_ID/$bundle_id/" -e "s/VERSION/$version/g" "$plist" > "$app/Contents/Info.plist"
 if [ "$models_wanted" = 1 ]; then
-  mkdir -p "$app/Contents/Resources/models"
+  here=$(pwd)
+  packages=$(mktemp -d "${TMPDIR:-/tmp}/safesightmac-packages.XXXXXX")
+  trap 'rm -rf "$packages"' EXIT
+  dest="$app/Contents/Resources/models"
+  mkdir -p "$dest"
   for p in marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage \
            bumble-private-detector/bumble-private-detector.fp32.mlpackage; do
-    mkdir -p "$app/Contents/Resources/models/$(dirname "$p")"
-    cp -R "$models/$p" "$app/Contents/Resources/models/$p"
+    mkdir -p "$packages/$(dirname "$p")"
+    cp -R "$models/$p" "$packages/$p"
   done
-  # The copied files must match the hash list sealed in the build.
-  here=$(pwd)
-  (cd "$app/Contents/Resources/models" && shasum -a 256 -c "$here/models/watcher-models.sha256" >/dev/null) \
-    || { echo "copied models do not match models/watcher-models.sha256"; exit 1; }
+  # The packages must match the hash list sealed in the build before anything is compiled from them.
+  (cd "$packages" && shasum -a 256 -c "$here/models/watcher-models.sha256" >/dev/null) \
+    || { echo "the model packages do not match models/watcher-models.sha256"; exit 1; }
+  for p in marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage \
+           bumble-private-detector/bumble-private-detector.fp32.mlpackage; do
+    mkdir -p "$dest/$(dirname "$p")"
+    xcrun coremlcompiler compile "$packages/$p" "$dest/$(dirname "$p")" >/dev/null
+  done
+  # The stamp is the sealed list's entries, one "sha256  path" line each, hashed (WatcherModels.stamp does the same).
+  stamp=$(awk 'NF == 2 { printf "%s  %s\n", tolower($1), $2 }' models/watcher-models.sha256 | shasum -a 256 | cut -d' ' -f1)
+  (cd "$dest" && {
+    echo "# from $stamp"
+    find . -type f -path '*.mlmodelc/*' | sed 's#^\./##' | LC_ALL=C sort | while IFS= read -r f; do shasum -a 256 "$f"; done
+  } > compiled.sha256)
 fi
 
 if [ "$testing" = 1 ]; then

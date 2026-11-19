@@ -65,11 +65,10 @@ final class TestingEditionApp {
         watcher?.notice = .testing(shortcut: shortcutWorks)
     }
 
-    /// ⌃⌥⌘Q: covers off, compiled models removed, and the app ends at once. It does not wait for anything that
-    /// could be stuck; macOS removes every window of an ended app, covers included.
+    /// ⌃⌥⌘Q: covers off, and the app ends at once. It does not wait for anything that could be stuck; macOS removes
+    /// every window of an ended app, covers included.
     func quitNow() {
         watcher?.hideEverything()
-        watcher?.removeCompiledModels()
         _exit(0)
     }
 
@@ -106,7 +105,6 @@ final class TestingEditionApp {
     func removeEverything(watcher: WatcherController) {
         watcher.stop()
         _ = watcher.waitForJudging(timeout: 3)
-        watcher.removeCompiledModels()
         stallWatchdog?.stop()
         layoutTimer?.invalidate()
         let id = Bundle.main.bundleIdentifier ?? ""

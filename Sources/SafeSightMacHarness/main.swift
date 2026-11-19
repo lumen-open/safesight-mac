@@ -176,16 +176,11 @@ if CommandLine.arguments.dropFirst().first == "vanish" {
 
 let o = parse()
 
-/// The models' compiled copies go in a folder of this run's own, removed when the run ends; folders left by runs
-/// that crashed are removed first (CompiledModels.swift).
-nonisolated(unsafe) var compiledModels: CompiledModelFolder?
-
 func makeDetector() -> Detector {
     if let m = o.models {
-        CompiledModelFolder.sweep()
-        compiledModels = try? CompiledModelFolder()
-        atexit { compiledModels?.remove() }
-        do { return try WatcherModels.loadDetector(folder: URL(fileURLWithPath: m), rule: o.rule, compiledInto: compiledModels?.url) }
+        // Packages are compiled once each, to a fixed place in this tool's Caches folder (DetectorCore's
+        // CompiledModels); an app's models folder holds them compiled already.
+        do { return try WatcherModels.loadDetector(folder: URL(fileURLWithPath: m), rule: o.rule) }
         catch { fail("models refused: \(error)") }
     }
     #if SAFESIGHTMAC_LAB

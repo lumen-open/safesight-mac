@@ -2,6 +2,13 @@
 // Loading the detector's models in the practice state (register SD-223 (b)): from a local models
 // folder (inside the signed app for a shipped build), each file checked against the hash list sealed
 // in the app before anything is loaded. Any failure means: do not load; the displays are covered whole.
+//
+// An app made by tools/make-app.sh carries its models compiled (`.mlmodelc`), so Core ML never compiles at a new
+// place at every start (each new place grew Core ML's own cache by about 200 MB). make-app.sh checks the packages
+// against the sealed list, compiles them, and lists every compiled file's hash in `compiled.sha256`, which begins with
+// a stamp of the sealed list it compiled from. The app checks that stamp against its own sealed list, then every
+// compiled file. Compiled output is not byte-for-byte repeatable (it carries the compiler's stamps), so its hashes
+// can only be listed when the app is put together; the code signature covers that list as it covers the app.
 import CryptoKit
 import DetectorCore
 import Foundation
@@ -12,6 +19,8 @@ public enum ModelCheckFailure: Error, Equatable, Sendable {
     case hashMismatch(String)
     /// A file inside a model package that the list does not name.
     case unlistedFile(String)
+    /// The compiled models' list was made from another sealed list than this build's.
+    case compiledFromOtherList
     case loadFailed(String)
 }
 
@@ -32,7 +41,49 @@ public enum WatcherModels {
         }
     }
 
-    /// Checks every listed file, and that each model package holds no file the list does not name.
+    /// The list of the compiled models' files that make-app.sh writes into the app's models folder.
+    public static let compiledListName = "compiled.sha256"
+
+    /// A stamp of a hash list: SHA-256 of its entries, one `sha256  path` line each, in order.
+    public static func stamp(of hashList: String) throws -> String {
+        sha256(Data(try parse(hashList).map { "\($0.sha256)  \($0.path)\n" }.joined().utf8))
+    }
+
+    /// For each model package in a hash list, a name for its compiled copy, made from the package's entries (which
+    /// were just checked, so the package is not read again to name it).
+    public static func packageKeys(_ hashList: String) throws -> [String: String] {
+        var lines: [String: String] = [:]
+        for e in try parse(hashList) {
+            guard let r = e.path.range(of: ".mlpackage/") else { continue }
+            let pkg = String(e.path[..<r.lowerBound]) + ".mlpackage"
+            lines[pkg, default: ""] += "\(e.sha256)  \(e.path[r.upperBound...])\n"
+        }
+        return lines.mapValues { sha256(Data($0.utf8)) }
+    }
+
+    /// Checks an app's compiled models: `compiled.sha256` must begin with `# from <stamp>` of `hashList`, and every
+    /// compiled file must match it, with no file in a compiled model that it does not name.
+    public static func verifyCompiled(folder: URL, hashList: String = committedHashList) throws {
+        guard let text = try? String(contentsOf: folder.appendingPathComponent(compiledListName), encoding: .utf8) else {
+            throw ModelCheckFailure.missingFile(compiledListName)
+        }
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        guard let first = lines.first, first.hasPrefix("# from ") else { throw ModelCheckFailure.malformedList }
+        lines.removeFirst()
+        guard String(first.dropFirst("# from ".count)).trimmingCharacters(in: .whitespaces) == (try stamp(of: hashList)) else {
+            throw ModelCheckFailure.compiledFromOtherList
+        }
+        let list = lines.joined(separator: "\n")
+        // Every sealed package has its compiled model in the list, so nothing is loaded that was not checked.
+        let compiledPaths = try parse(list).map(\.path)
+        for pkg in try packageKeys(hashList).keys {
+            let compiled = String(pkg.dropLast(".mlpackage".count)) + ".mlmodelc/"
+            guard compiledPaths.contains(where: { $0.hasPrefix(compiled) }) else { throw ModelCheckFailure.missingFile(compiled) }
+        }
+        try verify(folder: folder, hashList: list)
+    }
+
+    /// Checks every listed file, and that each model package (or compiled model) holds no file the list does not name.
     public static func verify(folder: URL, hashList: String = committedHashList) throws {
         let entries = try parse(hashList)
         guard !entries.isEmpty else { throw ModelCheckFailure.malformedList }
@@ -43,8 +94,10 @@ public enum WatcherModels {
         }
         let listed = Set(entries.map(\.path))
         let packages = Set(entries.compactMap { e -> String? in
-            guard let r = e.path.range(of: ".mlpackage/") else { return nil }
-            return String(e.path[..<r.lowerBound]) + ".mlpackage"
+            for ext in [".mlpackage", ".mlmodelc"] {
+                if let r = e.path.range(of: ext + "/") { return String(e.path[..<r.lowerBound]) + ext }
+            }
+            return nil
         })
         for pkg in packages {
             let root = folder.appendingPathComponent(pkg).resolvingSymlinksInPath()
@@ -59,15 +112,20 @@ public enum WatcherModels {
         }
     }
 
-    /// Verifies, then loads the watcher's three models with the sealed cut-off table. `compiledInto` is where their
-    /// compiled copies go (a `CompiledModelFolder`, removed when the app quits); nil leaves them in the temporary
-    /// folder, where Core ML never removes them.
-    public static func loadDetector(folder: URL, rule: DetectorRule, hashList: String = committedHashList,
-                                    compiledInto: URL? = nil) throws -> Detector {
-        try verify(folder: folder, hashList: hashList)
+    /// Verifies, then loads the watcher's three models with the sealed cut-off table: an app's compiled models,
+    /// checked against its `compiled.sha256`, or packages, checked against the sealed list and compiled once each to
+    /// a fixed place (DetectorCore's `CompiledModels`).
+    public static func loadDetector(folder: URL, rule: DetectorRule, hashList: String = committedHashList) throws -> Detector {
+        let compiled = FileManager.default.fileExists(atPath: folder.appendingPathComponent(compiledListName).path)
+        if compiled {
+            try verifyCompiled(folder: folder, hashList: hashList)
+        } else {
+            try verify(folder: folder, hashList: hashList)
+        }
+        let keys = compiled ? [:] : try packageKeys(hashList)
         do {
             let set = try ModelSet.watcher(directory: folder, bundleVersion: "practice-" + String(sha256(Data(hashList.utf8)).prefix(12)),
-                                           compiledInto: compiledInto)
+                                           compiled: compiled, keys: keys)
             var cfg = DetectorConfig(); cfg.rule = rule
             return try Detector(models: set, thresholdsJSON: committedThresholds, config: cfg)
         } catch {

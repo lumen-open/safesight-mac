@@ -45,9 +45,6 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         set { presenter.onCoversShown = newValue }
     }
     var repairActions: RepairCard.Actions?
-    /// Where the models' compiled copies go while the app runs; removed when it quits (CompiledModels.swift).
-    /// Main thread only.
-    private var compiled: CompiledModelFolder?
     /// What every display shows now: one plan per display the OS lists.
     @MainActor var plans: [CoverPlan] { coordinator.shown }
 
@@ -87,11 +84,6 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     @MainActor var notice: CoverNotice? {
         get { presenter.notice }
         set { presenter.notice = newValue; repairCard.notice = newValue; coordinator.present(urgent: true) }
-    }
-
-    /// Removes the models' compiled copies (at quit). The detector keeps working from memory until the app ends.
-    @MainActor func removeCompiledModels() {
-        compiled?.remove()
     }
 
     /// Waits, at most `timeout` seconds, for the judging queue to finish what it is doing. True when it did.
@@ -169,12 +161,10 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     @MainActor private func loadDetector(rule: DetectorRule) {
         link.ready = false
-        if compiled == nil { compiled = try? CompiledModelFolder() }
-        let compiledInto = compiled?.url
         judgeQueue.async { [weak self] in
             guard let self else { return }
             if self.detector == nil {
-                do { self.detector = try WatcherModels.loadDetector(folder: Self.modelsFolder(), rule: rule, compiledInto: compiledInto) }
+                do { self.detector = try WatcherModels.loadDetector(folder: Self.modelsFolder(), rule: rule) }
                 catch { DispatchQueue.main.async { self.reportDetectorFailure() }; return }
             } else {
                 self.detector?.setRule(rule)

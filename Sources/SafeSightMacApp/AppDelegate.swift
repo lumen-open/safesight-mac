@@ -36,8 +36,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // state kept for one (found in the Testing edition's safety pass).
         NSApp.disableRelaunchOnLogin()
         UserDefaults.standard.register(defaults: ["NSQuitAlwaysKeepsWindows": false])
-        // Compiled models left by a run that ended without quitting (a crash or a forced quit).
-        CompiledModelFolder.sweep()
         #if SAFESIGHTMAC_TESTING
         guard testing.launch(watcher: watcher) else { return }
         #endif
@@ -87,7 +85,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ note: Notification) {
         reconfiguration?.stop()
         watcher.stop()
-        watcher.removeCompiledModels()
     }
 
     // MARK: Running
