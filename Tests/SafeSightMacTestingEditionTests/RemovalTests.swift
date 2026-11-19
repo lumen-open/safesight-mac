@@ -133,6 +133,19 @@ final class FakeSettings: SettingsDomains {
         #expect(Removal.systemFolders().allSatisfy { URL(fileURLWithPath: $0).lastPathComponent.count == 1 })
     }
 
+    @Test func itsByHostSettingsGoAndNoOneElsesDo() throws {
+        let p = try makeContainer()
+        defer { try? fm.removeItem(at: p.root) }
+        let byHost = p.home.appendingPathComponent("Library/Preferences/ByHost")
+        try file(byHost.appendingPathComponent("\(id).0A1B2C3D-0000-0000-0000-000000000000.plist"))
+        try file(byHost.appendingPathComponent("com.apple.other.0A1B2C3D-0000-0000-0000-000000000000.plist"))
+        try fm.createSymbolicLink(at: byHost.appendingPathComponent("\(id).link.plist"), withDestinationURL: p.outside.appendingPathComponent("keep.txt"))
+        Removal.run(bundleID: id, home: p.home.path, settings: FakeSettings(), system: [])
+        #expect(!exists(byHost.appendingPathComponent("\(id).0A1B2C3D-0000-0000-0000-000000000000.plist")))
+        #expect(exists(byHost.appendingPathComponent("com.apple.other.0A1B2C3D-0000-0000-0000-000000000000.plist")))
+        #expect(linkExists(byHost.appendingPathComponent("\(id).link.plist")) && exists(p.outside.appendingPathComponent("keep.txt")))
+    }
+
     @Test func anotherAppsContainerIsNeverEmptied() throws {
         // A home that is a sandbox container, but not this app's: nothing in it is removed.
         let root = fm.temporaryDirectory.appendingPathComponent("safesightmac-removal-other-\(UUID().uuidString)")

@@ -64,6 +64,15 @@ public enum Removal {
         if isPlainFile(root.appendingPathComponent(prefs).path) {
             remove(prefs, in: root, into: &report)
         }
+        // Settings kept for this Mac only (ByHost): <bundle id>.<this Mac's identifier>.plist.
+        let byHost = "Library/Preferences/ByHost"
+        if isRealFolder(root.appendingPathComponent(byHost).path),
+           let names = try? FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent(byHost).path) {
+            for name in names.sorted() where name.hasPrefix(bundleID + ".") && name.hasSuffix(".plist")
+                && isPlainFile(root.appendingPathComponent(byHost + "/" + name).path) {
+                remove(byHost + "/" + name, in: root, into: &report)
+            }
+        }
         for folder in folders {
             let dir = root.appendingPathComponent(folder, isDirectory: true)
             guard isRealFolder(dir.path), let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { continue }
