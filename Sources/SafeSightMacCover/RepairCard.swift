@@ -168,6 +168,8 @@ public enum RepairCardView {
             b.controlSize = .large
             b.font = .systemFont(ofSize: 13, weight: main ? .medium : .regular)
             if main { b.bezelColor = NSColor(cgColor: t.accent.cg()) }
+            // A click never makes the card key, so the keyboard stays with the app underneath.
+            b.refusesFirstResponder = true
             b.sizeToFit()
             b.frame.size.width = max(b.frame.width + 8, 84)
             x -= b.frame.width
