@@ -63,6 +63,14 @@ public enum Band: String, CaseIterable, Sendable, Codable {
 
 public enum DisplayTrust: String, Sendable, Codable { case trusted, untrusted, magnified }
 
+/// A point the slice grid passes through, in frame pixels. The cover layer moves it with the content when
+/// a window scrolls or moves, so slices over content seen before have exactly the same pixels and come from
+/// the verdict cache. The grid still covers the whole area with the same slice size and overlap.
+public struct SliceAnchor: Sendable, Equatable {
+    public var x: Int, y: Int
+    public init(x: Int, y: Int) { self.x = x; self.y = y }
+}
+
 /// Where the frame came from.
 public struct JudgeContext: Sendable {
     public var windowID: UInt64
@@ -71,7 +79,11 @@ public struct JudgeContext: Sendable {
     public var display: DisplayTrust
     public var isVideo: Bool
     public var now: Date
-    public init(windowID: UInt64, startsCovered: Bool, display: DisplayTrust = .trusted, isVideo: Bool = false, now: Date = Date()) {
+    /// Where the slice grid is anchored (nil: at the area's top-left corner, as the lab build did).
+    public var sliceAnchor: SliceAnchor?
+    public init(windowID: UInt64, startsCovered: Bool, display: DisplayTrust = .trusted, isVideo: Bool = false, now: Date = Date(),
+                sliceAnchor: SliceAnchor? = nil) {
         self.windowID = windowID; self.startsCovered = startsCovered; self.display = display; self.isVideo = isVideo; self.now = now
+        self.sliceAnchor = sliceAnchor
     }
 }

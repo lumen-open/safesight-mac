@@ -180,7 +180,14 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             guard let p = pipelines[id], let idx = order.firstIndex(of: id), idx < Register.DISPLAYS_MAX else { continue }
             let start = ProcessInfo.processInfo.systemUptime
             DispatchQueue.main.async { self.busySince[id] = start }
-            let plan = p.process(f, snapshot: WindowList.snapshot(), now: start)
+            // Plans handed out before judging ends (covers moved with scrolled content) are drawn at once.
+            let plan = p.process(f, snapshot: WindowList.snapshot(), now: start) { [weak self] early in
+                DispatchQueue.main.async {
+                    guard let self, self.running else { return }
+                    self.plans[id] = early
+                    self.present()
+                }
+            }
             DispatchQueue.main.async {
                 self.busySince[id] = nil
                 guard self.running else { return }

@@ -126,17 +126,30 @@ public final class Detector {
         }
     }
 
-    static func slices(_ area: PixelRect, size: Int, stride: Int) -> [PixelRect] {
+    /// Overlapping slices over `area`. With no anchor, the grid starts at the area's corner (the lab build).
+    /// With an anchor, the grid passes through it, and a slice is added at each edge the grid does not reach:
+    /// consecutive slices still overlap by at least `size - stride`, so every picture that fits in the overlap
+    /// is whole in some slice, as before. It is at most one slice more per axis.
+    static func slices(_ area: PixelRect, size: Int, stride: Int, anchor: SliceAnchor? = nil) -> [PixelRect] {
         if area.w <= size && area.h <= size { return [] }
-        func starts(_ len: Int) -> [Int] {
-            if len <= size { return [0] }
-            var s = Array(Swift.stride(from: 0, through: len - size, by: stride))
-            if s.last! != len - size { s.append(len - size) }
+        func starts(_ lo: Int, _ len: Int, _ a: Int?) -> [Int] {
+            if len <= size { return [lo] }
+            guard let a else {
+                var s = Array(Swift.stride(from: lo, through: lo + len - size, by: stride))
+                if s.last! != lo + len - size { s.append(lo + len - size) }
+                return s
+            }
+            // The first grid line at or after `lo`.
+            let k = lo - a >= 0 ? (lo - a + stride - 1) / stride : -((a - lo) / stride)
+            var g = a + k * stride
+            var s: [Int] = g > lo ? [lo] : []
+            while g + size <= lo + len { s.append(g); g += stride }
+            if s.last! + size < lo + len { s.append(lo + len - size) }
             return s
         }
         var out: [PixelRect] = []
-        for y in starts(area.h) { for x in starts(area.w) {
-            out.append(PixelRect(x: area.x + x, y: area.y + y, w: min(size, area.w), h: min(size, area.h)))
+        for y in starts(area.y, area.h, anchor?.y) { for x in starts(area.x, area.w, anchor?.x) {
+            out.append(PixelRect(x: x, y: y, w: min(size, area.w), h: min(size, area.h)))
         } }
         return out
     }
@@ -177,7 +190,7 @@ public final class Detector {
                               key: VerdictCache.key(frame, r, pass: "region", version: v)))
         }
         tasks.append(Task(rect: A, pieces: Self.pieces(A), pass: .whole, gridMember: false, key: VerdictCache.key(frame, A, pass: "whole", version: v)))
-        for s in Self.slices(A, size: config.sliceSize, stride: config.sliceStride) {
+        for s in Self.slices(A, size: config.sliceSize, stride: config.sliceStride, anchor: ctx.sliceAnchor) {
             tasks.append(Task(rect: s, pieces: [s], pass: .slice, gridMember: false, key: VerdictCache.key(frame, s, pass: "slice", version: v)))
         }
 

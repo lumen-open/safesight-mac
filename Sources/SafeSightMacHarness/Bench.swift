@@ -120,10 +120,16 @@ final class Bench {
     /// Runs one frame through the pipeline, timing every stage and every plan it hands out.
     func step(_ p: DisplayPipeline, _ f: CapturedFrame, now: TimeInterval, pointer: CGPoint? = nil, snapshot snap: WindowSnapshot? = nil) -> BenchStep {
         detector.resetTimings()
+        var early: [(Double, CoverPlan)] = []
         let t0 = DispatchTime.now().uptimeNanoseconds
-        let plan = p.process(f, snapshot: snap ?? snapshot, now: now)
+        let plan = p.process(f, snapshot: snap ?? snapshot, now: now) { pl in
+            early.append((Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6, pl))
+        }
         let total = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
-        let plans = [ShownPlan(ms: total, drawMs: draw(plan), plan: plan, provisional: false)]
+        // Plans handed out early are drawn when they arrive (on the main thread in the app); here each is
+        // built after the call and its building time is added to when it arrived.
+        let plans = early.map { ShownPlan(ms: $0.0, drawMs: draw($0.1), plan: $0.1, provisional: true) }
+            + [ShownPlan(ms: total, drawMs: draw(plan), plan: plan, provisional: false)]
         return BenchStep(plans: plans, totalMs: total, pipe: p.lastTimings, judge: detector.timings)
     }
 
@@ -419,6 +425,9 @@ final class Bench {
             let s = step(p, frame(viewport(offset(ft)), dirty: [PixelRect(x: 0, y: 0, w: W, h: H)], t: ft), now: ft)
             steps.append(s)
             tl.add(s, start: ft)
+            if ProcessInfo.processInfo.environment["BENCH_TRACE"] != nil {
+                print("  frame t=\(r1(ft * 1000)) ms offset \(offset(ft)) total \(r1(s.totalMs)) motion \(r1(s.pipe.translateMs)) finder \(r1(s.judge.finderMs)) hash \(r1(s.judge.cacheMs)) hits \(s.judge.cacheHits) misses \(s.judge.cacheMisses) early \(s.plans.count - 1)")
+            }
             t = ft + (s.totalMs + s.plans.last!.drawMs) / 1000
         }
         tl.shown.sort { $0.t < $1.t }

@@ -37,6 +37,15 @@ public final class DisplayPipeline {
     var lastBounds: [JudgeTarget: CGRect] = [:]
     var overloadSince: [JudgeTarget: TimeInterval] = [:]
     var hot: Set<JudgeTarget> = []
+    /// How far each target's content has scrolled, in frame pixels: the slice grid moves with it.
+    var contentOffset: [JudgeTarget: Translation] = [:]
+    /// The last complete frame's row hashes per target, for finding motion (valid for the next frame only).
+    var rowCache: [JudgeTarget: (serial: Int, area: PixelRect, rows: [UInt64?])] = [:]
+    var frameSerial = 0
+    var lastFrameTime: TimeInterval?
+    /// How long a judging run takes (the recent longest, fading by a fifth a run): how far ahead a moving
+    /// cover must reach.
+    var runEstimateMs = 0.0
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
     public private(set) var judged = false
     public private(set) var lastPlan: CoverPlan
@@ -63,12 +72,18 @@ public final class DisplayPipeline {
     /// Drops every cover and all memory of the screen (used when the owner pauses, in practice state only).
     public func reset() {
         held = []; pending = []; lastImage = nil; lastMap = nil; lastFullPass = nil
-        lastBounds = [:]; overloadSince = [:]; hot = []
+        lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
         cover(because: .notYetJudged)
     }
 
     /// Handles one frame and returns everything to draw on this display.
-    public func process(_ f: CapturedFrame, snapshot: WindowSnapshot, now: TimeInterval, date: Date = Date()) -> CoverPlan {
+    ///
+    /// `provisional`, when given, receives plans to draw at once, before judging ends: covers moved with
+    /// content that scrolled. Every provisional plan holds every cover the last plan held (moved where its
+    /// picture moved), so drawing one never shows anything the last plan covered. The returned plan is the
+    /// final one for this frame and replaces them.
+    public func process(_ f: CapturedFrame, snapshot: WindowSnapshot, now: TimeInterval, date: Date = Date(),
+                        provisional: ((CoverPlan) -> Void)? = nil) -> CoverPlan {
         display = f.display
         switch f.status {
         case .blank, .suspended, .stopped:
@@ -78,13 +93,16 @@ public final class DisplayPipeline {
         case .idle:
             // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels.
             guard judged, let img = lastImage, let map = lastMap, !(held.isEmpty && pending.isEmpty) else { return lastPlan }
-            return run(img, map: map, dirty: [], snapshot: snapshot, now: now, date: date)
+            return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, provisional: provisional)
         case .complete:
             guard let img = f.image, let map = f.map, map.pixelWidth == img.width, map.pixelHeight == img.height, map.coversDisplay else {
                 return cover(because: .badFrameMetadata)
             }
-            lastImage = img; lastMap = map
-            return run(img, map: map, dirty: f.dirty, snapshot: snapshot, now: now, date: date)
+            let previous = lastMap.map { $0 == map } == true ? lastImage : nil
+            let dt = lastFrameTime.map { f.time - $0 } ?? 0
+            lastImage = img; lastMap = map; lastFrameTime = f.time
+            frameSerial += 1
+            return run(img, previous: previous, frameInterval: dt, map: map, dirty: f.dirty, snapshot: snapshot, now: now, date: date, provisional: provisional)
         }
     }
 
@@ -92,10 +110,14 @@ public final class DisplayPipeline {
         snapshot.bounds(of: t)?.origin ?? display.bounds.origin
     }
 
-    func run(_ img: RGBAImage, map: CaptureMap, dirty: [PixelRect]?, snapshot: WindowSnapshot, now: TimeInterval, date: Date) -> CoverPlan {
+    func run(_ img: RGBAImage, previous: RGBAImage?, frameInterval: TimeInterval, map: CaptureMap, dirty: [PixelRect]?, snapshot: WindowSnapshot,
+             now: TimeInterval, date: Date, provisional: ((CoverPlan) -> Void)?) -> CoverPlan {
         var timing = PipelineTimings()
         let tRun = PipelineTimings.now()
-        defer { timing.totalMs = PipelineTimings.ms(since: tRun); lastTimings = timing }
+        defer {
+            timing.totalMs = PipelineTimings.ms(since: tRun); lastTimings = timing
+            runEstimateMs = max(timing.totalMs, 0.8 * runEstimateMs)
+        }
         var tStage = tRun
         let d = display.bounds
         let visible = visibleByTarget(snapshot)
@@ -123,6 +145,20 @@ public final class DisplayPipeline {
         parts.sort { hot.contains($0.target) && !hot.contains($1.target) }
         timing.changeMs = PipelineTimings.ms(since: tStage)
 
+        // 2b. Content that moved by a translation (scrolling): its covers move with it now, in this update,
+        //     before the moved area is judged again. Each cover is drawn one step further along the motion
+        //     too, for this update, since the content keeps moving while judging runs.
+        var lead: [Held] = []
+        if judged, let prev = previous, dirty != nil {
+            tStage = PipelineTimings.now()
+            lead = followMotion(prev, img, parts: parts, map: map, snapshot: snapshot, frameInterval: frameInterval)
+            timing.translateMs = PipelineTimings.ms(since: tStage)
+            if !lead.isEmpty, let provisional {
+                provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead)))
+                timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
+            }
+        }
+
         // 3. Judge and turn classes into covers.
         var fresh: [Held] = []
         for p in parts {
@@ -131,7 +167,8 @@ public final class DisplayPipeline {
             bucket.refill(now: now)
             // The first judgement after the display was covered whole is not limited by the budget (SD-120).
             let budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
-            let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
+            let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
+                                   sliceAnchor: sliceAnchor(p.target, snapshot, map))
             tStage = PipelineTimings.now()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget)
             timing.judgeMs += PipelineTimings.ms(since: tStage)
@@ -170,13 +207,27 @@ public final class DisplayPipeline {
         for n in fresh { merge(n) }
         // A window that closed takes its covers with it; nothing of it is on screen any more.
         held.removeAll { visible[$0.target] == nil }
+        contentOffset = contentOffset.filter { visible[$0.key] != nil }
 
-        // 5. Draw: every held region, clipped to where its target is visible; and for a window that just
-        //    moved, its old place too, for this update (old and new frames are both covered).
+        // 5. Draw.
+        let items = drawItems(snapshot, visible, map, moved: moved, lead: lead)
+        lastBounds = [:]
+        for w in snapshot.windows where w.bounds.intersects(d) { lastBounds[.window(number: w.number, ownerPID: w.ownerPID)] = w.bounds }
+        lastPlan = CoverPlan(display: display, items: items)
+        return lastPlan
+    }
+
+    /// Every held region, clipped to where its target is visible; for a window that just moved, its old place
+    /// too, for this update (old and new frames are both covered); and the lead of covers that moved with
+    /// scrolled content.
+    func drawItems(_ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]], _ map: CaptureMap,
+                   moved: [(JudgeTarget, CGRect, CGRect)], lead: [Held]) -> [CoverItem] {
+        let d = display.bounds
         var items: [CoverItem] = []
-        for h in held {
+        for h in held + lead {
             guard let vis = visible[h.target] else { continue }
-            let rects = h.whole ? vis : vis.clipped(to: h.rel.offsetBy(dx: origin(of: h.target, snapshot).x, dy: origin(of: h.target, snapshot).y))
+            let o = origin(of: h.target, snapshot)
+            let rects = h.whole ? vis : vis.clipped(to: h.rel.offsetBy(dx: o.x, dy: o.y))
             items += rects.map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: h.kind) }
         }
         for (t, old, _) in moved {
@@ -185,10 +236,56 @@ public final class DisplayPipeline {
                 if r.hasArea { items.append(CoverItem(rect: CoordinateSpace.snapOutward(r, pointsPerPixel: map.pointsPerPixel), kind: h.kind)) }
             }
         }
-        lastBounds = [:]
-        for w in snapshot.windows where w.bounds.intersects(d) { lastBounds[.window(number: w.number, ownerPID: w.ownerPID)] = w.bounds }
-        lastPlan = CoverPlan(display: display, items: items)
-        return lastPlan
+        return items
+    }
+
+    /// The slice grid's anchor for a target: its origin, plus how far its content has scrolled.
+    func sliceAnchor(_ t: JudgeTarget, _ snapshot: WindowSnapshot, _ map: CaptureMap) -> SliceAnchor {
+        let o = map.pixelPoint(global: origin(of: t, snapshot))
+        let off = contentOffset[t] ?? Translation(dx: 0, dy: 0)
+        return SliceAnchor(x: Int(o.x.rounded()) + off.dx, y: Int(o.y.rounded()) + off.dy)
+    }
+
+    /// Finds content that moved by a translation in each changed part, and moves the covers over it. A cover
+    /// moves only when the pixels at its new place are exactly the pixels it covered; otherwise its new place
+    /// is covered as well as its old one. Returns each moved cover stretched along the motion as far as the
+    /// content will go before the next plan can be drawn (drawn for this update only). Nothing is lifted here.
+    func followMotion(_ prev: RGBAImage, _ img: RGBAImage, parts: [TargetArea], map: CaptureMap, snapshot: WindowSnapshot,
+                      frameInterval: TimeInterval) -> [Held] {
+        var lead: [Held] = [], copies: [Held] = []
+        let ppx = map.pointsPerPixel
+        for p in parts {
+            guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
+                  let area = map.toPixels(changedBox.intersection(visBox)), area.w >= 32, area.h >= 32 else { continue }
+            let newRows = MotionFinder.rowLines(img, area)
+            let cached = rowCache[p.target].flatMap { $0.serial == frameSerial - 1 && $0.area == area ? $0.rows : nil }
+            rowCache[p.target] = (frameSerial, area, newRows)
+            guard let t = MotionFinder.find(old: prev, new: img, area: area, oldRows: cached ?? MotionFinder.rowLines(prev, area), newRows: newRows)
+            else { continue }
+            let off = contentOffset[p.target] ?? Translation(dx: 0, dy: 0)
+            contentOffset[p.target] = Translation(dx: off.dx + t.dx, dy: off.dy + t.dy)
+            let o = origin(of: p.target, snapshot)
+            let step = (dx: CGFloat(t.dx) * ppx, dy: CGFloat(t.dy) * ppx)
+            // How far the content moves before the next plan: its speed times one judging run (at least 0.25 s)
+            // and a margin; at least one step, at most 2 s of motion.
+            let ahead = frameInterval > 0 ? min(2, (max(runEstimateMs, 250) + 50) / 1000) / frameInterval : 1
+            let reach = (dx: step.dx * max(1, CGFloat(ahead)), dy: step.dy * max(1, CGFloat(ahead)))
+            for i in held.indices where held[i].target == p.target && !held[i].whole {
+                guard let px = map.toPixels(held[i].rel.offsetBy(dx: o.x, dy: o.y)), px.intersects(area) else { continue }
+                let movedRel = held[i].rel.offsetBy(dx: step.dx, dy: step.dy)
+                let dest = PixelRect(x: px.x + t.dx, y: px.y + t.dy, w: px.w, h: px.h).intersection(area)
+                if let dest, MotionFinder.matches(old: prev, new: img, r: dest, t: t) {
+                    held[i].rel = movedRel
+                } else {
+                    var c = held[i]; c.rel = movedRel; copies.append(c)
+                }
+                var l = held[i]
+                l.rel = movedRel.union(movedRel.offsetBy(dx: reach.dx, dy: reach.dy))
+                lead.append(l)
+            }
+        }
+        held += copies
+        return lead
     }
 
     /// Where each target is visible on this display.

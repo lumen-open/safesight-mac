@@ -188,3 +188,75 @@ final class CacheTests: XCTestCase {
         XCTAssertEqual(two.judgements, 0)
     }
 }
+
+/// The slice grid anchored to the content (SafeSight Mac): with no anchor it is the lab build's grid; with
+/// one, it still covers every pixel of the area with the same overlap, and it is at most one slice longer
+/// per axis.
+final class SliceGridTests: XCTestCase {
+    /// The lab build's grid, as it was.
+    func labSlices(_ area: PixelRect, size: Int, stride: Int) -> [PixelRect] {
+        if area.w <= size && area.h <= size { return [] }
+        func starts(_ len: Int) -> [Int] {
+            if len <= size { return [0] }
+            var s = Array(Swift.stride(from: 0, through: len - size, by: stride))
+            if s.last! != len - size { s.append(len - size) }
+            return s
+        }
+        var out: [PixelRect] = []
+        for y in starts(area.h) { for x in starts(area.w) {
+            out.append(PixelRect(x: area.x + x, y: area.y + y, w: min(size, area.w), h: min(size, area.h)))
+        } }
+        return out
+    }
+
+    func testNoAnchorIsTheLabGrid() {
+        for (w, h) in [(513, 300), (2880, 1800), (1000, 1000), (600, 2000), (512, 513)] {
+            let a = PixelRect(x: 7, y: 3, w: w, h: h)
+            XCTAssertEqual(Detector.slices(a, size: 512, stride: 384), labSlices(a, size: 512, stride: 384))
+        }
+    }
+
+    func testAnAnchoredGridCoversEverythingWithTheSameOverlap() {
+        var g = XorShift32(seed: 21)
+        for _ in 0..<300 {
+            let a = PixelRect(x: Int(g.next() % 400), y: Int(g.next() % 400), w: 300 + Int(g.next() % 2800), h: 300 + Int(g.next() % 2000))
+            let anchor = SliceAnchor(x: Int(g.next() % 4000) - 2000, y: Int(g.next() % 4000) - 2000)
+            let s = Detector.slices(a, size: 512, stride: 384, anchor: anchor)
+            let lab = labSlices(a, size: 512, stride: 384)
+            if lab.isEmpty { XCTAssertTrue(s.isEmpty); continue }
+            for r in s { XCTAssertEqual(r.intersection(a), r, "inside the area") }
+            // Per axis: sorted starts begin at the edge, end at the far edge, and step by at most `stride`.
+            for (starts, lo, len) in [(Set(s.map(\.x)).sorted(), a.x, a.w), (Set(s.map(\.y)).sorted(), a.y, a.h)] {
+                let side = min(512, len)
+                XCTAssertEqual(starts.first, lo)
+                XCTAssertEqual(starts.last! + side, lo + len)
+                for (p, q) in zip(starts, starts.dropFirst()) { XCTAssertLessThanOrEqual(q - p, 384, "overlap at least 128") }
+            }
+            let cols = Set(s.map(\.x)).count, rows = Set(s.map(\.y)).count
+            XCTAssertLessThanOrEqual(cols, Set(lab.map(\.x)).count + 1)
+            XCTAssertLessThanOrEqual(rows, Set(lab.map(\.y)).count + 1)
+            XCTAssertEqual(s.count, cols * rows)
+        }
+    }
+
+    func testScrolledSlicesComeFromTheCache() {
+        // A tall page; a 600 x 1300 view of it, then the view 100 pixels further down. With the grid moved
+        // with the content, the inner slice rows of the second view have the same pixels as slices of the
+        // first (the edge rows are new either way).
+        var tall = canvas(600, 1500)
+        var g = XorShift32(seed: 4)
+        for i in 0..<14 { paint(&tall, PixelRect(x: 20 + Int(g.next() % 380), y: i * 100 + 10, w: 150, h: 50), channel: nil, seed: UInt32(30 + i)) }
+        func view(_ off: Int) -> RGBAImage {
+            RGBAImage(width: 600, height: 1300, pixels: Array(tall.pixels[(off * 600 * 4)..<((off + 1300) * 600 * 4)]))
+        }
+        func secondCall(anchored: Bool) -> Int {
+            let (d, _, _) = detector()
+            _ = d.judge(view(0), context: JudgeContext(windowID: 1, startsCovered: false, sliceAnchor: anchored ? SliceAnchor(x: 0, y: 0) : nil))
+            d.resetTimings()
+            _ = d.judge(view(100), context: JudgeContext(windowID: 1, startsCovered: false, sliceAnchor: anchored ? SliceAnchor(x: 0, y: -100) : nil))
+            return d.timings.tiles.values.reduce(0, +)
+        }
+        let plain = secondCall(anchored: false), anchored = secondCall(anchored: true)
+        XCTAssertLessThan(anchored, plain, "anchored: \(anchored) tiles judged, unanchored: \(plain)")
+    }
+}
