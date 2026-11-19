@@ -321,8 +321,9 @@ import Testing
         let (r, g) = judgedRig([a, b])
         #expect(r.presenter.whole(1) == nil, "judged clean")
         let removed = r.presenter.removed, applied = r.presenter.applied.count
-        // The OS says the screen is locked: every canvas goes, and nothing is drawn while it stays locked.
-        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true, screenLocked: true)
+        // The OS says the screen is locked and the lock screen is drawn: every canvas goes, and nothing is drawn while
+        // it stays locked.
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true, screenLocked: true, lockScreenUp: true)
         r.coordinator.tick()
         #expect(r.presenter.removed > removed)
         #expect(r.presenter.applied.count == applied, "nothing drawn at the lock screen")
@@ -338,10 +339,50 @@ import Testing
         #expect(r.presenter.whole(1) != nil, "a plan from before the lock never lowers the cover")
     }
 
+    /// The first live run: the canvas left the window list about three seconds after ⌃⌘Q, before the lock screen was
+    /// drawn, and the desktop was in sight meanwhile. The canvases now stay, covered whole, until the lock screen is seen
+    /// over every display (they sit below its level, so never over the password field), or `lockScreenWait` has passed.
+    @Test func whileTheScreenLocksEveryDisplayStaysCoveredWholeUntilTheLockScreenIsDrawn() {
+        let (r, _) = judgedRig([a, b])
+        #expect(r.presenter.whole(1) == nil, "judged clean")
+        let removed = r.presenter.removed
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true, screenLocked: true, lockScreenUp: false)
+        r.coordinator.tick()
+        #expect(r.presenter.removed == removed, "not taken off before the lock screen is drawn")
+        #expect(r.presenter.whole(1) != nil && r.presenter.whole(2) != nil, "covered whole meanwhile")
+        #expect(r.coordinator.waitingForLockScreen)
+        r.os.now += 1; r.coordinator.tick()
+        #expect(r.presenter.removed == removed && r.presenter.whole(1) != nil, "still covered whole a second later")
+        // The lock screen is drawn: the canvases go.
+        r.os.state.lockScreenUp = true
+        r.os.now += 0.25; r.coordinator.tick()
+        #expect(r.presenter.removed > removed)
+        #expect(!r.coordinator.waitingForLockScreen)
+    }
+
+    @Test func aLockScreenNeverSeenStillTakesTheCanvasesOffInTime() {
+        let (r, _) = judgedRig([a])
+        let removed = r.presenter.removed
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true, screenLocked: true, lockScreenUp: false)
+        r.coordinator.tick()
+        #expect(r.presenter.removed == removed)
+        r.os.now += CoverCoordinator.lockScreenWait + 0.1; r.coordinator.tick()
+        #expect(r.presenter.removed > removed, "a cover must never be what stands in front of the password field")
+    }
+
+    @Test func theLockScreenRuleCoversEveryDisplayWhole() {
+        let d1 = CGRect(x: 0, y: 0, width: 300, height: 200), d2 = CGRect(x: 300, y: 0, width: 300, height: 200)
+        #expect(SystemState.lockScreenCovers([d1, d2], shields: [d1, d2]))
+        #expect(SystemState.lockScreenCovers([d1, d2], shields: [CGRect(x: 0, y: 0, width: 600, height: 200)]))
+        #expect(!SystemState.lockScreenCovers([d1, d2], shields: [d1]), "one display still uncovered")
+        #expect(!SystemState.lockScreenCovers([d1], shields: [CGRect(x: 0, y: 0, width: 300, height: 30)]), "a strip is not the lock screen")
+        #expect(!SystemState.lockScreenCovers([], shields: [d1]))
+    }
+
     @Test func anotherSessionOnTheConsoleAlsoTakesEveryCoverOff() {
         let (r, _) = judgedRig([a])
         let applied = r.presenter.applied.count
-        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: false)
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: false, lockScreenUp: true)
         r.coordinator.willChange(.session)
         #expect(r.presenter.applied.count == applied && r.presenter.removed > 0)
         r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true)
