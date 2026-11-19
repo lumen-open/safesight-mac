@@ -104,28 +104,26 @@ final class CoverGapTests: XCTestCase {
 
     // MARK: Thin strips
 
-    func testAThinStripIsJudgedBySlicesNotDozensOfWholePassPieces() {
-        let img = canvas(3000, 40)
+    func testAThinStripIsJudgedGrownInPiecesOfAtMostTwoToOne() {
+        let img = canvas(3000, 200)
         let (d, _, _) = detector()
-        let strip = PixelRect(x: 0, y: 0, w: 3000, h: 16)
+        let strip = PixelRect(x: 0, y: 92, w: 3000, h: 16)
         let v = d.judge(img, context: ctx, within: strip)
-        XCTAssertFalse(v.regions.contains { $0.pass == .whole })
-        XCTAssertLessThanOrEqual(v.judgements, 40, "was about 250")
+        XCTAssertFalse(v.regions.contains { $0.pass == .slice }, "no slices stretched over a strip")
+        let whole = v.regions.first { $0.pass == .whole }
+        XCTAssertEqual(whole?.rect, PixelRect(x: 0, y: 68, w: 3000, h: 64), "grown with the pixels around it")
+        XCTAssertTrue(Detector.pieces(whole!.rect).allSatisfy { max($0.w, $0.h) <= 2 * min($0.w, $0.h) })
+        XCTAssertLessThanOrEqual(v.judgements, 70, "was about 250")
         XCTAssertEqual(v.overloaded, 0)
-        // Nothing of the strip is left unjudged: its slices reach every pixel of it.
-        let slices = v.regions.filter { $0.pass == .slice }.map(\.rect)
-        for x in stride(from: 0, to: 3000, by: 7) {
-            XCTAssertTrue(slices.contains { $0.x <= x && x < $0.maxX && $0.y <= 0 && $0.maxY >= 16 }, "x \(x)")
-        }
     }
 
-    func testAShortThinStripStillGetsOneSlice() {
+    func testAStripAtTheFramesEdgeGrowsInsideTheFrame() {
         let img = canvas(600, 40)
         let (d, _, _) = detector()
         let strip = PixelRect(x: 10, y: 4, w: 450, h: 12)
         let v = d.judge(img, context: ctx, within: strip)
-        XCTAssertFalse(v.regions.contains { $0.pass == .whole })
-        XCTAssertTrue(v.regions.contains { $0.pass == .slice && $0.rect == strip })
+        XCTAssertEqual(v.regions.first { $0.pass == .whole }?.rect, PixelRect(x: 10, y: 0, w: 450, h: 40))
+        XCTAssertEqual(Detector.grown(PixelRect(x: 0, y: 190, w: 300, h: 10), to: 64, width: 300, height: 200), PixelRect(x: 0, y: 136, w: 300, h: 64))
     }
 
     func testAThinStripWithAFlaggedSliceStillCovers() {

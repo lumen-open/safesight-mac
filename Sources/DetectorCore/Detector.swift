@@ -77,10 +77,21 @@ public final class Detector {
 
     typealias Pass = JudgePass
 
-    /// A call area whose short side is below this, and whose whole pass would take more than `thinWholePiecesMax`
-    /// pieces, skips the whole pass: its regions and slices judge it.
+    /// A call area whose short side is below this and that is more than 2:1 is a thin strip: its whole pass is grown to
+    /// this short side and it has no slices.
     static let thinBelow = 64
-    static let thinWholePiecesMax = 4
+
+    /// `r` grown on its short side to at least `side` (centred, kept inside the frame).
+    static func grown(_ r: PixelRect, to side: Int, width: Int, height: Int) -> PixelRect {
+        func grow(_ lo: Int, _ len: Int, _ limit: Int) -> (Int, Int) {
+            guard len < side else { return (lo, len) }
+            let n = min(side, limit)
+            let start = min(max(0, lo - (n - len) / 2), max(0, limit - n))
+            return (start, n)
+        }
+        if r.h <= r.w { let (y, h) = grow(r.y, r.h, height); return PixelRect(x: r.x, y: y, w: r.w, h: h) }
+        let (x, w) = grow(r.x, r.w, width); return PixelRect(x: x, y: r.y, w: w, h: r.h)
+    }
 
     /// Changes the detector rule. The verdict cache is emptied, because a cached outcome was made under
     /// the other rule (the tie-breaker is asked only under Balanced).
@@ -238,16 +249,14 @@ public final class Detector {
             tasks.append(Task(rect: r, pieces: Self.pieces(r), pass: .region, gridMember: gridMembers.contains(r),
                               key: VerdictCache.key(frame, r, pass: "region", version: v)))
         }
-        // A thin strip (a wide, short changed area) would cost dozens of whole-pass pieces. It is left to the regions
-        // and the slices, with at least one slice over it, so every part of it is still judged.
-        let wholePieces = Self.pieces(A)
-        let thin = A.shortSide < Self.thinBelow && wholePieces.count > Self.thinWholePiecesMax
-        if !thin {
-            tasks.append(Task(rect: A, pieces: wholePieces, pass: .whole, gridMember: false, key: VerdictCache.key(frame, A, pass: "whole", version: v)))
-        }
-        var sliceRects = Self.slices(A, size: config.sliceSize, stride: config.sliceStride, anchor: ctx.sliceAnchor)
-        if thin && sliceRects.isEmpty { sliceRects = [A] }
-        for s in sliceRects {
+        // A thin strip (a wide, short changed area) would cost dozens of tiny whole-pass pieces, and slices over it would
+        // reach the models stretched many times over. Its whole pass is grown to `thinBelow` on the short side with the
+        // pixels around it (within the frame) and judged in pieces of at most 2:1, and it has no slices: every part of it
+        // is still judged, never stretched beyond 2:1.
+        let thin = A.shortSide < Self.thinBelow && max(A.w, A.h) > 2 * A.shortSide
+        let W = thin ? Self.grown(A, to: Self.thinBelow, width: frame.width, height: frame.height) : A
+        tasks.append(Task(rect: W, pieces: Self.pieces(W), pass: .whole, gridMember: false, key: VerdictCache.key(frame, W, pass: "whole", version: v)))
+        for s in thin ? [] : Self.slices(A, size: config.sliceSize, stride: config.sliceStride, anchor: ctx.sliceAnchor) {
             tasks.append(Task(rect: s, pieces: [s], pass: .slice, gridMember: false, key: VerdictCache.key(frame, s, pass: "slice", version: v)))
         }
 
