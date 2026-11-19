@@ -123,6 +123,33 @@ extension DisplayCoverage {
         #expect(f.list.judged == [1], "and no judged place or stream of its own")
     }
 
+    @Test func aStaleMirrorRelationshipForAnExtendedDisplayStillGetsACanvas() {
+        // Around un-mirroring, CoreGraphics may still say display 2 repeats display 1 while it is already extended,
+        // to the right of display 1. It must keep its own canvas and its judged place.
+        var f = FakeDisplays.two
+        f.mirrors = [2: 1]
+        #expect(f.list.ids == [1, 2])
+        #expect(f.list.mirrors.isEmpty)
+        #expect(f.list.judged == [1, 2])
+        // Extended above or below, overlapping display 1's edge, or with bounds that cannot be read: a canvas too.
+        for b in [CGRect(x: 0, y: -200, width: 300, height: 200), CGRect(x: 150, y: 100, width: 300, height: 200)] {
+            f.bounds[2] = b
+            #expect(f.list.ids == [1, 2], "placed at \(b)")
+        }
+        f.bounds[2] = .zero
+        f.screenFrames[2] = CGRect(x: 300, y: 0, width: 300, height: 200)
+        #expect(f.list.ids == [1, 2], "bounds that cannot be read: any doubt means a canvas")
+    }
+
+    @Test func aMirrorInsideItsSourcesBoundsIsAMirror() {
+        // A hardware matte: the mirror's bounds lie inside its source's, at another origin.
+        var f = FakeDisplays.two
+        f.mirrors = [2: 1]
+        f.bounds[2] = CGRect(x: 10, y: 10, width: 280, height: 180)
+        #expect(f.list.ids == [1])
+        #expect(f.list.mirrors == [2: 1])
+    }
+
     @Test func whenTheMainDisplayIsAMirrorTheDisplayItRepeatsComesFirst() {
         var f = FakeDisplays.two
         f.active = [1, 2, 3]; f.screens = [2, 3]; f.online = [1, 2, 3]

@@ -187,6 +187,21 @@ extension CoverPlan {
         #expect(!WayOut.leavesMenuBar(display: 2, main: 1, mirrorOf: { [1: 2, 2: 1][$0] }), "a loop never happens; it leaves nothing")
     }
 
+    @Test func aStaleMirrorRelationshipLeavesNoMenuBarOnAnExtendedDisplay() {
+        // Display 2 is extended to the right of the main display, but CoreGraphics still says it repeats it.
+        let main = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        var places: [UInt32: CGRect] = [1: main, 2: CGRect(x: 1440, y: 0, width: 1920, height: 1080)]
+        let says: (UInt32) -> UInt32? = { $0 == 2 ? 1 : nil }
+        func leaves() -> Bool {
+            WayOut.leavesMenuBar(display: 2, main: 1, mirrorOf: { MirrorSets.source(of: $0, mirrorOf: says, bounds: { places[$0] ?? .null }) })
+        }
+        #expect(!leaves(), "its own menu bar is covered with the rest of it")
+        places[2] = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        #expect(leaves(), "a real mirror shares the main display's origin")
+        places[2] = .null
+        #expect(!leaves(), "bounds that cannot be read: covered")
+    }
+
     @Test func aWholeDisplayCoverLeavesTheMenuBarAndCoversTheDock() throws {
         let d = DisplayDescriptor(id: 5, bounds: CGRect(x: 0, y: 0, width: 1440, height: 900))
         let plan = CoverPlan.covered(d, because: .displayChanging)

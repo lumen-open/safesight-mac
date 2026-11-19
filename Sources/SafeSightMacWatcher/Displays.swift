@@ -50,6 +50,18 @@ public enum MirrorSets {
         }
         return r
     }
+
+    /// The display `id` repeats, believed only where it is plausible. Members of a mirror set share their source's
+    /// place in global coordinates: the same origin or, with a hardware matte, a place inside the source's bounds. A
+    /// display placed anywhere else is its own display, whatever `mirrorOf` says (a stale value around un-mirroring,
+    /// say), and so is one whose bounds cannot be read. Any doubt means it is covered by a canvas of its own.
+    public static func source(of id: UInt32, mirrorOf: (UInt32) -> UInt32?, bounds: (UInt32) -> CGRect) -> UInt32? {
+        guard let s = mirrorOf(id), s != id else { return nil }
+        let b = bounds(id), sb = bounds(s)
+        guard DisplayList.usable(b), DisplayList.usable(sb) else { return nil }
+        let sameOrigin = abs(b.minX - sb.minX) <= 0.5 && abs(b.minY - sb.minY) <= 0.5
+        return sameOrigin || sb.insetBy(dx: -0.5, dy: -0.5).contains(b) ? s : nil
+    }
 }
 
 /// The displays as the OS lists them now: AppKit's screens and CoreGraphics' active list, with CoreGraphics' online
@@ -90,19 +102,23 @@ public struct DisplayList: Equatable, Sendable {
     /// Merges the OS's lists.
     /// - A display may show something when CoreGraphics lists it as active, AppKit lists it as a screen, or
     ///   ScreenCaptureKit lists it (which can add a display, never take one away).
-    /// - A display that repeats another (`mirrorOf`) whose mirror set's root is such a display is a mirror: no canvas,
-    ///   no judging and no stream of its own; the window system draws the root's windows, covers included, into it.
-    ///   This holds whether CoreGraphics lists it as active (software mirroring) or only as online (hardware mirroring).
-    /// - Every other such display gets a canvas.
+    /// - A display that repeats another (`mirrorOf`) and shares its place in global coordinates (`MirrorSets.source`),
+    ///   whose mirror set's root is such a display, is a mirror: no canvas, no judging and no stream of its own; the
+    ///   window system draws the root's windows, covers included, into it. This holds whether CoreGraphics lists it as
+    ///   active (software mirroring) or only as online (hardware mirroring).
+    /// - Every other such display gets a canvas, including one CoreGraphics says repeats another but which is placed
+    ///   elsewhere: any doubt means a canvas.
     /// - Bounds are CoreGraphics' (`bounds`, global points); a display CoreGraphics gives no bounds for is placed by
     ///   its screen frame. A display with neither is `unplaced`.
     public static func make(screens: [Screen], active: [UInt32], online: [UInt32] = [], capture: [UInt32] = [],
                             main: UInt32, primaryHeight: CGFloat,
                             bounds: (UInt32) -> CGRect, mirrorOf: (UInt32) -> UInt32?) -> DisplayList {
         let shown = Set(active).union(screens.map(\.id)).union(capture)
+        // A mirror relationship counts only where the display shares its source's place (`MirrorSets.source`).
+        func repeats(_ id: UInt32) -> UInt32? { MirrorSets.source(of: id, mirrorOf: mirrorOf, bounds: bounds) }
         var mirrors: [UInt32: UInt32] = [:]
         for id in shown.union(online) {
-            if let r = MirrorSets.root(of: id, mirrorOf: mirrorOf), r != id, shown.contains(r) { mirrors[id] = r }
+            if let r = MirrorSets.root(of: id, mirrorOf: repeats), r != id, shown.contains(r) { mirrors[id] = r }
         }
         let drawn = shown.subtracting(mirrors.keys)
 

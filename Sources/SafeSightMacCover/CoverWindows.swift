@@ -197,9 +197,13 @@ public final class OverlayCovers: CoverPresenter {
 @MainActor
 enum MenuBarProbe {
     static func height(_ display: DisplayDescriptor, screen: NSScreen?) -> CGFloat {
-        guard WayOut.leavesMenuBar(display: display.id, main: CGMainDisplayID(), mirrorOf: { id in
+        // A mirror relationship counts only where the display shares its source's place (`MirrorSets.source`).
+        let raw: (UInt32) -> UInt32? = { id in
             let m = CGDisplayMirrorsDisplay(id)
             return m == kCGNullDirectDisplay ? nil : m
+        }
+        guard WayOut.leavesMenuBar(display: display.id, main: CGMainDisplayID(), mirrorOf: { id in
+            MirrorSets.source(of: id, mirrorOf: raw, bounds: { CGDisplayBounds($0) })
         }) else { return 0 }
         guard let screen else { return 0 }
         let inset = screen.frame.maxY - screen.visibleFrame.maxY
