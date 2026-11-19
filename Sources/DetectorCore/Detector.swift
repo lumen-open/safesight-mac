@@ -404,7 +404,15 @@ public final class Detector {
         timings.tiles[m.id, default: 0] += tensors.count
         let c = modelCost[m.id] ?? (0, 0)
         modelCost[m.id] = (c.ms + pre + inf, c.tiles + tensors.count)
-        return scores.max() ?? 0
+        return Self.validTop(scores, count: tensors.count)
+    }
+
+    /// The highest score, only when a model gave one finite score for every tensor. Anything else (too few or too
+    /// many scores, a NaN or an infinity anywhere) gives nil: the task is left unjudged, which covers, and a model
+    /// that misbehaves never reads as clean.
+    static func validTop(_ scores: [Float], count: Int) -> Float? {
+        guard count > 0, scores.count == count, scores.allSatisfy(\.isFinite) else { return nil }
+        return scores.max()
     }
 
     /// Judges every piece of a task with every model (jitter before every judgement) and folds the
@@ -452,9 +460,10 @@ public final class Detector {
             let refScores = try? r.flagScores(tensors)
             timings.inferenceMs[r.id, default: 0] += msSince(t0)
             timings.tiles[r.id, default: 0] += tensors.count
-            if let scores = refScores {
+            // A tie-breaker that gives no usable score has not settled the dispute: it stays covered.
+            if let scores = refScores, let top = Self.validTop(scores, count: tensors.count) {
                 o.refereeRan = true
-                o.refereeFlag = (scores.max() ?? 0) >= cut.cover
+                o.refereeFlag = top >= cut.cover
                 refereeCalls += t.pieces.count
             }
         }
