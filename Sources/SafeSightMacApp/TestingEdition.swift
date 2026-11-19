@@ -3,6 +3,7 @@
 //
 // - ⌃⌥⌘Q quits at once from anywhere, covers or not (EmergencyQuit). If another app holds the shortcut, every
 //   line says to quit from the menu bar icon instead.
+// - It checks and covers only inside the App Sandbox (Sandbox).
 // - Its line is on the menu bar item, the menu, the repair card, whole-window and whole-display covers, any cover
 //   that hides half a display, and the "How it works" window.
 #if SAFESIGHTMAC_TESTING
@@ -14,6 +15,7 @@ import SafeSightMacTestingEdition
 
 @MainActor
 final class TestingEditionApp {
+    let sandboxed = Sandbox.isSandboxed()
     private var emergency: EmergencyQuit?
     private weak var watcher: WatcherController?
     private var layoutObserver: NSObjectProtocol?

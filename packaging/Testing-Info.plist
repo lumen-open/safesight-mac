@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The Testing edition's Info.plist (docs/TESTING-EDITION.md). Its own name and identifier (ending in .testing),
+     so it never shares a permission, settings or a sandbox container with the full app. No Dock icon. Nothing
+     here installs, starts at login or runs in the background: tools/check-testing-edition.sh checks its keys. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key><string>safesight-mac</string>
+    <key>CFBundleIdentifier</key><string>BUNDLE_ID</string>
+    <key>CFBundleName</key><string>SafeSight Mac Testing</string>
+    <key>CFBundleDisplayName</key><string>SafeSight Mac Testing</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>VERSION</string>
+    <key>CFBundleVersion</key><string>VERSION</string>
+    <key>LSMinimumSystemVersion</key><string>15.0</string>
+    <key>LSUIElement</key><true/>
+    <key>NSHumanReadableCopyright</key><string>Apache License 2.0</string>
+</dict>
+</plist>

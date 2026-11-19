@@ -65,6 +65,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var permission: Bool { ScreenRecordingPermission.granted }
 
+    /// Whether this copy may check and cover at all: always in the release edition; in the Testing edition, only
+    /// inside the App Sandbox.
+    private var mayRun: Bool {
+        #if SAFESIGHTMAC_TESTING
+        return testing.sandboxed
+        #else
+        return true
+        #endif
+    }
+
     /// Reads the practice signal and offers Pause on the repair card only in the practice state. The Testing
     /// edition has no keeper check: it always allows pausing.
     private func refreshPractice() {
@@ -81,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func startIfAllowed() {
-        guard pausedUntil == nil, !pausedIndefinitely else { return }
+        guard pausedUntil == nil, !pausedIndefinitely, mayRun else { updateIcon(); return }
         if permission {
             permissionTimer?.invalidate(); permissionTimer = nil
             watcher.start(rule: rule)
@@ -135,13 +145,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateIcon() {
         let symbol: String
         switch status {
-        case .on, .starting: symbol = "rectangle.dashed"
+        case .on, .starting: symbol = mayRun ? "rectangle.dashed" : "exclamationmark.triangle"
         case .paused: symbol = "pause.rectangle"
         case .needsScreenRecording, .detectorUnavailable, .displayCovered: symbol = "exclamationmark.triangle"
         }
         statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: AppText.productName + ": " + status.title)
         #if SAFESIGHTMAC_TESTING
-        if let b = statusItem?.button { testing.label(b, status: status.title) }
+        if let b = statusItem?.button { testing.label(b, status: mayRun ? status.title : AppText.testingNotSandboxed) }
         #endif
     }
 
@@ -153,18 +163,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         testing.followLayout()
         for i in testing.menuHeader() { menu.addItem(i) }
         menu.addItem(.separator())
+        if !mayRun {
+            menu.addItem(label(AppText.testingNotSandboxed, bold: true))
+            menu.addItem(note(AppText.testingNotSandboxedDetail))
+        }
         #endif
 
-        menu.addItem(label(status.title, bold: true))
-        switch status {
-        case .needsScreenRecording:
-            menu.addItem(note(AppText.needsPermissionDetail))
-            menu.addItem(item(AppText.grantPermission) { ScreenRecordingPermission.request(); Self.openScreenRecordingSettings() })
-        case let .displayCovered(cause):
-            menu.addItem(note(cause.plainWords))
-        case .paused(let until):
-            if let u = until { menu.addItem(note("Covering resumes at \(DateFormatter.localizedString(from: u, dateStyle: .none, timeStyle: .short)).")) }
-        default: break
+        if mayRun {
+            menu.addItem(label(status.title, bold: true))
+            switch status {
+            case .needsScreenRecording:
+                menu.addItem(note(AppText.needsPermissionDetail))
+                menu.addItem(item(AppText.grantPermission) { ScreenRecordingPermission.request(); Self.openScreenRecordingSettings() })
+            case let .displayCovered(cause):
+                menu.addItem(note(cause.plainWords))
+            case .paused(let until):
+                if let u = until { menu.addItem(note("Covering resumes at \(DateFormatter.localizedString(from: u, dateStyle: .none, timeStyle: .short)).")) }
+            default: break
+            }
         }
 
         if BuildInfo.edition == .standard {
@@ -190,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             for (t, m) in [(AppText.pauseFor15, 15), (AppText.pauseFor60, 60)] {
                 let i = item(t) { [weak self] in self?.pause(minutes: m) }
-                i.isEnabled = practice.pauseAllowed
+                i.isEnabled = practice.pauseAllowed && mayRun
                 menu.addItem(i)
             }
         }
