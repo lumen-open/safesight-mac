@@ -81,16 +81,18 @@ public enum OwnCoverColours {
 
 /// The window levels the covers use (kCGWindowLayer in the window list is the same number).
 public enum CoverLevel {
-    /// The cover canvas: as high as a window can go while the lock screen and the login window (the shielding level)
-    /// stay above it, so a cover can never hide them. That is far above the screen saver's and the assistive-technology
-    /// levels, so another app cannot simply choose a level above the covers; one that does anyway, over a cover, covers
-    /// the display whole (`DisplayPipeline.canvasLevel`). The app's own windows and menus sit one level higher.
-    /// (Five under the cursor's level, which is two above the shielding level; written from the cursor's so that no part
-    /// of the app names the shielding level, which only an app taking the screen over needs. The tests check where it
-    /// lies against the shielding level itself.)
-    public static let canvas = Int(CGWindowLevelForKey(.cursorWindow)) - 5
-    /// The app's own windows, its menu and the repair card: one level above the canvas.
-    public static let appAbove = canvas + 1
+    /// The cover canvas: above the screen saver's level (1000) and the assistive-technology levels (up to 1500), and
+    /// safely below the lock screen. loginwindow's windows were read at levels 2001 and 2004 on a locked Mac, so the lock
+    /// screen's password field, the login window, authorization prompts and other system dialogs stay above every cover:
+    /// a cover must never be what stops the owner unlocking their Mac. An app that raises its own window to this level
+    /// or above is not covered itself; over a cover, it covers the display whole (`DisplayPipeline.canvasLevel`). Raising
+    /// the canvas above the lock screen is not allowed until a test Mac shows all of those stay usable over a whole-display
+    /// cover (`docs/STEP-1-STATUS.md`).
+    public static let canvas = 1990
+    /// The app's own windows, its menu and the repair card: one level above the canvas, still below the lock screen.
+    public static let appAbove = 1991
+    /// The lowest level loginwindow's windows were seen at on a locked Mac.
+    public static let lockScreenSeen = 2001
 }
 
 /// Everything drawn on one display, applied in one step.
