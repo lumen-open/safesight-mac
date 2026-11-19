@@ -98,4 +98,40 @@ import Testing
         _ = p.process(Fixtures.frame(changed, display: d, scale: 1, dirty: [PixelRect(x: 300, y: 110, w: 40, h: 40)], t: 0.75), snapshot: snap, now: 0.75)
         #expect(p.held.count == 1 && p.held.first?.clean == 0, "the slice's judgement from before the change does not complete a clean judgement")
     }
+
+    /// The content under a cover changes but the capture reports no changed area there (the reported areas can miss a
+    /// change). The pixels are compared anyway: the count starts again, and one clean judgement of the new content does
+    /// not lift it.
+    @Test func aChangeTheCaptureDidNotReportStillStartsTheCountAgain() {
+        var mode = "flag"
+        let g = self.g
+        let judge = VerdictScript { area in
+            mode == "flag"
+                ? self.verdict([RegionVerdict(rect: g, display: .cover, reason: .bothFamilies, pass: .region),
+                                RegionVerdict(rect: area, display: .clear, reason: .judgedClean, pass: .whole)])
+                : self.verdict([RegionVerdict(rect: g, display: .clear, reason: .judgedClean, pass: .region),
+                                RegionVerdict(rect: area, display: .clear, reason: .judgedClean, pass: .whole)])
+        }
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = Fixtures.oneWindow(d.bounds)
+        var img = Fixtures.blank(600, 400)
+        Fixtures.paint(&img, g, channel: nil, seed: 4)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        mode = "clean"
+        var t = 0.0
+        while (p.held.first?.clean ?? 0) < 3 && t < 10 {
+            t += 0.25
+            _ = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t), snapshot: snap, now: t)
+        }
+        #expect(p.held.first?.clean == 3)
+        Fixtures.paint(&img, g, channel: nil, seed: 77)   // new content; the frame reports nothing changed
+        t += 0.1
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [], t: t), snapshot: snap, now: t)
+        #expect(!p.held.isEmpty && p.held.allSatisfy { $0.clean < 2 }, "\(p.heldLines)")
+        // A frame that reports a change where nothing changed keeps the count.
+        let before = p.held.first?.clean
+        t += 0.1
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [g], t: t), snapshot: snap, now: t)
+        #expect(p.held.isEmpty || (p.held.first?.clean ?? 0) >= (before ?? 0), "a reported change with the same pixels starts nothing again")
+    }
 }
