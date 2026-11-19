@@ -222,6 +222,8 @@ public final class CoverCanvas: CoverPresenter {
 public final class OverlayCovers: CoverPresenter {
     private var pool: [CoverPanel] = []
     public var notice: CoverNotice?
+    /// When every panel was last brought to the front: at most four times a second, besides each panel newly shown.
+    private var frontedAt: TimeInterval = -.infinity
     public init(notice: CoverNotice? = nil) { self.notice = notice }
 
     public func apply(_ plans: [CoverPlan]) {
@@ -239,6 +241,9 @@ public final class OverlayCovers: CoverPresenter {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         while pool.count < frames.count { pool.append(CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1))) }
+        let now = ProcessInfo.processInfo.systemUptime
+        let refront = now - frontedAt >= 0.25
+        if refront { frontedAt = now }
         for (i, panel) in pool.enumerated() {
             guard i < frames.count else { panel.orderOut(nil); continue }
             var (piece, scale, lined) = frames[i]
@@ -247,7 +252,7 @@ public final class OverlayCovers: CoverPresenter {
             root.frame = CGRect(origin: .zero, size: piece.frame.size)
             piece.frame.origin = .zero
             root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale, notice: notice, testingLineOn: lined ? [0] : [])
-            panel.orderFrontRegardless()
+            if refront || !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()
     }

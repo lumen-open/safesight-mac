@@ -215,7 +215,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     /// Judges one frame, then lets every other display, and any other work waiting, have its turn.
     private func judgeNext() {
-        guard let f = frames.next() else { return }
+        guard let f = frames.next(windows: { WindowList.snapshot() }) else { return }
         judge(f)
         judgeQueue.async { [weak self] in self?.judgeNext() }
     }

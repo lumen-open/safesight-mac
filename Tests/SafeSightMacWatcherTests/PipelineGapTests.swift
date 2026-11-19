@@ -251,6 +251,19 @@ final class VerdictScript: Judging {
         #expect(early.contains { $0.covers(CGRect(x: 60, y: 60, width: 100, height: 100)) }, "old place too")
     }
 
+    @Test func theWindowListIsReadOncePerFrameJudgedNotPerFrameCaptured() {
+        let q = FrameQueue()
+        q.open()
+        let img = Fixtures.blank(600, 400)
+        for k in 0..<10 { _ = q.offer(Fixtures.frame(touched(img, UInt8(k)), display: d, scale: 1, dirty: corner, t: Double(k) / 60), now: Double(k) / 60) }
+        var reads = 0
+        let f = q.next { reads += 1; return self.snap }
+        #expect(reads == 1)
+        #expect(f?.windows == snap)
+        #expect(q.next { reads += 1; return self.snap } == nil)
+        #expect(reads == 1)
+    }
+
     @Test func theWindowListTravelsWithThePixels() {
         var box = FrameMailbox()
         let a = WindowSnapshot(windows: [win], time: 1)

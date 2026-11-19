@@ -205,8 +205,10 @@ public final class FrameQueue: @unchecked Sendable {
     }
 
     /// The next frame, from the display whose turn it is. Returns nil, and marks the drain finished, when no frame waits.
-    public func next() -> CapturedFrame? {
-        lock.withLock {
+    /// `windows`, when given, reads the window list for a complete frame that carries none: once per frame taken for
+    /// judging (the newest pixels), never for the frames captured and replaced while it waited.
+    public func next(windows: (() -> WindowSnapshot)? = nil) -> CapturedFrame? {
+        let taken: CapturedFrame? = lock.withLock {
             while !turn.isEmpty {
                 let id = turn.removeFirst()
                 if let f = boxes[id]?.take() { since[id] = nil; return f }
@@ -214,6 +216,9 @@ public final class FrameQueue: @unchecked Sendable {
             scheduled = false
             return nil
         }
+        guard var f = taken else { return nil }
+        if f.windows == nil, f.status == .complete, let read = windows { f.windows = read() }
+        return f
     }
 
     /// How long each display's oldest unjudged frame has waited.
