@@ -1,0 +1,522 @@
+{
+  "bench" : "safesightmac-bench\/1",
+  "busy" : {
+    "register" : {
+      "allHarmlessShownAfterS" : {
+        "median" : 17.399999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "assumption" : "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+      "budget" : "register (JUDGEMENT_BUDGET 40\/s, JUDGEMENT_BURST 400)",
+      "firstCallMs" : {
+        "median" : 2688.8000000000002,
+        "n" : 6,
+        "worst" : 2762
+      },
+      "firstCallStages" : {
+        "cacheHashMs" : 41.100000000000001,
+        "cacheHits" : 138,
+        "cacheMisses" : 503,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.5,
+        "decisionMs" : 0,
+        "finderMs" : 189,
+        "judgements" : 400,
+        "judgeTotalMs" : 2687.9000000000001,
+        "model.bumble-private-detector.inferenceMs" : 0,
+        "model.bumble-private-detector.preprocessMs" : 0,
+        "model.bumble-private-detector.tiles" : 0,
+        "model.marqo-vit-tiny-384.inferenceMs" : 1317.7,
+        "model.marqo-vit-tiny-384.preprocessMs" : 624.20000000000005,
+        "model.marqo-vit-tiny-384.tiles" : 200,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 274.19999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 222.80000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 200,
+        "overloaded" : 338,
+        "planningMs" : 0.90000000000000002,
+        "processTotalMs" : 2688.8000000000002,
+        "translationMs" : 0
+      },
+      "fullyJudgedAfterS" : {
+        "median" : 17.300000000000001,
+        "n" : 6,
+        "worst" : 20.899999999999999
+      },
+      "pages" : 6,
+      "perPage" : [
+        {
+          "calls" : 102,
+          "computeMs" : 11336.6,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2762,
+          "firstCallOverloaded" : 288,
+          "fullyJudgedAfterS" : 13.699999999999999,
+          "harmlessClearAfterS" : 13.800000000000001,
+          "lastOverloadAfterS" : 13.5,
+          "page" : "synthetic-0058.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 13.800000000000001,
+            "worst" : 13.800000000000001
+          },
+          "standInCoveredAfterMs" : 2762.5999999999999
+        },
+        {
+          "calls" : 118,
+          "computeMs" : 12277.1,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2621.8000000000002,
+          "firstCallOverloaded" : 310,
+          "fullyJudgedAfterS" : 14.9,
+          "harmlessClearAfterS" : 15.199999999999999,
+          "lastOverloadAfterS" : 14.699999999999999,
+          "page" : "synthetic-0048.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 15.199999999999999,
+            "worst" : 15.199999999999999
+          },
+          "standInCoveredAfterMs" : 2622.3000000000002
+        },
+        {
+          "calls" : 142,
+          "computeMs" : 14931.9,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2679.9000000000001,
+          "firstCallOverloaded" : 375,
+          "fullyJudgedAfterS" : 17.600000000000001,
+          "harmlessClearAfterS" : 17.699999999999999,
+          "lastOverloadAfterS" : 17.399999999999999,
+          "page" : "synthetic-0057.png",
+          "photos" : 234,
+          "photosCoveredOrBlurredAtSomePoint" : 234,
+          "photoShownLateS" : {
+            "median" : 17.699999999999999,
+            "worst" : 17.699999999999999
+          },
+          "standInCoveredAfterMs" : 2680.4000000000001
+        },
+        {
+          "calls" : 140,
+          "computeMs" : 14569.9,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2711.4000000000001,
+          "firstCallOverloaded" : 427,
+          "fullyJudgedAfterS" : 17.300000000000001,
+          "harmlessClearAfterS" : 17.399999999999999,
+          "lastOverloadAfterS" : 17.100000000000001,
+          "page" : "synthetic-0040.png",
+          "photos" : 194,
+          "photosCoveredOrBlurredAtSomePoint" : 194,
+          "photoShownLateS" : {
+            "median" : 17.399999999999999,
+            "worst" : 17.399999999999999
+          },
+          "standInCoveredAfterMs" : 2712.0999999999999
+        },
+        {
+          "calls" : 180,
+          "computeMs" : 16690.200000000001,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2557.0999999999999,
+          "firstCallOverloaded" : 338,
+          "fullyJudgedAfterS" : 20.899999999999999,
+          "harmlessClearAfterS" : 21.100000000000001,
+          "lastOverloadAfterS" : 20.699999999999999,
+          "page" : "synthetic-0025.png",
+          "photos" : 159,
+          "photosCoveredOrBlurredAtSomePoint" : 159,
+          "photoShownLateS" : {
+            "median" : 21.100000000000001,
+            "worst" : 21.100000000000001
+          },
+          "standInCoveredAfterMs" : 2557.5999999999999
+        },
+        {
+          "calls" : 94,
+          "computeMs" : 10836.700000000001,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2688.8000000000002,
+          "firstCallOverloaded" : 260,
+          "fullyJudgedAfterS" : 12.800000000000001,
+          "harmlessClearAfterS" : 12.800000000000001,
+          "lastOverloadAfterS" : 12.6,
+          "page" : "synthetic-0013.png",
+          "photos" : 157,
+          "photosCoveredOrBlurredAtSomePoint" : 157,
+          "photoShownLateS" : {
+            "median" : 12.800000000000001,
+            "worst" : 12.800000000000001
+          },
+          "standInCoveredAfterMs" : 2689.1999999999998
+        }
+      ],
+      "photosCoveredOrBlurredShare" : {
+        "median" : 1,
+        "n" : 6,
+        "worst" : 1
+      },
+      "photoShownLateMedianS" : {
+        "median" : 17.399999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "photoShownLateWorstS" : {
+        "median" : 17.399999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "photoShownSharpBeforeFirstCoverS" : {
+        "median" : 2.7000000000000002,
+        "n" : 6,
+        "worst" : 2.7999999999999998
+      },
+      "standInTimeToCoverMs" : {
+        "median" : 2689.1999999999998,
+        "n" : 6,
+        "worst" : 2762.5999999999999
+      }
+    },
+    "unlimited" : {
+      "allHarmlessShownAfterS" : {
+        "median" : 7.9000000000000004,
+        "n" : 6,
+        "worst" : 8.5
+      },
+      "assumption" : "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+      "budget" : "unlimited (compute-bound; DETECTOR_CALL_CAP still applies)",
+      "firstCallMs" : {
+        "median" : 2694.0999999999999,
+        "n" : 6,
+        "worst" : 2785
+      },
+      "firstCallStages" : {
+        "cacheHashMs" : 41,
+        "cacheHits" : 138,
+        "cacheMisses" : 503,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.5,
+        "decisionMs" : 0,
+        "finderMs" : 187.40000000000001,
+        "judgements" : 400,
+        "judgeTotalMs" : 2693,
+        "model.bumble-private-detector.inferenceMs" : 0,
+        "model.bumble-private-detector.preprocessMs" : 0,
+        "model.bumble-private-detector.tiles" : 0,
+        "model.marqo-vit-tiny-384.inferenceMs" : 1332,
+        "model.marqo-vit-tiny-384.preprocessMs" : 629.10000000000002,
+        "model.marqo-vit-tiny-384.tiles" : 200,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 279,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 224,
+        "model.nsfwjs-mobilenet-v2.tiles" : 200,
+        "overloaded" : 338,
+        "planningMs" : 0.80000000000000004,
+        "processTotalMs" : 2694.0999999999999,
+        "translationMs" : 0
+      },
+      "fullyJudgedAfterS" : {
+        "median" : 7.7000000000000002,
+        "n" : 6,
+        "worst" : 8.3000000000000007
+      },
+      "pages" : 6,
+      "perPage" : [
+        {
+          "calls" : 6,
+          "computeMs" : 6860.1000000000004,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2675.1999999999998,
+          "firstCallOverloaded" : 288,
+          "fullyJudgedAfterS" : 6.7000000000000002,
+          "harmlessClearAfterS" : 7,
+          "lastOverloadAfterS" : 2.7000000000000002,
+          "page" : "synthetic-0058.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 7,
+            "worst" : 7
+          },
+          "standInCoveredAfterMs" : 2675.5999999999999
+        },
+        {
+          "calls" : 6,
+          "computeMs" : 6994.3999999999996,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2623.9000000000001,
+          "firstCallOverloaded" : 310,
+          "fullyJudgedAfterS" : 6.9000000000000004,
+          "harmlessClearAfterS" : 7.0999999999999996,
+          "lastOverloadAfterS" : 2.6000000000000001,
+          "page" : "synthetic-0048.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 7.0999999999999996,
+            "worst" : 7.0999999999999996
+          },
+          "standInCoveredAfterMs" : 2624.3000000000002
+        },
+        {
+          "calls" : 6,
+          "computeMs" : 7897.8000000000002,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2694.0999999999999,
+          "firstCallOverloaded" : 375,
+          "fullyJudgedAfterS" : 7.7999999999999998,
+          "harmlessClearAfterS" : 8,
+          "lastOverloadAfterS" : 2.7000000000000002,
+          "page" : "synthetic-0057.png",
+          "photos" : 234,
+          "photosCoveredOrBlurredAtSomePoint" : 234,
+          "photoShownLateS" : {
+            "median" : 8,
+            "worst" : 8
+          },
+          "standInCoveredAfterMs" : 2694.5999999999999
+        },
+        {
+          "calls" : 6,
+          "computeMs" : 7818.8999999999996,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2772.9000000000001,
+          "firstCallOverloaded" : 427,
+          "fullyJudgedAfterS" : 7.7000000000000002,
+          "harmlessClearAfterS" : 7.9000000000000004,
+          "lastOverloadAfterS" : 2.7999999999999998,
+          "page" : "synthetic-0040.png",
+          "photos" : 194,
+          "photosCoveredOrBlurredAtSomePoint" : 194,
+          "photoShownLateS" : {
+            "median" : 7.9000000000000004,
+            "worst" : 7.9000000000000004
+          },
+          "standInCoveredAfterMs" : 2773.5
+        },
+        {
+          "calls" : 7,
+          "computeMs" : 8417.5,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2614.6999999999998,
+          "firstCallOverloaded" : 338,
+          "fullyJudgedAfterS" : 8.3000000000000007,
+          "harmlessClearAfterS" : 8.5,
+          "lastOverloadAfterS" : 5,
+          "page" : "synthetic-0025.png",
+          "photos" : 159,
+          "photosCoveredOrBlurredAtSomePoint" : 159,
+          "photoShownLateS" : {
+            "median" : 8.5,
+            "worst" : 8.5
+          },
+          "standInCoveredAfterMs" : 2615.1999999999998
+        },
+        {
+          "calls" : 6,
+          "computeMs" : 6738.8999999999996,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2785,
+          "firstCallOverloaded" : 260,
+          "fullyJudgedAfterS" : 6.5999999999999996,
+          "harmlessClearAfterS" : 6.9000000000000004,
+          "lastOverloadAfterS" : 2.7999999999999998,
+          "page" : "synthetic-0013.png",
+          "photos" : 157,
+          "photosCoveredOrBlurredAtSomePoint" : 157,
+          "photoShownLateS" : {
+            "median" : 6.9000000000000004,
+            "worst" : 6.9000000000000004
+          },
+          "standInCoveredAfterMs" : 2785.3000000000002
+        }
+      ],
+      "photosCoveredOrBlurredShare" : {
+        "median" : 1,
+        "n" : 6,
+        "worst" : 1
+      },
+      "photoShownLateMedianS" : {
+        "median" : 7.9000000000000004,
+        "n" : 6,
+        "worst" : 8.5
+      },
+      "photoShownLateWorstS" : {
+        "median" : 7.9000000000000004,
+        "n" : 6,
+        "worst" : 8.5
+      },
+      "photoShownSharpBeforeFirstCoverS" : {
+        "median" : 2.7000000000000002,
+        "n" : 6,
+        "worst" : 2.7999999999999998
+      },
+      "standInTimeToCoverMs" : {
+        "median" : 2694.5999999999999,
+        "n" : 6,
+        "worst" : 2785.3000000000002
+      }
+    }
+  },
+  "chip" : "Apple M1 Max",
+  "display" : "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+  "frameCopy" : {
+    "frame" : "2880x1800",
+    "ms" : {
+      "median" : 3.7000000000000002,
+      "n" : 10,
+      "worst" : 5.2999999999999998
+    },
+    "note" : "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+  },
+  "label" : "after 3a (exact-match caches)",
+  "models" : "real models (converted), checked against the sealed hash list; sealed cut-off table",
+  "notIncluded" : "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+  "os" : "Version 26.3 (Build 25D125)",
+  "reappear" : {
+    "reload" : {
+      "firstShowMs" : {
+        "median" : 2641,
+        "n" : 6,
+        "worst" : 2733.1999999999998
+      },
+      "firstShowStages" : {
+        "cacheHashMs" : 40.700000000000003,
+        "cacheHits" : 138,
+        "cacheMisses" : 502,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 191.09999999999999,
+        "judgements" : 400,
+        "judgeTotalMs" : 2640.0999999999999,
+        "model.bumble-private-detector.inferenceMs" : 0,
+        "model.bumble-private-detector.preprocessMs" : 0,
+        "model.bumble-private-detector.tiles" : 0,
+        "model.marqo-vit-tiny-384.inferenceMs" : 1306.4000000000001,
+        "model.marqo-vit-tiny-384.preprocessMs" : 607.10000000000002,
+        "model.marqo-vit-tiny-384.tiles" : 200,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 274.30000000000001,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 218.19999999999999,
+        "model.nsfwjs-mobilenet-v2.tiles" : 200,
+        "overloaded" : 343,
+        "planningMs" : 0.80000000000000004,
+        "processTotalMs" : 2641,
+        "translationMs" : 0
+      },
+      "pages" : 6,
+      "reloadMs" : {
+        "median" : 43.299999999999997,
+        "n" : 6,
+        "worst" : 44.700000000000003
+      },
+      "reloadStages" : {
+        "cacheHashMs" : 41.200000000000003,
+        "cacheHits" : 622,
+        "cacheMisses" : 0,
+        "changeDetectionMs" : 0.10000000000000001,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 0,
+        "judgements" : 0,
+        "judgeTotalMs" : 41.299999999999997,
+        "overloaded" : 0,
+        "planningMs" : 2,
+        "processTotalMs" : 43.299999999999997,
+        "translationMs" : 0
+      }
+    },
+    "scrollBack-otherOffsets" : {
+      "backMs" : {
+        "median" : 938.89999999999998,
+        "n" : 9,
+        "worst" : 1229.5
+      },
+      "backStages" : {
+        "cacheHashMs" : 41.600000000000001,
+        "cacheHits" : 14,
+        "cacheMisses" : 32,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 124.40000000000001,
+        "judgements" : 64,
+        "judgeTotalMs" : 938.79999999999995,
+        "model.marqo-vit-tiny-384.inferenceMs" : 268.39999999999998,
+        "model.marqo-vit-tiny-384.preprocessMs" : 259.69999999999999,
+        "model.marqo-vit-tiny-384.tiles" : 32,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 48.700000000000003,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 189.19999999999999,
+        "model.nsfwjs-mobilenet-v2.tiles" : 32,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 938.89999999999998,
+        "translationMs" : 0
+      },
+      "downMs" : {
+        "median" : 1133.5999999999999,
+        "n" : 7,
+        "worst" : 1311.9000000000001
+      }
+    },
+    "scrollBack-sameOffsets" : {
+      "backMs" : {
+        "median" : 41.5,
+        "n" : 6,
+        "worst" : 62.899999999999999
+      },
+      "backStages" : {
+        "cacheHashMs" : 41.399999999999999,
+        "cacheHits" : 47,
+        "cacheMisses" : 0,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 0,
+        "judgements" : 0,
+        "judgeTotalMs" : 41.399999999999999,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 41.5,
+        "translationMs" : 0
+      },
+      "downMs" : {
+        "median" : 1235,
+        "n" : 7,
+        "worst" : 1359.3
+      }
+    },
+    "windowMove" : {
+      "moveMs" : {
+        "median" : 927.60000000000002,
+        "n" : 6,
+        "worst" : 1506.8
+      },
+      "pages" : 6,
+      "stages" : {
+        "cacheHashMs" : 55.200000000000003,
+        "cacheHits" : 911,
+        "cacheMisses" : 25,
+        "changeDetectionMs" : 0.10000000000000001,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 213.09999999999999,
+        "judgements" : 50,
+        "judgeTotalMs" : 925.89999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 270.19999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 191.40000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 25,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 41.899999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 138,
+        "model.nsfwjs-mobilenet-v2.tiles" : 25,
+        "overloaded" : 0,
+        "planningMs" : 0.90000000000000002,
+        "processTotalMs" : 927.60000000000002,
+        "translationMs" : 0
+      }
+    }
+  },
+  "rule" : "balanced"
+}

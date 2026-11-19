@@ -166,8 +166,8 @@ public final class DisplayPipeline {
         timing.changeMs = PipelineTimings.ms(since: tStage)
 
         // 2b. Content that moved by a translation (scrolling): its covers move with it now, in this update,
-        //     before the moved area is judged again. Each cover is drawn one step further along the motion
-        //     too, for this update, since the content keeps moving while judging runs.
+        //     before the moved area is judged again. Each moved cover is also drawn reaching ahead along the
+        //     motion, for this update, as far as the content will go before the next plan.
         var lead: [Held] = []
         if judged, let prev = previous, dirty != nil {
             tStage = PipelineTimings.now()
@@ -203,7 +203,6 @@ public final class DisplayPipeline {
                 vis.clipped(to: map.toGlobal(r)).map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: kind) }
             }
             func blur(_ r: PixelRect) -> CoverKind { ContainBlur.make(img, r).map { .blur($0) } ?? .plain }
-            let callStart = PipelineTimings.now()
             let progress: ((JudgeProgress) -> Void)? = provisional == nil || !judged ? nil : { event in
                 switch event {
                 case let .found(pending, coveredByCache, estimatedMs):
@@ -226,7 +225,6 @@ public final class DisplayPipeline {
                     timing.fastFlags += 1
                     publishEarly()
                 }
-                _ = callStart
             }
             tStage = PipelineTimings.now()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: progress)

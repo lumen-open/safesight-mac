@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Step 1 status: the cover-only app
 
-14 November 2026. Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness only. **The app has not been run live on any Mac.** Running it needs the Screen Recording permission, which only the owner can grant, on a test Mac.
+14 November 2026, updated 18 November (speed work, ST-040 re-run). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness only. **The app has not been run live on any Mac.** Running it needs the Screen Recording permission, which only the owner can grant, on a test Mac.
 
 Step 1 is the practice state of the watcher shipped alone (register SD-223 (f)). It has no lock: no keeper, no root part, no plain shield, no installer, no updater, no login item. It can be paused or quit at any time, and it protects nothing against its own owner.
 
@@ -37,7 +37,9 @@ These parts are built, and each is exercised by tests or the harness:
     - the display set changes, or the Mac sleeps or switches session.
 
     A repair card above the covers says why, in plain words, and offers Try again, Pause (in the practice state only) and Quit. Nothing ever locks the screen, logs anyone out or reports anywhere.
-  - **Slowness covers more.** Unjudged entries stay blurred or covered and are judged again. A window still unjudged after 0.5 s is covered whole.
+  - **Slowness covers more.** Unjudged entries stay blurred or covered and are judged again. When judging a window's new pictures would take longer than `COVER_GOAL` (0.1 s), they are blurred first and shown when cleared. A window still unjudged after 0.5 s is covered whole.
+  - **Covers follow scrolling.** When content moves by a translation, its covers move with it at once, before the moved area is judged again; a cover moves only onto exactly the pixels it covered.
+  - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte.
 - **The practice state** (SD-223).
   - The watcher is in the practice state only while no root-owned `<rd>.safesightmac.keeper.plist` (or the lab form) exists in `/Library/LaunchDaemons`. It is read with `lstat`, so a symbolic link is judged by its own owner.
   - If the check cannot be completed, the app does not claim the practice state: covering carries on and pause is turned off.
@@ -60,10 +62,12 @@ Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 83 test functions: 18 XCTest + 65 Swift Testing, all pass
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 85: adds the 2 stand-in tests, all pass
+swift test                                                 # 112 test functions: 35 XCTest + 77 Swift Testing, all pass
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 114: adds the 2 stand-in tests, all pass
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models ../v3-detector/models/converted --pages ../v3-detector/data/finder-bench-heldout/screens --json FILE
+swift run -c release safesightmac-harness falsecovers --models ../v3-detector/models/converted --list LIST --root ../v3-detector --rule balanced --json FILE
 swift run -c release safesightmac-harness demo --models ../v3-detector/models/converted
 ```
 
@@ -81,6 +85,10 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 | Wording | `AppTextTests` (SafeSightMacCoreTests) | The promise matches the README word for word; no forbidden claim; the mode sentence carries no figure; strict cover mode says "not in this version" |
 | Status line | `StatusTests` | "Needs Screen Recording", "Covering: on", a whole-display cover, pause and detector failure |
 | Stand-in (lab builds) | `StandInTests` | The stand-in through the real detector with null models is covered and placed on a 2x display at a negative origin; null models alone cover nothing |
+| Exact-match caches | 10 `CacheTests` (DetectorCoreTests), `VerdictCacheInThePipelineTests` | The key is the full SHA-256 of every byte (all four channels), size, pass and bundle version; one changed byte in any channel is a new key; a picture one level different is judged again; a flagged picture drawn where a clean one was is covered; a moved picture comes from the cache; the cache never holds more than its bound and keeps what is used; cached finder proposals equal the finder's, at the same place and moved; a change inside the finder's reach is a new key; a reloaded page is not judged again and stays covered |
+| Slice grid moved with the content | 3 `SliceGridTests` | No anchor gives the lab build's grid exactly; 300 random areas and anchors: every slice inside the area, the grid reaches both edges, steps of at most 384 (overlap at least 128), at most one slice more per axis; a scrolled view judges fewer tiles |
+| Covers follow scrolling | `MotionTests` | Vertical and horizontal scrolls are found; nothing moved, another page and a blank page give none; the match is exact to one byte; a cover moves with its picture in a plan handed out before judging and reaches ahead along the motion, with no smear left behind; a cover whose picture did not move with the page covers both places; nothing is handed out when nothing scrolled |
+| Faster order, never less judging | 4 `FastFirstTests`, `CoverFirstTests` | With or without the fast pass: the same verdicts, judgements and tiles per model, also under a tight budget; what is left is told after the finder, and is empty once cached; a fast flag is told but the tie-breaker still decides (it can clear it); under Either it is told as a cover; pictures nearest the pointer come first and the rest are left as overload, never clear. A busy page is blurred first and shown when cleared; a picture judged in time is not blurred first; a fast flag is blurred before the full rule covers; every early plan keeps every cover already shown; no early plan while a display is covered whole; the window under the pointer is judged first, and with no pointer the order is front to back |
 
 **Harness results** (lab build, null models, stand-in, an 800 x 500 point display at 2x, placed right of a 900-point-high primary):
 
@@ -118,6 +126,44 @@ Before any speed work:
 | Scrolling back to places seen before / to other places | 186 ms / 1.12 s | | at other places no slice matches the cache |
 
 Where the time goes: Marqo (about 3.5 ms preprocessing and 7 ms inference a tile) dominates; on a full-window change the 40 slices of 512 px cost about 0.8 s, the finder 150 to 220 ms and hashing for the cache about 38 ms. On busy pages the per-call cap and the judging budget, not compute, decide how long pictures stay blurred or covered: once a window has had unjudged entries for 0.5 s it is covered whole.
+
+### What the speed work changed (18 November 2026)
+
+The hard rule for all of it: nothing judges or covers less. No model is skipped, no cut-off is raised, the cut-off table is unchanged, and only the full rule lifts a cover (after `VIDEO_VOTE` clean judgements, as before). Speed comes only from caching exact matches, moving covers, covering earlier and ordering.
+
+- **Exact-match caches** (`VerdictCache.swift`, `FinderCache.swift`). The verdict cache's key is now the full 256-bit SHA-256 (it was cut to 128 bits) over fixed-width fields and every byte of the tile's pixels, all four channels, with its size, pass and bundle version. Preprocessing is a fixed function of exactly those bytes, so an exact match is an exact match of the preprocessed input. No approximate hash is used anywhere; a near copy is judged again. Memory is bounded: at most 65,536 entries, about 4 MB, in two generations close to least-recently-used (O(1); the lab build's eviction shifted a 50,000-entry array on every insert). New: the picture finder's proposals are reused when every pixel the finder can read (the area and up to `max(68, short side / 2 + 4)` pixels around it) is byte for byte the same, moved to the area's new place; at most 32 results.
+- **Covers follow scrolling** (`Motion.swift`, `DisplayPipeline.followMotion`). Each changed part is checked for a vertical, else horizontal, translation from row hashes (the last frame's are kept, so each frame is hashed once; about 6 ms for a 2880 x 1800 window). A cover moves with its picture in a plan handed out at once, before the moved area is judged again, and only when the pixels at its new place equal the pixels it covered, byte for byte; otherwise its new place is covered as well as its old one. For this update each moved cover also reaches ahead along the motion as far as the content will go before the next plan (its speed times the recent longest judging run, at least 0.25 s). The slice grid now moves with the content (`SliceAnchor`): same slice size and overlap, at most one slice more per axis, so slices over content already judged come from the cache. Covers no longer smear into long streaks while a page scrolls.
+- **Cover first on busy pages** (`DisplayPipeline`, `JudgeProgress.found`). After the finder and the caches, the detector tells the cover layer which picture regions are still to judge and about how long that will take. If the frame's time so far plus that estimate passes `COVER_GOAL` (0.1 s, the owner's goal; `TIME_TO_COVER` stays 0.5 s for the whole-window step), those regions are blurred at once, and shown when the full rule clears them. A picture that can be judged within the goal is not blurred first.
+- **Order** (`Detector.judge`, `DisplayPipeline`). Hot windows first, as before; then the window under the pointer and those nearest it; within a window, pictures nearest the pointer first (otherwise smallest first, as before). Within one call the fastest model (by measured cost; NSFWJS here) now runs first over every picture region the call will judge, and a flag is shown at once as a blur (a cover under Either, where that flag alone covers) before the other model and the tie-breaker decide. The same entries are chosen within the same budget as before; tests check that the verdicts, the judgements and the tiles each model judges are the same with and without the fast pass.
+- **Plans handed out early** reach the screen through `process(..., provisional:)`; the app draws them on the main thread as they come. Every early plan holds every cover the last plan held, plus every cover decided so far in the frame, and none is handed out while a display is covered whole.
+
+### Measured after the speed work
+
+Same bench, same machine, models, pages and settings. Results: `results/speed-after.json` (all four changes), `results/speed-after-caches.json` (the caches alone) and `results/speed-after-scrolling.json` (caches and scrolling). "First cover" is the first plan with a cover or blur over the picture, counting the cover layer update; "full rule" is the final plan.
+
+| Case | Before | After | Which change |
+|---|---|---|---|
+| One new picture, first cover (16-31 / 32-63 / 64-127 / 128+ px), median, worst | 58.5, 77.6 / 46.8, 53.0 / 50.7, 58.1 / 51.4, 67.4 ms | **2.6, 9.3 / 6.2, 8.3 / 6.0, 8.4 / 7.9, 10.2 ms** (64 of 64 covered) | fastest model first (see the caveat below) |
+| One new picture, full rule's cover | 47 to 59 ms, worst 78 ms | 45 to 54 ms, worst 66 ms | unchanged, as it must be |
+| 32-tile grid, first cover | 460 ms, worst 1,070 ms | **5.8 ms, worst 6.6 ms**; full rule 415 ms, worst 967 ms | fastest model first |
+| Busy Retina page, stand-in first covered | 2.83 s, worst 3.01 s | **0.25 s, worst 0.33 s** | cover first |
+| Busy page, harmless photos shown sharp before their first blur | 2.8 s, worst 3.0 s | 0.2 s, worst 0.3 s | cover first |
+| Busy page, every harmless photo shown | 19.0 s (9.3 s with no budget limit) | 17.4 s (7.4 s) | caches |
+| Scrolling, each judged frame (8 / 32 / 96 px a frame) | 1.33 / 1.18 / 1.50 s | 0.87 / 0.64 / 0.89 s | slice grid moved with the content |
+| Scrolling, a covered picture in view: time exposed (most of it exposed) | 1.82 / 0.45 / 0.15 s (all of it) | **0.03 / 0.04 / 0.05 s** (12% / 47% / all, at the very start of the scroll) | covers follow scrolling |
+| Scrolling, a picture scrolling into view: covered after it shows | 2.26 / 0.56 / 0.19 s | 1.65 / 0.61 / 0.08 s (0.15 s at 32 px with no budget limit) | not solved: it waits for the next judged frame |
+| Reload of a judged busy page | 270 ms | **59 ms** | finder cache |
+| Scrolling back to places seen before / to other places | 186 ms / 1.12 s | **50 ms / 519 ms** | finder cache / slice grid |
+| Window moved, same content | 1.01 s | 1.07 s | none: the finder's reach takes in the new surroundings, and the uncovered strip is new |
+
+- **The caveat on "first cover".** The early blur comes when the fastest model (NSFWJS) has run on the picture and flagged it. In the lab the stand-in's check, made right after NSFWJS has run, stands in for that flag. A real explicit picture gets that early blur only if NSFWJS flags it at its strict cut-offs (0.93 to 0.996); otherwise it is covered by the full rule, at 45 to 54 ms median and 66 ms worst in this bench. Both are under the 0.1 s goal here, before capture latency and display time, which only ST-031 can add.
+- **The cost of covering first.** On the six busy pages, 580 picture regions a page (median; worst 947) were blurred first. Before, every photo on those pages was shown sharp, unjudged, for 2.8 s, then blurred or covered for load until judged; now they are blurred from 0.2 s. The time until every harmless photo is shown is unchanged by covering first: the judging budget and the whole-window step decide it.
+- **Ordering.** The pointer did not help on these pages: photos near it were shown after 17.7 s with or without it, because once a window has had unjudged entries for 0.5 s it is covered whole. Judging the pictures nearest the pointer first left more entries for later in the first call (375 against 338, median), as nearer pictures were larger. Early fast flags on the busy pages, the stand-in's included: at most 1 a page without the pointer, up to 5 with it (median 0 and 1); the bench does not record whether any of them was a harmless photo, which would be blurred briefly until the full rule cleared it.
+- **While scrolling**, up to 35% of the display was under covers or blurs at the worst moment (median 2.5 to 3.5%), from blurring new pictures first and from covers reaching ahead.
+
+Still not measured: ScreenCaptureKit's capture latency and real display time (ST-031, test Mac, camera or capture device); energy and heat (ST-038, the Air); memory over a day with these caches (ST-039; the bounds are about 4 MB for verdicts and 32 finder results); how often a real flagged picture is flagged by the fastest model alone; scrolling inside part of a window, horizontal scrolling and zooming on real apps.
+
+Where the time still goes, and what is left (none of it built): on a full-window change the finder (about 185 ms) and exact-match hashing (about 40 ms) come before any blur, so a busy page cannot be blurred within 0.1 s; pictures scrolling into view wait for the next judged frame; `JUDGEMENT_BUDGET` (40 a second) against about 1,100 judgements for a busy Retina page from scratch, and the whole-window step at 0.5 s of unjudged entries, decide how long busy pages stay blurred or covered. Each is for ST-038 or a later design decision.
 
 ## False covers through the whole pipeline: ST-040 re-run (18 November 2026)
 
@@ -189,12 +235,12 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 
 ## Known limits
 
-- **Flashes.** In show-first mode every window is shown first and judged just after, so a picture can be seen for a moment before its cover. How long is not measured; the target is under half a second. When judging is busy (busy pages, many changes), it is longer.
+- **Flashes.** In show-first mode every window is shown first and judged just after, so a picture can be seen for a moment before its cover. How long on a real display is not measured (ST-031). In the lab, from the frame to the cover layer, one new picture is covered within about 50 ms (worst 66 ms) and a busy page's new pictures are blurred after about 0.25 s; a picture scrolling into view can show for up to the time one judged frame takes (0.6 to 0.9 s on a Retina window). The owner's goal is about 0.1 s.
 - **The catch rate is unmeasured.** Nobody knows how many explicit pictures this detector misses. The cut-offs are strict to keep false covers low, so Balanced may miss more, by an amount nobody has measured. No accuracy figure may be published (claims ledger).
 - **False covers and blurs.** The detector covers some harmless things. The picture finder grows regions to a picture's edge, so a cover can spill over neighbouring text. Small pictures it is unsure about are blurred.
 - **No lock and no shield.** This build can be paused or quit, and if it crashes or is quit, the screen is uncovered. At start, and when a display appears or wakes, the display is covered whole until its first judged frame (a few seconds when the models load).
 - **Not judged:** the cursor, the brighter-than-white range of HDR displays, protected video (captured as black), sound and text, anything before login. Accessibility Zoom is not detected.
-- **Load.** A busy screen judged from scratch exceeds the budget. Unjudged regions are blurred and unjudged 512-pixel slices are covered, so busy pages show lag, blur and blocks of cover until they are judged. A third display and beyond are covered whole.
+- **Load.** A busy screen judged from scratch exceeds the budget. Its new pictures are blurred first; unjudged 512-pixel slices are covered; after 0.5 s of unjudged entries the window is covered whole. A busy Retina page stays blurred or covered for 13 to 21 s at `JUDGEMENT_BUDGET` (6 to 8 s with no budget limit). A third display and beyond are covered whole.
 - **Choices made where the register is silent or open.** Each is a working value tied to its test:
   - canvas window level: screen-saver level (ST-032);
   - cover colour: neutral grey;
@@ -210,7 +256,7 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - strict cover mode and judged copy;
   - "This is wrong";
   - heat and Low Power Mode inputs;
-  - pointer and focus priority (hot windows do go first);
+  - keyboard-focus priority (the pointer's window and the pictures nearest the pointer go first since 18 November; the front-most window comes before windows behind it);
   - matching a frame to the window list taken nearest its time (the list is read when the frame is judged);
   - the crash-loop breaker;
   - the heartbeat and the plain shield, which are not part of the practice state.

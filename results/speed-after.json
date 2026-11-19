@@ -1,0 +1,1236 @@
+{
+  "bench" : "safesightmac-bench\/1",
+  "busy" : {
+    "register" : {
+      "allHarmlessShownAfterS" : {
+        "median" : 17.399999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "assumption" : "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+      "budget" : "register (JUDGEMENT_BUDGET 40\/s, JUDGEMENT_BURST 400)",
+      "fastModelFlags" : {
+        "median" : 0,
+        "n" : 6,
+        "worst" : 1
+      },
+      "firstCallMs" : {
+        "median" : 2597,
+        "n" : 6,
+        "worst" : 2686.1999999999998
+      },
+      "firstCallStages" : {
+        "cacheHashMs" : 40.5,
+        "cacheHits" : 0,
+        "cacheMisses" : 621,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 186.80000000000001,
+        "judgements" : 400,
+        "judgeTotalMs" : 2574.9000000000001,
+        "model.bumble-private-detector.inferenceMs" : 0,
+        "model.bumble-private-detector.preprocessMs" : 0,
+        "model.bumble-private-detector.tiles" : 0,
+        "model.marqo-vit-tiny-384.inferenceMs" : 1319.5999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 609.29999999999995,
+        "model.marqo-vit-tiny-384.tiles" : 200,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 205.19999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 208.19999999999999,
+        "model.nsfwjs-mobilenet-v2.tiles" : 200,
+        "overloaded" : 338,
+        "planningMs" : 0.90000000000000002,
+        "processTotalMs" : 2597,
+        "translationMs" : 20.800000000000001
+      },
+      "firstPlanHandedOutMs" : {
+        "median" : 248.69999999999999,
+        "n" : 6,
+        "worst" : 325.10000000000002
+      },
+      "fullyJudgedAfterS" : {
+        "median" : 17.199999999999999,
+        "n" : 6,
+        "worst" : 20.899999999999999
+      },
+      "pages" : 6,
+      "perPage" : [
+        {
+          "calls" : 105,
+          "computeMs" : 10608.700000000001,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2597,
+          "firstCallOverloaded" : 288,
+          "fullyJudgedAfterS" : 13.699999999999999,
+          "harmlessClearAfterS" : 13.800000000000001,
+          "lastOverloadAfterS" : 13.5,
+          "page" : "synthetic-0058.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 13.800000000000001,
+            "worst" : 13.800000000000001
+          },
+          "standInCoveredAfterMs" : 197.59999999999999
+        },
+        {
+          "calls" : 121,
+          "computeMs" : 11255.9,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2539,
+          "firstCallOverloaded" : 310,
+          "fullyJudgedAfterS" : 14.9,
+          "harmlessClearAfterS" : 15.199999999999999,
+          "lastOverloadAfterS" : 14.699999999999999,
+          "page" : "synthetic-0048.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 15.199999999999999,
+            "worst" : 15.199999999999999
+          },
+          "standInCoveredAfterMs" : 187.19999999999999
+        },
+        {
+          "calls" : 147,
+          "computeMs" : 13327.799999999999,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2521,
+          "firstCallOverloaded" : 375,
+          "fullyJudgedAfterS" : 17.600000000000001,
+          "harmlessClearAfterS" : 17.699999999999999,
+          "lastOverloadAfterS" : 17.399999999999999,
+          "page" : "synthetic-0057.png",
+          "photos" : 234,
+          "photosCoveredOrBlurredAtSomePoint" : 234,
+          "photoShownLateS" : {
+            "median" : 17.699999999999999,
+            "worst" : 17.699999999999999
+          },
+          "standInCoveredAfterMs" : 249.69999999999999
+        },
+        {
+          "calls" : 140,
+          "computeMs" : 14699.700000000001,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2667.6999999999998,
+          "firstCallOverloaded" : 427,
+          "fullyJudgedAfterS" : 17.199999999999999,
+          "harmlessClearAfterS" : 17.399999999999999,
+          "lastOverloadAfterS" : 17,
+          "page" : "synthetic-0040.png",
+          "photos" : 194,
+          "photosCoveredOrBlurredAtSomePoint" : 194,
+          "photoShownLateS" : {
+            "median" : 17.399999999999999,
+            "worst" : 17.399999999999999
+          },
+          "standInCoveredAfterMs" : 326.80000000000001
+        },
+        {
+          "calls" : 178,
+          "computeMs" : 15445.1,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2686.1999999999998,
+          "firstCallOverloaded" : 338,
+          "fullyJudgedAfterS" : 20.899999999999999,
+          "harmlessClearAfterS" : 21.100000000000001,
+          "lastOverloadAfterS" : 20.699999999999999,
+          "page" : "synthetic-0025.png",
+          "photos" : 159,
+          "photosCoveredOrBlurredAtSomePoint" : 159,
+          "photoShownLateS" : {
+            "median" : 21.100000000000001,
+            "worst" : 21.100000000000001
+          },
+          "standInCoveredAfterMs" : 290.69999999999999
+        },
+        {
+          "calls" : 96,
+          "computeMs" : 10144.200000000001,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2584.0999999999999,
+          "firstCallOverloaded" : 260,
+          "fullyJudgedAfterS" : 12.800000000000001,
+          "harmlessClearAfterS" : 12.9,
+          "lastOverloadAfterS" : 12.6,
+          "page" : "synthetic-0013.png",
+          "photos" : 157,
+          "photosCoveredOrBlurredAtSomePoint" : 157,
+          "photoShownLateS" : {
+            "median" : 12.9,
+            "worst" : 12.9
+          },
+          "standInCoveredAfterMs" : 233.69999999999999
+        }
+      ],
+      "photosCoveredOrBlurredShare" : {
+        "median" : 1,
+        "n" : 6,
+        "worst" : 1
+      },
+      "photoShownLateMedianS" : {
+        "median" : 17.399999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "photoShownLateWorstS" : {
+        "median" : 17.399999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "photoShownSharpBeforeFirstCoverS" : {
+        "median" : 0.20000000000000001,
+        "n" : 6,
+        "worst" : 0.29999999999999999
+      },
+      "photosNearProbeShownAfterS" : {
+        "median" : 17.699999999999999,
+        "n" : 74,
+        "worst" : 21.100000000000001
+      },
+      "pointer" : "none",
+      "probe" : "photos within 220 points of 1080, 675",
+      "regionsCoveredFirst" : {
+        "median" : 580,
+        "n" : 6,
+        "worst" : 947
+      },
+      "standInTimeToCoverMs" : {
+        "median" : 249.69999999999999,
+        "n" : 6,
+        "worst" : 326.80000000000001
+      }
+    },
+    "registerPointer" : {
+      "allHarmlessShownAfterS" : {
+        "median" : 17.199999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "assumption" : "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+      "budget" : "register (JUDGEMENT_BUDGET 40\/s, JUDGEMENT_BURST 400)",
+      "fastModelFlags" : {
+        "median" : 1,
+        "n" : 6,
+        "worst" : 5
+      },
+      "firstCallMs" : {
+        "median" : 2639.5999999999999,
+        "n" : 6,
+        "worst" : 2730
+      },
+      "firstCallStages" : {
+        "cacheHashMs" : 40.899999999999999,
+        "cacheHits" : 0,
+        "cacheMisses" : 621,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 184.90000000000001,
+        "judgements" : 400,
+        "judgeTotalMs" : 2618.4000000000001,
+        "model.bumble-private-detector.inferenceMs" : 47.100000000000001,
+        "model.bumble-private-detector.preprocessMs" : 4.7000000000000002,
+        "model.bumble-private-detector.tiles" : 1,
+        "model.marqo-vit-tiny-384.inferenceMs" : 1304.4000000000001,
+        "model.marqo-vit-tiny-384.preprocessMs" : 592.89999999999998,
+        "model.marqo-vit-tiny-384.tiles" : 200,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 194.09999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 215.69999999999999,
+        "model.nsfwjs-mobilenet-v2.tiles" : 200,
+        "overloaded" : 375,
+        "planningMs" : 0.59999999999999998,
+        "processTotalMs" : 2639.5999999999999,
+        "translationMs" : 20.600000000000001
+      },
+      "firstPlanHandedOutMs" : {
+        "median" : 247,
+        "n" : 6,
+        "worst" : 321.60000000000002
+      },
+      "fullyJudgedAfterS" : {
+        "median" : 17.199999999999999,
+        "n" : 6,
+        "worst" : 20.899999999999999
+      },
+      "pages" : 6,
+      "perPage" : [
+        {
+          "calls" : 106,
+          "computeMs" : 10385.6,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2639.5999999999999,
+          "firstCallOverloaded" : 338,
+          "fullyJudgedAfterS" : 13.699999999999999,
+          "harmlessClearAfterS" : 13.800000000000001,
+          "lastOverloadAfterS" : 13.6,
+          "page" : "synthetic-0058.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 13.800000000000001,
+            "worst" : 13.800000000000001
+          },
+          "standInCoveredAfterMs" : 194
+        },
+        {
+          "calls" : 121,
+          "computeMs" : 11115.200000000001,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2489.6999999999998,
+          "firstCallOverloaded" : 375,
+          "fullyJudgedAfterS" : 14.9,
+          "harmlessClearAfterS" : 15.1,
+          "lastOverloadAfterS" : 14.800000000000001,
+          "page" : "synthetic-0048.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 15.1,
+            "worst" : 15.1
+          },
+          "standInCoveredAfterMs" : 186.5
+        },
+        {
+          "calls" : 145,
+          "computeMs" : 13377.1,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2657.5,
+          "firstCallOverloaded" : 489,
+          "fullyJudgedAfterS" : 17.600000000000001,
+          "harmlessClearAfterS" : 17.699999999999999,
+          "lastOverloadAfterS" : 17.399999999999999,
+          "page" : "synthetic-0057.png",
+          "photos" : 234,
+          "photosCoveredOrBlurredAtSomePoint" : 234,
+          "photoShownLateS" : {
+            "median" : 17.699999999999999,
+            "worst" : 17.699999999999999
+          },
+          "standInCoveredAfterMs" : 253.5
+        },
+        {
+          "calls" : 141,
+          "computeMs" : 12944.299999999999,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2579.3000000000002,
+          "firstCallOverloaded" : 397,
+          "fullyJudgedAfterS" : 17.199999999999999,
+          "harmlessClearAfterS" : 17.199999999999999,
+          "lastOverloadAfterS" : 17.100000000000001,
+          "page" : "synthetic-0040.png",
+          "photos" : 194,
+          "photosCoveredOrBlurredAtSomePoint" : 194,
+          "photoShownLateS" : {
+            "median" : 17.199999999999999,
+            "worst" : 17.199999999999999
+          },
+          "standInCoveredAfterMs" : 323
+        },
+        {
+          "calls" : 181,
+          "computeMs" : 15487.5,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2499.8000000000002,
+          "firstCallOverloaded" : 348,
+          "fullyJudgedAfterS" : 20.899999999999999,
+          "harmlessClearAfterS" : 21.100000000000001,
+          "lastOverloadAfterS" : 20.699999999999999,
+          "page" : "synthetic-0025.png",
+          "photos" : 159,
+          "photosCoveredOrBlurredAtSomePoint" : 159,
+          "photoShownLateS" : {
+            "median" : 21.100000000000001,
+            "worst" : 21.100000000000001
+          },
+          "standInCoveredAfterMs" : 247.69999999999999
+        },
+        {
+          "calls" : 94,
+          "computeMs" : 10907.5,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2730,
+          "firstCallOverloaded" : 305,
+          "fullyJudgedAfterS" : 12.800000000000001,
+          "harmlessClearAfterS" : 12.800000000000001,
+          "lastOverloadAfterS" : 12.6,
+          "page" : "synthetic-0013.png",
+          "photos" : 157,
+          "photosCoveredOrBlurredAtSomePoint" : 157,
+          "photoShownLateS" : {
+            "median" : 12.800000000000001,
+            "worst" : 12.800000000000001
+          },
+          "standInCoveredAfterMs" : 244.80000000000001
+        }
+      ],
+      "photosCoveredOrBlurredShare" : {
+        "median" : 1,
+        "n" : 6,
+        "worst" : 1
+      },
+      "photoShownLateMedianS" : {
+        "median" : 17.199999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "photoShownLateWorstS" : {
+        "median" : 17.199999999999999,
+        "n" : 6,
+        "worst" : 21.100000000000001
+      },
+      "photoShownSharpBeforeFirstCoverS" : {
+        "median" : 0.20000000000000001,
+        "n" : 6,
+        "worst" : 0.29999999999999999
+      },
+      "photosNearProbeShownAfterS" : {
+        "median" : 17.699999999999999,
+        "n" : 74,
+        "worst" : 21.100000000000001
+      },
+      "pointer" : "at 1080, 675 points",
+      "probe" : "photos within 220 points of 1080, 675",
+      "regionsCoveredFirst" : {
+        "median" : 580,
+        "n" : 6,
+        "worst" : 947
+      },
+      "standInTimeToCoverMs" : {
+        "median" : 247.69999999999999,
+        "n" : 6,
+        "worst" : 323
+      }
+    },
+    "unlimited" : {
+      "allHarmlessShownAfterS" : {
+        "median" : 7.4000000000000004,
+        "n" : 6,
+        "worst" : 8.0999999999999996
+      },
+      "assumption" : "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+      "budget" : "unlimited (compute-bound; DETECTOR_CALL_CAP still applies)",
+      "fastModelFlags" : {
+        "median" : 0,
+        "n" : 6,
+        "worst" : 1
+      },
+      "firstCallMs" : {
+        "median" : 2565.4000000000001,
+        "n" : 6,
+        "worst" : 2711.5999999999999
+      },
+      "firstCallStages" : {
+        "cacheHashMs" : 39.200000000000003,
+        "cacheHits" : 0,
+        "cacheMisses" : 621,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.59999999999999998,
+        "decisionMs" : 0,
+        "finderMs" : 186.09999999999999,
+        "judgements" : 400,
+        "judgeTotalMs" : 2543.5,
+        "model.bumble-private-detector.inferenceMs" : 0,
+        "model.bumble-private-detector.preprocessMs" : 0,
+        "model.bumble-private-detector.tiles" : 0,
+        "model.marqo-vit-tiny-384.inferenceMs" : 1346.7,
+        "model.marqo-vit-tiny-384.preprocessMs" : 574.70000000000005,
+        "model.marqo-vit-tiny-384.tiles" : 200,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 196.59999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 204,
+        "model.nsfwjs-mobilenet-v2.tiles" : 200,
+        "overloaded" : 338,
+        "planningMs" : 0.80000000000000004,
+        "processTotalMs" : 2565.4000000000001,
+        "translationMs" : 20.800000000000001
+      },
+      "firstPlanHandedOutMs" : {
+        "median" : 246.09999999999999,
+        "n" : 6,
+        "worst" : 318.89999999999998
+      },
+      "fullyJudgedAfterS" : {
+        "median" : 7.2000000000000002,
+        "n" : 6,
+        "worst" : 7.7999999999999998
+      },
+      "pages" : 6,
+      "perPage" : [
+        {
+          "calls" : 6,
+          "computeMs" : 6515.5,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2549.8000000000002,
+          "firstCallOverloaded" : 288,
+          "fullyJudgedAfterS" : 6.4000000000000004,
+          "harmlessClearAfterS" : 6.5999999999999996,
+          "lastOverloadAfterS" : 2.5,
+          "page" : "synthetic-0058.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 6.5999999999999996,
+            "worst" : 6.5999999999999996
+          },
+          "standInCoveredAfterMs" : 189.80000000000001
+        },
+        {
+          "calls" : 6,
+          "computeMs" : 6608.6000000000004,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2513.8000000000002,
+          "firstCallOverloaded" : 310,
+          "fullyJudgedAfterS" : 6.5,
+          "harmlessClearAfterS" : 6.7000000000000002,
+          "lastOverloadAfterS" : 2.5,
+          "page" : "synthetic-0048.png",
+          "photos" : 288,
+          "photosCoveredOrBlurredAtSomePoint" : 288,
+          "photoShownLateS" : {
+            "median" : 6.7000000000000002,
+            "worst" : 6.7000000000000002
+          },
+          "standInCoveredAfterMs" : 188.40000000000001
+        },
+        {
+          "calls" : 6,
+          "computeMs" : 7442.3000000000002,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2632.8000000000002,
+          "firstCallOverloaded" : 375,
+          "fullyJudgedAfterS" : 7.2999999999999998,
+          "harmlessClearAfterS" : 7.5,
+          "lastOverloadAfterS" : 2.6000000000000001,
+          "page" : "synthetic-0057.png",
+          "photos" : 234,
+          "photosCoveredOrBlurredAtSomePoint" : 234,
+          "photoShownLateS" : {
+            "median" : 7.5,
+            "worst" : 7.5
+          },
+          "standInCoveredAfterMs" : 290
+        },
+        {
+          "calls" : 6,
+          "computeMs" : 7327.6999999999998,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2711.5999999999999,
+          "firstCallOverloaded" : 427,
+          "fullyJudgedAfterS" : 7.2000000000000002,
+          "harmlessClearAfterS" : 7.4000000000000004,
+          "lastOverloadAfterS" : 2.7000000000000002,
+          "page" : "synthetic-0040.png",
+          "photos" : 194,
+          "photosCoveredOrBlurredAtSomePoint" : 194,
+          "photoShownLateS" : {
+            "median" : 7.4000000000000004,
+            "worst" : 7.4000000000000004
+          },
+          "standInCoveredAfterMs" : 320.30000000000001
+        },
+        {
+          "calls" : 7,
+          "computeMs" : 7948,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2514.0999999999999,
+          "firstCallOverloaded" : 338,
+          "fullyJudgedAfterS" : 7.7999999999999998,
+          "harmlessClearAfterS" : 8.0999999999999996,
+          "lastOverloadAfterS" : 4.7999999999999998,
+          "page" : "synthetic-0025.png",
+          "photos" : 159,
+          "photosCoveredOrBlurredAtSomePoint" : 159,
+          "photoShownLateS" : {
+            "median" : 8.0999999999999996,
+            "worst" : 8.0999999999999996
+          },
+          "standInCoveredAfterMs" : 246.90000000000001
+        },
+        {
+          "calls" : 6,
+          "computeMs" : 6024.3000000000002,
+          "firstCallJudgements" : 400,
+          "firstCallMs" : 2565.4000000000001,
+          "firstCallOverloaded" : 260,
+          "fullyJudgedAfterS" : 5.9000000000000004,
+          "harmlessClearAfterS" : 6.0999999999999996,
+          "lastOverloadAfterS" : 2.6000000000000001,
+          "page" : "synthetic-0013.png",
+          "photos" : 157,
+          "photosCoveredOrBlurredAtSomePoint" : 157,
+          "photoShownLateS" : {
+            "median" : 6.0999999999999996,
+            "worst" : 6.0999999999999996
+          },
+          "standInCoveredAfterMs" : 241.19999999999999
+        }
+      ],
+      "photosCoveredOrBlurredShare" : {
+        "median" : 1,
+        "n" : 6,
+        "worst" : 1
+      },
+      "photoShownLateMedianS" : {
+        "median" : 7.4000000000000004,
+        "n" : 6,
+        "worst" : 8.0999999999999996
+      },
+      "photoShownLateWorstS" : {
+        "median" : 7.4000000000000004,
+        "n" : 6,
+        "worst" : 8.0999999999999996
+      },
+      "photoShownSharpBeforeFirstCoverS" : {
+        "median" : 0.20000000000000001,
+        "n" : 6,
+        "worst" : 0.29999999999999999
+      },
+      "photosNearProbeShownAfterS" : {
+        "median" : 7.5,
+        "n" : 74,
+        "worst" : 8.0999999999999996
+      },
+      "pointer" : "none",
+      "probe" : "photos within 220 points of 1080, 675",
+      "regionsCoveredFirst" : {
+        "median" : 580,
+        "n" : 6,
+        "worst" : 947
+      },
+      "standInTimeToCoverMs" : {
+        "median" : 246.90000000000001,
+        "n" : 6,
+        "worst" : 320.30000000000001
+      }
+    }
+  },
+  "chip" : "Apple M1 Max",
+  "display" : "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+  "frameCopy" : {
+    "frame" : "2880x1800",
+    "ms" : {
+      "median" : 3.8999999999999999,
+      "n" : 10,
+      "worst" : 6.0999999999999996
+    },
+    "note" : "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+  },
+  "grid" : {
+    "finalPlanMs" : {
+      "median" : 414.5,
+      "n" : 8,
+      "worst" : 966.70000000000005
+    },
+    "harmlessTilesCoveredOrBlurredInFinalPlan" : 23,
+    "stages" : {
+      "cacheHashMs" : 1,
+      "cacheHits" : 0,
+      "cacheMisses" : 30,
+      "changeDetectionMs" : 0,
+      "coverDrawMs" : 0,
+      "decisionMs" : 0,
+      "finderMs" : 4.2999999999999998,
+      "judgements" : 66,
+      "judgeTotalMs" : 414.10000000000002,
+      "model.marqo-vit-tiny-384.inferenceMs" : 218.69999999999999,
+      "model.marqo-vit-tiny-384.preprocessMs" : 105.40000000000001,
+      "model.marqo-vit-tiny-384.tiles" : 33,
+      "model.nsfwjs-mobilenet-v2.inferenceMs" : 45,
+      "model.nsfwjs-mobilenet-v2.preprocessMs" : 38.299999999999997,
+      "model.nsfwjs-mobilenet-v2.tiles" : 33,
+      "overloaded" : 0,
+      "planningMs" : 0,
+      "processTotalMs" : 414.5,
+      "translationMs" : 0.40000000000000002
+    },
+    "standInCovered" : 8,
+    "tiles" : 32,
+    "timeToCoverMs" : {
+      "median" : 5.7999999999999998,
+      "n" : 8,
+      "worst" : 6.5999999999999996
+    },
+    "trials" : 8
+  },
+  "label" : "after all of part 3",
+  "models" : "real models (converted), checked against the sealed hash list; sealed cut-off table",
+  "notIncluded" : "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+  "os" : "Version 26.3 (Build 25D125)",
+  "reappear" : {
+    "reload" : {
+      "firstShowMs" : {
+        "median" : 2591.0999999999999,
+        "n" : 6,
+        "worst" : 2664.5999999999999
+      },
+      "firstShowStages" : {
+        "cacheHashMs" : 41.299999999999997,
+        "cacheHits" : 0,
+        "cacheMisses" : 622,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 190.80000000000001,
+        "judgements" : 400,
+        "judgeTotalMs" : 2568.6999999999998,
+        "model.bumble-private-detector.inferenceMs" : 0,
+        "model.bumble-private-detector.preprocessMs" : 0,
+        "model.bumble-private-detector.tiles" : 0,
+        "model.marqo-vit-tiny-384.inferenceMs" : 1275.3,
+        "model.marqo-vit-tiny-384.preprocessMs" : 607.89999999999998,
+        "model.marqo-vit-tiny-384.tiles" : 200,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 222.69999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 209.90000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 200,
+        "overloaded" : 343,
+        "planningMs" : 0.80000000000000004,
+        "processTotalMs" : 2591.0999999999999,
+        "translationMs" : 22
+      },
+      "pages" : 6,
+      "reloadMs" : {
+        "median" : 58.899999999999999,
+        "n" : 6,
+        "worst" : 61.399999999999999
+      },
+      "reloadStages" : {
+        "cacheHashMs" : 40.799999999999997,
+        "cacheHits" : 622,
+        "cacheMisses" : 0,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 0,
+        "judgements" : 0,
+        "judgeTotalMs" : 40.899999999999999,
+        "overloaded" : 0,
+        "planningMs" : 2,
+        "processTotalMs" : 58.899999999999999,
+        "translationMs" : 16
+      }
+    },
+    "scrollBack-otherOffsets" : {
+      "backMs" : {
+        "median" : 518.60000000000002,
+        "n" : 9,
+        "worst" : 818.39999999999998
+      },
+      "backStages" : {
+        "cacheHashMs" : 41.600000000000001,
+        "cacheHits" : 34,
+        "cacheMisses" : 12,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 124.2,
+        "judgements" : 22,
+        "judgeTotalMs" : 513.29999999999995,
+        "model.marqo-vit-tiny-384.inferenceMs" : 108.7,
+        "model.marqo-vit-tiny-384.preprocessMs" : 115.90000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 11,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 18.800000000000001,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 91.299999999999997,
+        "model.nsfwjs-mobilenet-v2.tiles" : 11,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 518.60000000000002,
+        "translationMs" : 5.2000000000000002
+      },
+      "downMs" : {
+        "median" : 689.5,
+        "n" : 7,
+        "worst" : 1146.7
+      }
+    },
+    "scrollBack-sameOffsets" : {
+      "backMs" : {
+        "median" : 49.799999999999997,
+        "n" : 6,
+        "worst" : 50.399999999999999
+      },
+      "backStages" : {
+        "cacheHashMs" : 44.600000000000001,
+        "cacheHits" : 48,
+        "cacheMisses" : 0,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 0,
+        "judgements" : 0,
+        "judgeTotalMs" : 44.600000000000001,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 49.799999999999997,
+        "translationMs" : 5.2000000000000002
+      },
+      "downMs" : {
+        "median" : 762.39999999999998,
+        "n" : 7,
+        "worst" : 1344.5
+      }
+    },
+    "windowMove" : {
+      "moveMs" : {
+        "median" : 1066.4000000000001,
+        "n" : 6,
+        "worst" : 1620
+      },
+      "pages" : 6,
+      "stages" : {
+        "cacheHashMs" : 57.399999999999999,
+        "cacheHits" : 911,
+        "cacheMisses" : 29,
+        "changeDetectionMs" : 0.10000000000000001,
+        "coverDrawMs" : 0.59999999999999998,
+        "decisionMs" : 0,
+        "finderMs" : 213.80000000000001,
+        "judgements" : 58,
+        "judgeTotalMs" : 1039.4000000000001,
+        "model.marqo-vit-tiny-384.inferenceMs" : 317.5,
+        "model.marqo-vit-tiny-384.preprocessMs" : 222.09999999999999,
+        "model.marqo-vit-tiny-384.tiles" : 29,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 49,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 162.90000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 29,
+        "overloaded" : 0,
+        "planningMs" : 0.90000000000000002,
+        "processTotalMs" : 1066.4000000000001,
+        "translationMs" : 25.300000000000001
+      }
+    }
+  },
+  "rule" : "balanced",
+  "scroll" : {
+    "8px-register" : {
+      "coveredDisplayShare" : {
+        "median" : 0.025000000000000001,
+        "worst" : 0.34799999999999998
+      },
+      "framesJudged" : 8,
+      "perFrameMs" : {
+        "median" : 866.5,
+        "n" : 8,
+        "worst" : 994.89999999999998
+      },
+      "scrollingS" : 5,
+      "simulatedS" : 6.0600000000000005,
+      "speed" : "8 px per frame at 60 Hz (240 points per second)",
+      "stages" : {
+        "cacheHashMs" : 39.700000000000003,
+        "cacheHits" : 20,
+        "cacheMisses" : 27,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 115.90000000000001,
+        "judgements" : 58,
+        "judgeTotalMs" : 861.39999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 271.10000000000002,
+        "model.marqo-vit-tiny-384.preprocessMs" : 218.5,
+        "model.marqo-vit-tiny-384.tiles" : 29,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 40.700000000000003,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 156.09999999999999,
+        "model.nsfwjs-mobilenet-v2.tiles" : 29,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 866.5,
+        "translationMs" : 5.2000000000000002
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.029999999999999999,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 0.125
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 1.6480000000000001,
+        "exposedS" : 1.6499999999999999,
+        "firstVisibleS" : 1.8959999999999999,
+        "maxShareExposed" : 1
+      }
+    },
+    "8px-unlimited" : {
+      "coveredDisplayShare" : {
+        "median" : 0.025000000000000001,
+        "worst" : 0.34799999999999998
+      },
+      "framesJudged" : 8,
+      "perFrameMs" : {
+        "median" : 909,
+        "n" : 8,
+        "worst" : 988.29999999999995
+      },
+      "scrollingS" : 5,
+      "simulatedS" : 6.0600000000000005,
+      "speed" : "8 px per frame at 60 Hz (240 points per second)",
+      "stages" : {
+        "cacheHashMs" : 39.5,
+        "cacheHits" : 23,
+        "cacheMisses" : 26,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 117.7,
+        "judgements" : 58,
+        "judgeTotalMs" : 903.79999999999995,
+        "model.marqo-vit-tiny-384.inferenceMs" : 265.30000000000001,
+        "model.marqo-vit-tiny-384.preprocessMs" : 228.80000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 29,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 39.700000000000003,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 157.30000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 29,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 909,
+        "translationMs" : 5.2000000000000002
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.029999999999999999,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 0.125
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 1.7,
+        "exposedS" : 1.7,
+        "firstVisibleS" : 1.8959999999999999,
+        "maxShareExposed" : 1
+      }
+    },
+    "32px-register" : {
+      "coveredDisplayShare" : {
+        "median" : 0.028999999999999998,
+        "worst" : 0.252
+      },
+      "framesJudged" : 5,
+      "perFrameMs" : {
+        "median" : 644.5,
+        "n" : 5,
+        "worst" : 1072.7
+      },
+      "scrollingS" : 1.875,
+      "simulatedS" : 3.2200000000000002,
+      "speed" : "32 px per frame at 60 Hz (960 points per second)",
+      "stages" : {
+        "cacheHashMs" : 39,
+        "cacheHits" : 21,
+        "cacheMisses" : 22,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 112.5,
+        "judgements" : 44,
+        "judgeTotalMs" : 639.39999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 137.09999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 180.30000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 22,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 26.199999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 135,
+        "model.nsfwjs-mobilenet-v2.tiles" : 22,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 644.5,
+        "translationMs" : 5.0999999999999996
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.040000000000000001,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 0.46899999999999997
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 0.60799999999999998,
+        "exposedS" : 0.60999999999999999,
+        "firstVisibleS" : 0.47600000000000003,
+        "maxShareExposed" : 1
+      }
+    },
+    "32px-unlimited" : {
+      "coveredDisplayShare" : {
+        "median" : 0.035000000000000003,
+        "worst" : 0.35200000000000004
+      },
+      "framesJudged" : 5,
+      "perFrameMs" : {
+        "median" : 606.5,
+        "n" : 5,
+        "worst" : 1066
+      },
+      "scrollingS" : 1.875,
+      "simulatedS" : 3.2600000000000002,
+      "speed" : "32 px per frame at 60 Hz (960 points per second)",
+      "stages" : {
+        "cacheHashMs" : 37.299999999999997,
+        "cacheHits" : 23,
+        "cacheMisses" : 20,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 111.3,
+        "judgements" : 36,
+        "judgeTotalMs" : 601.5,
+        "model.marqo-vit-tiny-384.inferenceMs" : 125.2,
+        "model.marqo-vit-tiny-384.preprocessMs" : 161.30000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 18,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 21.600000000000001,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 120.5,
+        "model.nsfwjs-mobilenet-v2.tiles" : 18,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 606.5,
+        "translationMs" : 5
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.040000000000000001,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 0.46899999999999997
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 0.152,
+        "exposedS" : 0.71999999999999997,
+        "firstVisibleS" : 0.47600000000000003,
+        "maxShareExposed" : 1
+      }
+    },
+    "96px-register" : {
+      "coveredDisplayShare" : {
+        "median" : 0.021000000000000001,
+        "worst" : 0.34999999999999998
+      },
+      "framesJudged" : 3,
+      "perFrameMs" : {
+        "median" : 886.29999999999995,
+        "n" : 3,
+        "worst" : 970.20000000000005
+      },
+      "scrollingS" : 0.625,
+      "simulatedS" : 1.8999999999999999,
+      "speed" : "96 px per frame at 60 Hz (2880 points per second)",
+      "stages" : {
+        "cacheHashMs" : 40.799999999999997,
+        "cacheHits" : 25,
+        "cacheMisses" : 31,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 108.90000000000001,
+        "judgements" : 66,
+        "judgeTotalMs" : 881.10000000000002,
+        "model.marqo-vit-tiny-384.inferenceMs" : 232.59999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 243.30000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 33,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 37.5,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 174,
+        "model.nsfwjs-mobilenet-v2.tiles" : 33,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 886.29999999999995,
+        "translationMs" : 5.0999999999999996
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.050000000000000003,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 1
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 0.080000000000000002,
+        "exposedS" : 0.080000000000000002,
+        "firstVisibleS" : 0.16,
+        "maxShareExposed" : 1
+      }
+    },
+    "96px-unlimited" : {
+      "coveredDisplayShare" : {
+        "median" : 0.021000000000000001,
+        "worst" : 0.072000000000000008
+      },
+      "framesJudged" : 3,
+      "perFrameMs" : {
+        "median" : 758.89999999999998,
+        "n" : 3,
+        "worst" : 984.10000000000002
+      },
+      "scrollingS" : 0.625,
+      "simulatedS" : 1.7899999999999998,
+      "speed" : "96 px per frame at 60 Hz (2880 points per second)",
+      "stages" : {
+        "cacheHashMs" : 39.600000000000001,
+        "cacheHits" : 28,
+        "cacheMisses" : 27,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 108.09999999999999,
+        "judgements" : 58,
+        "judgeTotalMs" : 753.89999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 189.19999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 202.40000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 29,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 35.899999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 146.59999999999999,
+        "model.nsfwjs-mobilenet-v2.tiles" : 29,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 758.89999999999998,
+        "translationMs" : 5
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.050000000000000003,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 1
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 0.23199999999999998,
+        "exposedS" : 0.22999999999999998,
+        "firstVisibleS" : 0.16,
+        "maxShareExposed" : 1
+      }
+    }
+  },
+  "single" : {
+    "16-31" : {
+      "covered" : 16,
+      "finalPlanMs" : {
+        "median" : 53.799999999999997,
+        "n" : 16,
+        "worst" : 66
+      },
+      "stages" : {
+        "cacheHashMs" : 0.10000000000000001,
+        "cacheHits" : 0,
+        "cacheMisses" : 3,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 0.10000000000000001,
+        "judgements" : 10,
+        "judgeTotalMs" : 53.799999999999997,
+        "model.marqo-vit-tiny-384.inferenceMs" : 27.899999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 14.6,
+        "model.marqo-vit-tiny-384.tiles" : 5,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 4.4000000000000004,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 5.2000000000000002,
+        "model.nsfwjs-mobilenet-v2.tiles" : 5,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 53.799999999999997,
+        "translationMs" : 0
+      },
+      "timeToCoverMs" : {
+        "median" : 2.6000000000000001,
+        "n" : 16,
+        "worst" : 9.3000000000000007
+      },
+      "trials" : 16
+    },
+    "32-63" : {
+      "covered" : 16,
+      "finalPlanMs" : {
+        "median" : 45.100000000000001,
+        "n" : 16,
+        "worst" : 60.600000000000001
+      },
+      "stages" : {
+        "cacheHashMs" : 0.10000000000000001,
+        "cacheHits" : 0,
+        "cacheMisses" : 3,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 0.20000000000000001,
+        "judgements" : 8,
+        "judgeTotalMs" : 45.100000000000001,
+        "model.marqo-vit-tiny-384.inferenceMs" : 23.5,
+        "model.marqo-vit-tiny-384.preprocessMs" : 11.800000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 4,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 3.7000000000000002,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 4.4000000000000004,
+        "model.nsfwjs-mobilenet-v2.tiles" : 4,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 45.100000000000001,
+        "translationMs" : 0
+      },
+      "timeToCoverMs" : {
+        "median" : 6.2000000000000002,
+        "n" : 16,
+        "worst" : 8.3000000000000007
+      },
+      "trials" : 16
+    },
+    "64-127" : {
+      "covered" : 16,
+      "finalPlanMs" : {
+        "median" : 46.200000000000003,
+        "n" : 16,
+        "worst" : 51.399999999999999
+      },
+      "stages" : {
+        "cacheHashMs" : 0.20000000000000001,
+        "cacheHits" : 0,
+        "cacheMisses" : 3,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 0.5,
+        "judgements" : 8,
+        "judgeTotalMs" : 46.100000000000001,
+        "model.marqo-vit-tiny-384.inferenceMs" : 23.399999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 12.5,
+        "model.marqo-vit-tiny-384.tiles" : 4,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 4.4000000000000004,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 4.5999999999999996,
+        "model.nsfwjs-mobilenet-v2.tiles" : 4,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 46.200000000000003,
+        "translationMs" : 0
+      },
+      "timeToCoverMs" : {
+        "median" : 6,
+        "n" : 16,
+        "worst" : 8.4000000000000004
+      },
+      "trials" : 16
+    },
+    "128+" : {
+      "covered" : 16,
+      "finalPlanMs" : {
+        "median" : 47.700000000000003,
+        "n" : 16,
+        "worst" : 62
+      },
+      "stages" : {
+        "cacheHashMs" : 0.80000000000000004,
+        "cacheHits" : 0,
+        "cacheMisses" : 3,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 2.3999999999999999,
+        "judgements" : 6,
+        "judgeTotalMs" : 47.600000000000001,
+        "model.marqo-vit-tiny-384.inferenceMs" : 20.300000000000001,
+        "model.marqo-vit-tiny-384.preprocessMs" : 12.6,
+        "model.marqo-vit-tiny-384.tiles" : 3,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 3.7999999999999998,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 5.4000000000000004,
+        "model.nsfwjs-mobilenet-v2.tiles" : 3,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 47.700000000000003,
+        "translationMs" : 0.20000000000000001
+      },
+      "timeToCoverMs" : {
+        "median" : 7.9000000000000004,
+        "n" : 16,
+        "worst" : 10.199999999999999
+      },
+      "trials" : 16
+    }
+  }
+}

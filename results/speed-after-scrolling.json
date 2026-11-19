@@ -1,0 +1,452 @@
+{
+  "bench" : "safesightmac-bench\/1",
+  "chip" : "Apple M1 Max",
+  "display" : "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+  "frameCopy" : {
+    "frame" : "2880x1800",
+    "ms" : {
+      "median" : 3.8999999999999999,
+      "n" : 10,
+      "worst" : 5.7000000000000002
+    },
+    "note" : "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+  },
+  "label" : "after 3b (covers follow scrolling)",
+  "models" : "real models (converted), checked against the sealed hash list; sealed cut-off table",
+  "notIncluded" : "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+  "os" : "Version 26.3 (Build 25D125)",
+  "reappear" : {
+    "reload" : {
+      "firstShowMs" : {
+        "median" : 2564.5999999999999,
+        "n" : 6,
+        "worst" : 2810.4000000000001
+      },
+      "firstShowStages" : {
+        "cacheHashMs" : 40.799999999999997,
+        "cacheHits" : 138,
+        "cacheMisses" : 502,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 183.40000000000001,
+        "judgements" : 400,
+        "judgeTotalMs" : 2539.8000000000002,
+        "model.bumble-private-detector.inferenceMs" : 0,
+        "model.bumble-private-detector.preprocessMs" : 0,
+        "model.bumble-private-detector.tiles" : 0,
+        "model.marqo-vit-tiny-384.inferenceMs" : 1255,
+        "model.marqo-vit-tiny-384.preprocessMs" : 583.60000000000002,
+        "model.marqo-vit-tiny-384.tiles" : 200,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 259.89999999999998,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 207.19999999999999,
+        "model.nsfwjs-mobilenet-v2.tiles" : 200,
+        "overloaded" : 343,
+        "planningMs" : 0.90000000000000002,
+        "processTotalMs" : 2564.5999999999999,
+        "translationMs" : 22.300000000000001
+      },
+      "pages" : 6,
+      "reloadMs" : {
+        "median" : 58.799999999999997,
+        "n" : 6,
+        "worst" : 59.700000000000003
+      },
+      "reloadStages" : {
+        "cacheHashMs" : 40,
+        "cacheHits" : 622,
+        "cacheMisses" : 0,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0.69999999999999996,
+        "decisionMs" : 0,
+        "finderMs" : 0,
+        "judgements" : 0,
+        "judgeTotalMs" : 40,
+        "overloaded" : 0,
+        "planningMs" : 2,
+        "processTotalMs" : 58.799999999999997,
+        "translationMs" : 16.100000000000001
+      }
+    },
+    "scrollBack-otherOffsets" : {
+      "backMs" : {
+        "median" : 517.60000000000002,
+        "n" : 9,
+        "worst" : 811.10000000000002
+      },
+      "backStages" : {
+        "cacheHashMs" : 41.399999999999999,
+        "cacheHits" : 36,
+        "cacheMisses" : 11,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 123.8,
+        "judgements" : 22,
+        "judgeTotalMs" : 512.29999999999995,
+        "model.marqo-vit-tiny-384.inferenceMs" : 119.7,
+        "model.marqo-vit-tiny-384.preprocessMs" : 116.5,
+        "model.marqo-vit-tiny-384.tiles" : 11,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 17.600000000000001,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 91.299999999999997,
+        "model.nsfwjs-mobilenet-v2.tiles" : 11,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 517.60000000000002,
+        "translationMs" : 5.2000000000000002
+      },
+      "downMs" : {
+        "median" : 724.5,
+        "n" : 7,
+        "worst" : 1284.2
+      }
+    },
+    "scrollBack-sameOffsets" : {
+      "backMs" : {
+        "median" : 48.5,
+        "n" : 6,
+        "worst" : 53
+      },
+      "backStages" : {
+        "cacheHashMs" : 43.200000000000003,
+        "cacheHits" : 48,
+        "cacheMisses" : 0,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 0,
+        "judgements" : 0,
+        "judgeTotalMs" : 43.200000000000003,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 48.5,
+        "translationMs" : 5.2999999999999998
+      },
+      "downMs" : {
+        "median" : 763.60000000000002,
+        "n" : 7,
+        "worst" : 1383.0999999999999
+      }
+    },
+    "windowMove" : {
+      "moveMs" : {
+        "median" : 994.89999999999998,
+        "n" : 6,
+        "worst" : 1599.5999999999999
+      },
+      "pages" : 6,
+      "stages" : {
+        "cacheHashMs" : 57.399999999999999,
+        "cacheHits" : 911,
+        "cacheMisses" : 29,
+        "changeDetectionMs" : 0.10000000000000001,
+        "coverDrawMs" : 0.59999999999999998,
+        "decisionMs" : 0,
+        "finderMs" : 208.09999999999999,
+        "judgements" : 58,
+        "judgeTotalMs" : 968.39999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 224.09999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 219.30000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 29,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 45.700000000000003,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 156.90000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 29,
+        "overloaded" : 0,
+        "planningMs" : 0.80000000000000004,
+        "processTotalMs" : 994.89999999999998,
+        "translationMs" : 25.399999999999999
+      }
+    }
+  },
+  "rule" : "balanced",
+  "scroll" : {
+    "8px-register" : {
+      "coveredDisplayShare" : {
+        "median" : 0.02,
+        "worst" : 0.028999999999999998
+      },
+      "framesJudged" : 9,
+      "perFrameMs" : {
+        "median" : 769,
+        "n" : 9,
+        "worst" : 893.60000000000002
+      },
+      "scrollingS" : 5,
+      "simulatedS" : 6.1200000000000001,
+      "speed" : "8 px per frame at 60 Hz (240 points per second)",
+      "stages" : {
+        "cacheHashMs" : 42.200000000000003,
+        "cacheHits" : 28,
+        "cacheMisses" : 25,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 115.3,
+        "judgements" : 54,
+        "judgeTotalMs" : 763.89999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 178.69999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 206.5,
+        "model.marqo-vit-tiny-384.tiles" : 27,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 36.700000000000003,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 150.40000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 27,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 769,
+        "translationMs" : 5.0999999999999996
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.029999999999999999,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 0.125
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 1.26,
+        "exposedS" : 1.26,
+        "firstVisibleS" : 1.8959999999999999,
+        "maxShareExposed" : 1
+      }
+    },
+    "8px-unlimited" : {
+      "coveredDisplayShare" : {
+        "median" : 0.02,
+        "worst" : 0.025000000000000001
+      },
+      "framesJudged" : 9,
+      "perFrameMs" : {
+        "median" : 732.39999999999998,
+        "n" : 9,
+        "worst" : 962.39999999999998
+      },
+      "scrollingS" : 5,
+      "simulatedS" : 6.0999999999999996,
+      "speed" : "8 px per frame at 60 Hz (240 points per second)",
+      "stages" : {
+        "cacheHashMs" : 39.399999999999999,
+        "cacheHits" : 28,
+        "cacheMisses" : 24,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 112.2,
+        "judgements" : 52,
+        "judgeTotalMs" : 727.39999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 177.69999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 199.30000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 26,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 33.5,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 143.40000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 26,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 732.39999999999998,
+        "translationMs" : 5
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.029999999999999999,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 0.125
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 1.46,
+        "exposedS" : 1.46,
+        "firstVisibleS" : 1.8959999999999999,
+        "maxShareExposed" : 1
+      }
+    },
+    "32px-register" : {
+      "coveredDisplayShare" : {
+        "median" : 0.027000000000000003,
+        "worst" : 0.031
+      },
+      "framesJudged" : 5,
+      "perFrameMs" : {
+        "median" : 611.60000000000002,
+        "n" : 5,
+        "worst" : 1090.2
+      },
+      "scrollingS" : 1.875,
+      "simulatedS" : 3.2399999999999998,
+      "speed" : "32 px per frame at 60 Hz (960 points per second)",
+      "stages" : {
+        "cacheHashMs" : 40.600000000000001,
+        "cacheHits" : 32,
+        "cacheMisses" : 16,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 111.09999999999999,
+        "judgements" : 34,
+        "judgeTotalMs" : 606.39999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 113.40000000000001,
+        "model.marqo-vit-tiny-384.preprocessMs" : 164.09999999999999,
+        "model.marqo-vit-tiny-384.tiles" : 17,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 22.899999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 123.3,
+        "model.nsfwjs-mobilenet-v2.tiles" : 17,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 611.60000000000002,
+        "translationMs" : 5.2000000000000002
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.050000000000000003,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 0.5
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 0.61199999999999999,
+        "exposedS" : 1.02,
+        "firstVisibleS" : 0.47600000000000003,
+        "maxShareExposed" : 1
+      }
+    },
+    "32px-unlimited" : {
+      "coveredDisplayShare" : {
+        "median" : 0.027000000000000003,
+        "worst" : 0.031
+      },
+      "framesJudged" : 5,
+      "perFrameMs" : {
+        "median" : 697.10000000000002,
+        "n" : 5,
+        "worst" : 1056.4000000000001
+      },
+      "scrollingS" : 1.875,
+      "simulatedS" : 3.2299999999999995,
+      "speed" : "32 px per frame at 60 Hz (960 points per second)",
+      "stages" : {
+        "cacheHashMs" : 39.200000000000003,
+        "cacheHits" : 20,
+        "cacheMisses" : 23,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 111.5,
+        "judgements" : 48,
+        "judgeTotalMs" : 692.10000000000002,
+        "model.marqo-vit-tiny-384.inferenceMs" : 163.80000000000001,
+        "model.marqo-vit-tiny-384.preprocessMs" : 193.40000000000001,
+        "model.marqo-vit-tiny-384.tiles" : 24,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 33.700000000000003,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 142.80000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 24,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 697.10000000000002,
+        "translationMs" : 5.2000000000000002
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.040000000000000001,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 0.46899999999999997
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 0.60799999999999998,
+        "exposedS" : 1.02,
+        "firstVisibleS" : 0.47600000000000003,
+        "maxShareExposed" : 1
+      }
+    },
+    "96px-register" : {
+      "coveredDisplayShare" : {
+        "median" : 0.021000000000000001,
+        "worst" : 0.021000000000000001
+      },
+      "framesJudged" : 3,
+      "perFrameMs" : {
+        "median" : 873.60000000000002,
+        "n" : 3,
+        "worst" : 1005.1
+      },
+      "scrollingS" : 0.625,
+      "simulatedS" : 1.9199999999999999,
+      "speed" : "96 px per frame at 60 Hz (2880 points per second)",
+      "stages" : {
+        "cacheHashMs" : 40.600000000000001,
+        "cacheHits" : 28,
+        "cacheMisses" : 28,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 109,
+        "judgements" : 66,
+        "judgeTotalMs" : 868.60000000000002,
+        "model.marqo-vit-tiny-384.inferenceMs" : 218.69999999999999,
+        "model.marqo-vit-tiny-384.preprocessMs" : 245.69999999999999,
+        "model.marqo-vit-tiny-384.tiles" : 33,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 41.700000000000003,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 175.80000000000001,
+        "model.nsfwjs-mobilenet-v2.tiles" : 33,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 873.60000000000002,
+        "translationMs" : 5.0999999999999996
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.050000000000000003,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 1
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 0.23199999999999998,
+        "exposedS" : 0.22999999999999998,
+        "firstVisibleS" : 0.16,
+        "maxShareExposed" : 1
+      }
+    },
+    "96px-unlimited" : {
+      "coveredDisplayShare" : {
+        "median" : 0.021000000000000001,
+        "worst" : 0.021000000000000001
+      },
+      "framesJudged" : 3,
+      "perFrameMs" : {
+        "median" : 915.70000000000005,
+        "n" : 3,
+        "worst" : 1110.9000000000001
+      },
+      "scrollingS" : 0.625,
+      "simulatedS" : 2.0699999999999998,
+      "speed" : "96 px per frame at 60 Hz (2880 points per second)",
+      "stages" : {
+        "cacheHashMs" : 45.799999999999997,
+        "cacheHits" : 27,
+        "cacheMisses" : 29,
+        "changeDetectionMs" : 0,
+        "coverDrawMs" : 0,
+        "decisionMs" : 0,
+        "finderMs" : 114.40000000000001,
+        "judgements" : 66,
+        "judgeTotalMs" : 910.39999999999998,
+        "model.marqo-vit-tiny-384.inferenceMs" : 226.30000000000001,
+        "model.marqo-vit-tiny-384.preprocessMs" : 259.60000000000002,
+        "model.marqo-vit-tiny-384.tiles" : 33,
+        "model.nsfwjs-mobilenet-v2.inferenceMs" : 45.899999999999999,
+        "model.nsfwjs-mobilenet-v2.preprocessMs" : 186.19999999999999,
+        "model.nsfwjs-mobilenet-v2.tiles" : 33,
+        "overloaded" : 0,
+        "planningMs" : 0,
+        "processTotalMs" : 915.70000000000005,
+        "translationMs" : 5.2999999999999998
+      },
+      "standInInView" : {
+        "coveredAfterVisibleS" : 0,
+        "exposedS" : 0.050000000000000003,
+        "firstVisibleS" : 0,
+        "maxShareExposed" : 1
+      },
+      "standInScrollingIn" : {
+        "coveredAfterVisibleS" : 0.23600000000000002,
+        "exposedS" : 0.23999999999999999,
+        "firstVisibleS" : 0.16,
+        "maxShareExposed" : 1
+      }
+    }
+  }
+}
