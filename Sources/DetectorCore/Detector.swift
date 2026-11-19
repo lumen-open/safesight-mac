@@ -355,14 +355,17 @@ public final class Detector {
 
         // Then every model the full rule needs (the fast model's score is not judged twice). A task a model
         // failed on stays unjudged: it is covered or blurred as overload and judged again in a later call.
+        // Every task a model failed on in this call, the fastest model's failures included. A failure is never shown as
+        // judged earlier: it is unjudged, covered or blurred and counted, and what was seen of it before is forgotten.
+        var failed = fastFailed
         for i in chosen where !fastFailed.contains(i) {
-            if let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) {
-                tasks[i].outcome = o; tasks[i].judged = true
-                // Kept only if it covers or was clearly clean (the margin rule); otherwise judged again next time.
-                if o.cacheable { cache.put(tasks[i].key, o) }
-                if !o.cacheable && !covers(o) && !o.forced { seenClear.put(tasks[i].key, at: ctx.now) } else { seenClear.remove(tasks[i].key) }
-            }
+            guard let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) else { failed.insert(i); continue }
+            tasks[i].outcome = o; tasks[i].judged = true
+            // Kept only if it covers or was clearly clean (the margin rule); otherwise judged again next time.
+            if o.cacheable { cache.put(tasks[i].key, o) }
+            if !o.cacheable && !covers(o) && !o.forced { seenClear.put(tasks[i].key, at: ctx.now) } else { seenClear.remove(tasks[i].key) }
         }
+        for i in failed { seenClear.remove(tasks[i].key) }
         for (i, j) in sameAs where tasks[j].judged { tasks[i].outcome = tasks[j].outcome; tasks[i].judged = true }
 
         // A window turns hot only after a both-family hit (SD-125, C06-3 d). The lab's grid trigger
@@ -380,8 +383,11 @@ public final class Detector {
         var coverWindow = false, strike = false, overloaded = 0
         for (k, t) in tasks.enumerated() {
             guard t.judged, let o = t.outcome else {
-                let rep = sameAs[k].map { tasks[$0] } ?? t
-                if let e = earlier(rep) {
+                let r = sameAs[k] ?? k, rep = tasks[r]
+                // Shown as judged earlier only if no model failed on it in this call, and not a small picture in a window
+                // that turned hot in this call (judged earlier under the rule for a window that was not hot).
+                let hotNow = becameHot && rep.pass == .region && rep.rect.shortSide < config.hotBelow
+                if !failed.contains(r), !hotNow, let e = earlier(rep) {
                     let due = ctx.now.timeIntervalSince(e.at) >= config.rejudgeAfter
                     out.append(RegionVerdict(rect: t.rect, display: .clear, reason: due ? .rejudgeDue : .judgedEarlier, pass: t.pass))
                     timings.judgedEarlier += 1
