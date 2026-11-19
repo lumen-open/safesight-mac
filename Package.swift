@@ -40,8 +40,16 @@ var targets: [Target] = [
             swiftSettings: appSettings),
     .target(name: "SafeSightMacCapture", dependencies: ["SafeSightMacWatcher", "Preprocess"], swiftSettings: appSettings),
     .target(name: "SafeSightMacCover", dependencies: ["SafeSightMacWatcher", "SafeSightMacCore"], swiftSettings: appSettings),
+    // What only the Testing edition does: the emergency quit (⌃⌥⌘Q), the sandbox check, one copy at a time, the
+    // main-thread watchdog and the one-click removal of its own data. Built and tested in every flavour; linked
+    // into the app only in the Testing edition.
+    .target(name: "SafeSightMacTestingEdition", dependencies: ["SafeSightMacCore"], swiftSettings: appSettings),
+    .testTarget(name: "SafeSightMacTestingEditionTests", dependencies: ["SafeSightMacTestingEdition", "SafeSightMacCore"],
+                swiftSettings: appSettings),
     // The cover-only menu-bar app.
-    .executableTarget(name: "SafeSightMacApp", dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCapture", "SafeSightMacCover", "DetectorCore"],
+    .executableTarget(name: "SafeSightMacApp",
+                      dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCapture", "SafeSightMacCover", "DetectorCore"]
+                          + (testing ? ["SafeSightMacTestingEdition"] : []),
                       swiftSettings: appSettings),
     // The lab harness: frames from files or synthetic scenes through the pipeline, never the screen.
     .executableTarget(name: "SafeSightMacHarness", dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCover", "DetectorCore", "Preprocess"] + (lab ? ["LabStandIn"] : []),

@@ -103,6 +103,13 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         onChange?()
     }
 
+    /// Takes every cover and the repair card off the screen at once, without stopping anything (the emergency quit
+    /// does this just before the app ends).
+    @MainActor func hideEverything() {
+        presenter.removeAll()
+        repairCard.hide()
+    }
+
     /// Covers every display whole, then rebuilds the streams (display change, wake, session return).
     @MainActor func rebuild(because cause: FaultCause) {
         guard running else { return }

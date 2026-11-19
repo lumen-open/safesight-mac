@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // The minimal menu-bar app of the cover-only build: status, the practice state, the detector mode
 // picker, strict cover mode shown as "not in this version", pause (practice state only), "How it
-// works" and Quit. No Dock icon, no login item, no network. The Testing edition has no keeper check and says
-// what it is everywhere it shows.
+// works" and Quit. No Dock icon, no login item, no network. The Testing edition has no keeper check, says what
+// it is everywhere it shows, and adds its own ways out (TestingEdition.swift).
 import AppKit
 import DetectorCore
 import SafeSightMacCapture
@@ -13,13 +13,16 @@ import SafeSightMacWatcher
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
-    private let watcher = WatcherController(presenter: CoverForm.current == .overlays ? OverlayCovers() : CoverCanvas())
+    let watcher = WatcherController(presenter: CoverForm.current == .overlays ? OverlayCovers() : CoverCanvas())
     private var practice: PracticePresentation = PracticePresentation(.unknown(reason: "not read yet"))
     private var pausedUntil: Date?
     private var pausedIndefinitely = false
     private var resumeTimer: Timer?
     private var permissionTimer: Timer?
     private var howItWorks: HowItWorksWindow?
+    #if SAFESIGHTMAC_TESTING
+    let testing = TestingEditionApp()
+    #endif
 
     private var rule: DetectorRule {
         get { DetectorRule(rawValue: UserDefaults.standard.string(forKey: "detectorRule") ?? "") ?? .balanced }
@@ -28,8 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         #if SAFESIGHTMAC_TESTING
-        // No emergency shortcut yet: the line says to quit from the menu bar icon.
-        watcher.notice = .testing(shortcut: false)
+        guard testing.launch(watcher: watcher) else { return }
         #endif
 
         statusItem = NSStatusBar.system.statusItem(withLength: BuildInfo.edition == .testing ? NSStatusItem.variableLength : NSStatusItem.squareLength)
@@ -139,12 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: AppText.productName + ": " + status.title)
         #if SAFESIGHTMAC_TESTING
-        if let b = statusItem?.button {
-            b.title = AppText.testingBadge
-            b.imagePosition = .imageLeading
-            b.toolTip = AppText.testingLine(shortcut: false)
-            b.setAccessibilityLabel(AppText.testingName + ". " + AppText.testingLine(shortcut: false) + " " + status.title)
-        }
+        if let b = statusItem?.button { testing.label(b, status: status.title) }
         #endif
     }
 
@@ -153,8 +150,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
 
         #if SAFESIGHTMAC_TESTING
-        menu.addItem(label(AppText.testingLine(shortcut: false), bold: true))
-        menu.addItem(note(AppText.testingDetail))
+        testing.followLayout()
+        for i in testing.menuHeader() { menu.addItem(i) }
         menu.addItem(.separator())
         #endif
 
@@ -201,7 +198,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(item(AppText.howItWorks) { [weak self] in self?.showHowItWorks() })
         #if SAFESIGHTMAC_TESTING
-        menu.addItem(item(AppText.testingQuit) { NSApp.terminate(nil) })
+        let quit = item(AppText.testingQuit) { NSApp.terminate(nil) }
+        testing.showShortcut(on: quit)
+        menu.addItem(quit)
         #else
         menu.addItem(item(AppText.quit) { NSApp.terminate(nil) })
         #endif
@@ -209,7 +208,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func showHowItWorks() {
         #if SAFESIGHTMAC_TESTING
-        let w = howItWorks ?? HowItWorksWindow(shortcut: false)
+        // Made afresh, so that it says whether ⌃⌥⌘Q works now.
+        let w = HowItWorksWindow(shortcut: testing.shortcutWorks)
         #else
         let w = howItWorks ?? HowItWorksWindow()
         #endif
@@ -225,7 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var handlers: [ClosureTarget] = []
 
-    private func item(_ title: String, _ action: @escaping () -> Void) -> NSMenuItem {
+    func item(_ title: String, _ action: @escaping () -> Void) -> NSMenuItem {
         let t = ClosureTarget(action)
         handlers.append(t)
         let i = NSMenuItem(title: title, action: #selector(ClosureTarget.fire), keyEquivalent: "")
@@ -233,7 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return i
     }
 
-    private func label(_ s: String, bold: Bool) -> NSMenuItem {
+    func label(_ s: String, bold: Bool) -> NSMenuItem {
         let i = NSMenuItem(title: s, action: nil, keyEquivalent: "")
         if bold { i.attributedTitle = NSAttributedString(string: s, attributes: [.font: NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)]) }
         i.isEnabled = false
@@ -241,7 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// A wrapped paragraph inside the menu.
-    private func note(_ s: String) -> NSMenuItem {
+    func note(_ s: String) -> NSMenuItem {
         let i = NSMenuItem()
         let f = NSTextField(wrappingLabelWithString: s)
         f.font = .menuFont(ofSize: NSFont.smallSystemFontSize)
