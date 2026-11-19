@@ -59,11 +59,15 @@ public enum WatcherModels {
         }
     }
 
-    /// Verifies, then loads the watcher's three models with the sealed cut-off table.
-    public static func loadDetector(folder: URL, rule: DetectorRule, hashList: String = committedHashList) throws -> Detector {
+    /// Verifies, then loads the watcher's three models with the sealed cut-off table. `compiledInto` is where their
+    /// compiled copies go (a `CompiledModelFolder`, removed when the app quits); nil leaves them in the temporary
+    /// folder, where Core ML never removes them.
+    public static func loadDetector(folder: URL, rule: DetectorRule, hashList: String = committedHashList,
+                                    compiledInto: URL? = nil) throws -> Detector {
         try verify(folder: folder, hashList: hashList)
         do {
-            let set = try ModelSet.watcher(directory: folder, bundleVersion: "practice-" + String(sha256(Data(hashList.utf8)).prefix(12)))
+            let set = try ModelSet.watcher(directory: folder, bundleVersion: "practice-" + String(sha256(Data(hashList.utf8)).prefix(12)),
+                                           compiledInto: compiledInto)
             var cfg = DetectorConfig(); cfg.rule = rule
             return try Detector(models: set, thresholdsJSON: committedThresholds, config: cfg)
         } catch {

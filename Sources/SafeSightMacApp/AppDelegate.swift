@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        // Compiled models left by a run that ended without quitting (a crash or a forced quit).
+        CompiledModelFolder.sweep()
         #if SAFESIGHTMAC_TESTING
         guard testing.launch(watcher: watcher) else { return }
         #endif
@@ -59,7 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startIfAllowed()
     }
 
-    func applicationWillTerminate(_ note: Notification) { watcher.stop() }
+    func applicationWillTerminate(_ note: Notification) {
+        watcher.stop()
+        watcher.removeCompiledModels()
+    }
 
     // MARK: Running
 

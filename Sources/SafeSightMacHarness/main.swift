@@ -166,9 +166,16 @@ func report(_ i: Int, _ label: String, _ plan: CoverPlan, primaryHeight: CGFloat
 
 let o = parse()
 
+/// The models' compiled copies go in a folder of this run's own, removed when the run ends; folders left by runs
+/// that crashed are removed first (CompiledModels.swift).
+nonisolated(unsafe) var compiledModels: CompiledModelFolder?
+
 func makeDetector() -> Detector {
     if let m = o.models {
-        do { return try WatcherModels.loadDetector(folder: URL(fileURLWithPath: m), rule: o.rule) }
+        CompiledModelFolder.sweep()
+        compiledModels = try? CompiledModelFolder()
+        atexit { compiledModels?.remove() }
+        do { return try WatcherModels.loadDetector(folder: URL(fileURLWithPath: m), rule: o.rule, compiledInto: compiledModels?.url) }
         catch { fail("models refused: \(error)") }
     }
     #if SAFESIGHTMAC_LAB

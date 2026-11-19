@@ -23,9 +23,21 @@ final class CoreMLScoringModel: ScoringModel {
     let flagIndices: [Int]
     private let model: MLModel
 
-    init(id: String, family: Family, side: Int, flagIndices: [Int], url: URL, units: MLComputeUnits = .cpuAndNeuralEngine) throws {
+    /// `compiledInto`: where the compiled copy of a model package goes. Core ML compiles into the temporary folder
+    /// and never removes the copy (about 220 MB for the watcher's three models, at every start); a folder the
+    /// caller owns can be removed when the caller is done (SafeSightMacWatcher's `CompiledModelFolder`).
+    init(id: String, family: Family, side: Int, flagIndices: [Int], url: URL, units: MLComputeUnits = .cpuAndNeuralEngine,
+         compiledInto: URL? = nil) throws {
         self.id = id; self.family = family; self.side = side; self.flagIndices = flagIndices
-        let compiled = url.pathExtension == "mlmodelc" ? url : try MLModel.compileModel(at: url)
+        var compiled = url
+        if url.pathExtension != "mlmodelc" {
+            compiled = try MLModel.compileModel(at: url)
+            if let dir = compiledInto {
+                let moved = dir.appendingPathComponent(compiled.lastPathComponent)
+                // Same volume, so a rename. If it fails the copy stays where Core ML put it, and still loads.
+                if (try? FileManager.default.moveItem(at: compiled, to: moved)) != nil { compiled = moved }
+            }
+        }
         let cfg = MLModelConfiguration()
         cfg.computeUnits = units
         model = try MLModel(contentsOf: compiled, configuration: cfg)
@@ -73,19 +85,22 @@ public struct ModelSet {
     /// gives the browser-like set, where a dispute nobody can settle is covered (SD-125).
     /// `familyB` picks the family-B model: NSFWJS today, or the screen-aware model from the cloud run
     /// (`kestrel-screen-b-224`, classes [NSFW, SFW]) once Stage 3 has converted it.
+    /// `compiledInto`: the folder for the models' compiled copies (see `CoreMLScoringModel`); nil leaves them in
+    /// the temporary folder, as Core ML does.
     public static func watcher(directory d: URL, bundleVersion: String, referee: Bool = true,
-                               familyB: String = "nsfwjs-mobilenet-v2") throws -> ModelSet {
+                               familyB: String = "nsfwjs-mobilenet-v2", compiledInto c: URL? = nil) throws -> ModelSet {
         let b: ScoringModel = familyB == "nsfwjs-mobilenet-v2"
             ? try CoreMLScoringModel(id: familyB, family: .b, side: 224, flagIndices: [1, 3],
-                                     url: d.appendingPathComponent("nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage"))
+                                     url: d.appendingPathComponent("nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage"), compiledInto: c)
             : try CoreMLScoringModel(id: familyB, family: .b, side: 224, flagIndices: [0],
-                                     url: d.appendingPathComponent("\(familyB)/\(familyB).mlpackage"))
+                                     url: d.appendingPathComponent("\(familyB)/\(familyB).mlpackage"), compiledInto: c)
         return try ModelSet(models: [
             CoreMLScoringModel(id: "marqo-vit-tiny-384", family: .a, side: 384, flagIndices: [0],
-                               url: d.appendingPathComponent("marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage")),
+                               url: d.appendingPathComponent("marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage"), compiledInto: c),
             b,
         ], referee: referee ? try CoreMLScoringModel(id: "bumble-private-detector", family: .b, side: 480, flagIndices: [0],
-                               url: d.appendingPathComponent("bumble-private-detector/bumble-private-detector.fp32.mlpackage"), units: .cpuAndGPU) : nil,
+                               url: d.appendingPathComponent("bumble-private-detector/bumble-private-detector.fp32.mlpackage"), units: .cpuAndGPU,
+                               compiledInto: c) : nil,
            bundleVersion: bundleVersion)
     }
 
