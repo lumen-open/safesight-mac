@@ -64,7 +64,7 @@ How these requests are designed:
 - The same rhythm whether or not you've asked to leave, so the traffic doesn't show what you're doing.
 - The project has no access to these hosts' request logs.
 
-What this doesn't hide: someone who can watch your network can see that your Mac contacts these hosts, and could guess that SafeSight Mac is installed.
+What this doesn't hide: someone who can see your network traffic can tell that your Mac contacts these hosts, and could guess that SafeSight Mac is installed.
 
 **If you install the optional browser extension** (designed): Chrome and Edge check their stores for updates, as they do for any store extension, so Google or Microsoft can learn the extension is installed. The Firefox copy is signed by Mozilla, and what Firefox tells Mozilla about it will be recorded and listed here before it ships. The Safari copy comes inside the app. The extension itself sends nothing and keeps no history.
 
