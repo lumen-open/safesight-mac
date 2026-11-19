@@ -34,6 +34,10 @@ public actor ScreenCapture {
     private let sink: CaptureSink
     private let ownPID: pid_t
     private var streams: [UInt32: DisplayStream] = [:]
+    /// Set by `close()`: from then on `start()` does nothing. A start can still be on its way when the owner stops
+    /// watching (the models were loading, or the actor was waiting on ScreenCaptureKit); without this it would begin
+    /// capturing, and report displays to be covered, after Pause, Quit or Remove.
+    private var closed = false
 
     public init(sink: CaptureSink, ownPID: pid_t = getpid()) {
         self.sink = sink; self.ownPID = ownPID
@@ -44,15 +48,19 @@ public actor ScreenCapture {
     /// Discovers every active display and starts one stream for each. Any display that cannot be
     /// streamed is reported as a fault, so it is covered whole.
     public func start() async {
+        guard !closed else { return }
         await stop()
+        guard !closed else { return }
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
+            guard !closed else { return }
             for id in Self.activeDisplayIDs() { sink.captureFault(display: id, cause: .noPermissionOrNoContent) }
             sink.captureDisplays(Self.activeDisplayIDs().map { DisplayDescriptor(id: $0, bounds: CGDisplayBounds($0)) })
             return
         }
+        guard !closed else { return }
         // The active set: ScreenCaptureKit's list, cross-checked with CoreGraphics. A display in either list counts.
         let scIDs = Set(content.displays.map(\.displayID))
         let allIDs = scIDs.union(Self.activeDisplayIDs()).sorted()
@@ -62,14 +70,24 @@ public actor ScreenCapture {
             guard let display = content.displays.first(where: { $0.displayID == id }) else {
                 sink.captureFault(display: id, cause: .noStream); continue
             }
+            guard !closed else { return }
             let s = DisplayStream(display: display, excluding: own, sink: sink)
             do {
                 try await s.start()
+                // Closed while this stream was starting: stop it again at once.
+                guard !closed else { await s.stop(); return }
                 streams[id] = s
             } catch {
+                guard !closed else { return }
                 sink.captureFault(display: id, cause: .noStream)
             }
         }
+    }
+
+    /// Stops every stream for good: a later `start()` does nothing.
+    public func close() async {
+        closed = true
+        await stop()
     }
 
     public func stop() async {

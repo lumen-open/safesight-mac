@@ -57,7 +57,7 @@ var targets: [Target] = [
     // The drawing of covers: way-out lines, colours, click-through panels. Builds layers and panels; shows nothing.
     .testTarget(name: "SafeSightMacCoverTests", dependencies: ["SafeSightMacCover", "SafeSightMacWatcher", "SafeSightMacCore"],
                 swiftSettings: appSettings),
-    .testTarget(name: "SafeSightMacWatcherTests", dependencies: ["SafeSightMacWatcher", "DetectorCore", "Preprocess", "RegionFinder"] + (lab ? ["LabStandIn"] : []),
+    .testTarget(name: "SafeSightMacWatcherTests", dependencies: ["SafeSightMacWatcher", "SafeSightMacCapture", "DetectorCore", "Preprocess", "RegionFinder"] + (lab ? ["LabStandIn"] : []),
                 swiftSettings: appSettings),
 ]
 if lab {

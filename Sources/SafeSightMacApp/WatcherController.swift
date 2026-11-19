@@ -25,6 +25,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     // Main thread only.
     private(set) var plans: [UInt32: CoverPlan] = [:]
+    /// Whether the last drawing put any cover on screen (for `onCoversShown`).
+    private var coversOnScreen = false
     private var busySince: [UInt32: TimeInterval] = [:]
     private var wholeSince: TimeInterval?
     private(set) var detectorFailed = false
@@ -99,6 +101,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             } else {
                 self.detector?.setRule(rule)
             }
+            // Stopped while the models loaded: never start capturing. (`close()` covers a stop after this point.)
+            guard self.lock.withLock({ self.accepting }) else { return }
             Task { await cap.start() }
         }
         onChange?()
@@ -110,7 +114,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         lock.withLock { accepting = false; mailboxes = [:] }
         let cap = capture
         capture = nil
-        Task { await cap?.stop() }
+        Task { await cap?.close() }
         judgeQueue.async { [weak self] in
             self?.pipelines.values.forEach { $0.reset() }
             self?.pipelines = [:]
@@ -119,6 +123,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         watchdog?.invalidate(); watchdog = nil
         presenter.removeAll()
         repairCard.hide()
+        coversOnScreen = false
         onCoversShown?(false)
         onChange?()
     }
@@ -133,21 +138,22 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// Covers every display whole, then rebuilds the streams (display change, wake, session return).
     @MainActor func rebuild(because cause: FaultCause) {
         guard running else { return }
+        let cap = capture   // read here: `capture` belongs to the main thread
         judgeQueue.async { [weak self] in
             guard let self else { return }
             let covered = self.pipelines.mapValues { $0.cover(because: cause) }
-            DispatchQueue.main.async { self.plans.merge(covered) { $1 }; self.present() }
-            let cap = self.capture
+            DispatchQueue.main.async { guard self.running else { return }; self.plans.merge(covered) { $1 }; self.present() }
             Task { await cap?.start() }
         }
     }
 
     /// Covers every display whole without rebuilding (sleep, session switched away).
     @MainActor func coverAll(because cause: FaultCause) {
+        guard running else { return }
         judgeQueue.async { [weak self] in
             guard let self else { return }
             let covered = self.pipelines.mapValues { $0.cover(because: cause) }
-            DispatchQueue.main.async { self.plans.merge(covered) { $1 }; self.present() }
+            DispatchQueue.main.async { guard self.running else { return }; self.plans.merge(covered) { $1 }; self.present() }
         }
     }
 
@@ -156,6 +162,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     private func reportDetectorFailure() {
         let ids = ScreenCapture.activeDisplayIDs()
         DispatchQueue.main.async {
+            // Not after a stop: covers only ever come from a watcher that is running.
+            guard self.running else { return }
             self.detectorFailed = true
             for id in ids { self.plans[id] = .covered(DisplayDescriptor(id: id, bounds: CGDisplayBounds(id)), because: .detectorUnavailable) }
             self.present()
@@ -179,7 +187,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             guard let self else { return }
             let d = DisplayDescriptor(id: id, bounds: CGDisplayBounds(id))
             let plan = self.pipelines[id]?.cover(because: cause) ?? .covered(d, because: cause)
-            DispatchQueue.main.async { self.plans[id] = plan; self.present() }
+            DispatchQueue.main.async { guard self.running else { return }; self.plans[id] = plan; self.present() }
         }
     }
 
@@ -201,7 +209,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
                 out[d.id] = i < Register.DISPLAYS_MAX ? p.lastPlan : p.cover(because: .tooManyDisplays)
             }
             self.pipelines = fresh
-            DispatchQueue.main.async { self.plans = out; self.present() }
+            DispatchQueue.main.async { guard self.running else { return }; self.plans = out; self.present() }
         }
     }
 
@@ -254,8 +262,13 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         for (id, t) in busySince where now - t > Register.JUDGING_STALL {
             if let d = shown[id]?.display { shown[id] = .covered(d, because: .judgingBehind) }
         }
+        // The stall watchdog is armed before drawing, so a hang inside the drawing itself is caught, and disarmed
+        // only once no cover is left.
+        let showing = shown.values.contains { $0.wholeDisplay != nil || !$0.items.isEmpty }
+        if showing || coversOnScreen { onCoversShown?(true) }
         presenter.apply(Array(shown.values))
-        onCoversShown?(shown.values.contains { $0.wholeDisplay != nil || !$0.items.isEmpty })
+        coversOnScreen = showing
+        onCoversShown?(showing)
         // The repair card: whenever a display has been covered whole for two seconds or more. It sits on a display
         // that is covered whole, never on one the owner is working on.
         let causes = shown.values.compactMap(\.wholeDisplay)
