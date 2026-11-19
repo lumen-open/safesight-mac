@@ -156,7 +156,7 @@ strong { font-weight: 600; }
 /* ----- Buttons and fields ----- */
 .actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
 .actions.row { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 12px; }
-.actions.center { align-items: center; margin-top: 8px; }
+.actions.center { align-items: center; justify-content: center; margin-top: 8px; }
 button {
   font: inherit; border: 0; cursor: pointer; border-radius: 14px;
   min-height: 50px; padding: 12px 20px; font-weight: 600;
@@ -266,6 +266,9 @@ input:focus, textarea:focus { outline: none; border-color: var(--accent); box-sh
 .foot { margin: 22px 10px 0; color: var(--muted); font-size: 13px; line-height: 1.5; text-align: center; }
 .foot p { margin: 0 0 6px; }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
 @media (min-width: 640px) {
   main { padding-top: 48px; }
   .card { padding: 34px 34px 30px; }
