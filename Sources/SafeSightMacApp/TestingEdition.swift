@@ -30,11 +30,8 @@ final class TestingEditionApp {
     /// At launch. False only when another copy is already running: this one has then said so and is ending.
     func launch(watcher: WatcherController) -> Bool {
         if SingleCopy.anotherCopyRunning() {
-            let a = NSAlert()
-            a.messageText = AppText.testingAlreadyRunning
-            a.addButton(withTitle: AppText.testingRemovedDone)
-            Self.showAboveCovers(a)   // the first copy's covers may be up
-            exit(0)
+            showAlreadyRunning()
+            return false
         }
         self.watcher = watcher
         // The way out that needs nothing else: registered first, before anything can be covered.
@@ -126,6 +123,34 @@ final class TestingEditionApp {
         exit(0)
     }
 
+    /// The second copy's message, in a panel of its own at the level above covers (the first copy's covers may be
+    /// up). Not an NSAlert: running one modally may set its own window level, below the covers. This copy ends when
+    /// the button is clicked, or after 30 seconds on its own.
+    private var alreadyRunning: NSPanel?
+    private func showAlreadyRunning() {
+        let p = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 420, height: 120), styleMask: [.titled], backing: .buffered, defer: false)
+        p.title = AppText.testingName
+        p.isRestorable = false
+        p.level = CoverLevels.appAbove
+        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        let text = NSTextField(wrappingLabelWithString: AppText.testingAlreadyRunning)
+        text.frame = CGRect(x: 20, y: 56, width: 380, height: 44)
+        let button = NSButton(title: AppText.testingRemovedDone, target: nil, action: nil)
+        button.frame = CGRect(x: 310, y: 14, width: 90, height: 32)
+        button.bezelStyle = .push
+        button.keyEquivalent = "\r"
+        button.target = QuitTarget.shared
+        button.action = #selector(QuitTarget.quit)
+        p.contentView?.addSubview(text)
+        p.contentView?.addSubview(button)
+        p.center()
+        NSApp.activate()
+        p.orderFrontRegardless()
+        p.makeKey()
+        alreadyRunning = p
+        Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { _ in exit(0) }
+    }
+
     /// Shows an alert in front, above every cover (covers sit at the screen-saver level, above ordinary alerts).
     @discardableResult
     static func showAboveCovers(_ a: NSAlert) -> NSApplication.ModalResponse {
@@ -134,5 +159,10 @@ final class TestingEditionApp {
         a.window.level = CoverLevels.appAbove
         return a.runModal()
     }
+}
+/// Ends the second copy when its message is dismissed.
+final class QuitTarget: NSObject {
+    static let shared = QuitTarget()
+    @objc func quit() { exit(0) }
 }
 #endif
