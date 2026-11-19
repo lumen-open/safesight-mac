@@ -18,6 +18,9 @@ public enum Reason: String, Sendable, Codable {
     /// bothFamilies: the two families agreed. referee: one family flagged and the referee confirmed.
     /// disputed: one family flagged and no referee could settle it, so the picture is covered (SD-125).
     case judgedClean, bothFamilies, referee, disputed, containedSmall, hotContext, overload, cached, videoHold
+    /// Only in `JudgeProgress.fastFlag`, never in a verdict: the fastest model flagged, the full rule has not
+    /// decided yet.
+    case provisional
     #if KESTREL_LAB
     case labForced
     #endif
@@ -81,9 +84,22 @@ public struct JudgeContext: Sendable {
     public var now: Date
     /// Where the slice grid is anchored (nil: at the area's top-left corner, as the lab build did).
     public var sliceAnchor: SliceAnchor?
+    /// Where the owner is looking (the pointer), in frame pixels: pictures nearest it are judged first.
+    public var focus: PixelRect?
     public init(windowID: UInt64, startsCovered: Bool, display: DisplayTrust = .trusted, isVideo: Bool = false, now: Date = Date(),
-                sliceAnchor: SliceAnchor? = nil) {
+                sliceAnchor: SliceAnchor? = nil, focus: PixelRect? = nil) {
         self.windowID = windowID; self.startsCovered = startsCovered; self.display = display; self.isVideo = isVideo; self.now = now
-        self.sliceAnchor = sliceAnchor
+        self.sliceAnchor = sliceAnchor; self.focus = focus
     }
+}
+
+/// What a `judge` call tells its caller before it returns. Classes and rectangles only, never a score.
+public enum JudgeProgress: Sendable {
+    /// After the finder and the caches: the picture regions not decided yet (whether or not this call's budget
+    /// reaches them), the picture regions the cache already says to cover, and about how long the judging
+    /// left in this call will take.
+    case found(pending: [PixelRect], coveredByCache: [PixelRect], estimatedMs: Double)
+    /// The fastest model flagged this picture; the full rule has not decided yet. Its class is `contain`
+    /// under Balanced and `cover` under Either, where that flag alone covers.
+    case fastFlag(RegionVerdict)
 }

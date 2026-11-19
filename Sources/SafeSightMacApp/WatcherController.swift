@@ -180,8 +180,10 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             guard let p = pipelines[id], let idx = order.firstIndex(of: id), idx < Register.DISPLAYS_MAX else { continue }
             let start = ProcessInfo.processInfo.systemUptime
             DispatchQueue.main.async { self.busySince[id] = start }
-            // Plans handed out before judging ends (covers moved with scrolled content) are drawn at once.
-            let plan = p.process(f, snapshot: WindowList.snapshot(), now: start) { [weak self] early in
+            // Plans handed out before judging ends (moved covers, cover-first blurs, fast flags) are drawn at once.
+            // The pointer, in global points: the window under it and the pictures nearest it go first.
+            let pointer = CGEvent(source: nil)?.location
+            let plan = p.process(f, snapshot: WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
                 DispatchQueue.main.async {
                     guard let self, self.running else { return }
                     self.plans[id] = early

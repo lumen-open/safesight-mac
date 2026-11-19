@@ -157,7 +157,14 @@ public final class Detector {
     /// Judges one captured frame (or a still image) and returns classes only.
     /// `budget` is the caller's share of model judgements for this call; `DetectorConfig.maxJudgementsPerCall`
     /// (`DETECTOR_CALL_CAP`) stays as the backstop. A budget of 0 returns every uncached entry as `overload`.
-    public func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect? = nil, budget callerBudget: Int? = nil) -> FrameVerdict {
+    ///
+    /// `progress`, when given, hears twice before the call returns, in classes only: once after the finder and
+    /// the caches (`JudgeProgress.found`), and once per picture the fastest model flags (`fastFlag`). Then the
+    /// fastest model runs first over every picture region this call will judge, and the other models after,
+    /// in the same order. The same entries are judged within the same budget either way; only the order of
+    /// the work changes, and every verdict comes from the full rule.
+    public func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect? = nil, budget callerBudget: Int? = nil,
+                      progress: ((JudgeProgress) -> Void)? = nil) -> FrameVerdict {
         let tCall = nowNs()
         timings.calls += 1
         defer { timings.totalMs += msSince(tCall) }
@@ -183,8 +190,19 @@ public final class Detector {
 
         // Build tasks in priority order: region pass (hot first, then small pictures near... all regions),
         // then the whole pass, then slices. Overflow lands on the last tasks, which are also covered by others.
+        // With a focus (the pointer, in frame pixels), pictures nearest it come first (SD-120's order of
+        // work); otherwise the smallest first, as in the lab build.
         var tasks: [Task] = []
-        let regionRects = found.regions.map(\.rect).sorted { $0.shortSide < $1.shortSide }
+        let regionRects: [PixelRect]
+        if let f = ctx.focus {
+            func dist(_ r: PixelRect) -> Int {
+                let dx = max(0, max(r.x - f.maxX, f.x - r.maxX)), dy = max(0, max(r.y - f.maxY, f.y - r.maxY))
+                return dx * dx + dy * dy
+            }
+            regionRects = found.regions.map(\.rect).sorted { (dist($0), $0.shortSide) < (dist($1), $1.shortSide) }
+        } else {
+            regionRects = found.regions.map(\.rect).sorted { $0.shortSide < $1.shortSide }
+        }
         for r in regionRects {
             tasks.append(Task(rect: r, pieces: Self.pieces(r), pass: .region, gridMember: gridMembers.contains(r),
                               key: VerdictCache.key(frame, r, pass: "region", version: v)))
@@ -194,22 +212,59 @@ public final class Detector {
             tasks.append(Task(rect: s, pieces: [s], pass: .slice, gridMember: false, key: VerdictCache.key(frame, s, pass: "slice", version: v)))
         }
 
-        // Cache, then judge within the budget.
+        // Cache, then choose what to judge within the budget: in task order, every uncached task whose cost
+        // still fits (as the lab build did, judging as it went). A task with the same pixels as one chosen
+        // earlier in this call takes that task's outcome, as the cache would have given it.
         var budget = min(config.maxJudgementsPerCall, max(0, callerBudget ?? config.maxJudgementsPerCall))
         var judgements = 0
-        timings.cacheMs += msSince(t0)
+        var chosen: [Int] = [], sameAs: [Int: Int] = [:], firstWithKey: [ExactKey: Int] = [:]
+        var pendingCost = 0
         for i in tasks.indices {
             if let o = cache.get(tasks[i].key) { tasks[i].outcome = o; tasks[i].judged = true; timings.cacheHits += 1; continue }
             timings.cacheMisses += 1
+            if let j = firstWithKey[tasks[i].key] { sameAs[i] = j; continue }
             let cost = tasks[i].pieces.count * (models.models.count + (tasks[i].rect.shortSide < config.containBelow ? models.students.count : 0))
             if cost > budget { continue }
             budget -= cost
             judgements += cost
-            if let o = judgeTask(frame, tasks[i]) {
+            pendingCost += cost
+            chosen.append(i)
+            firstWithKey[tasks[i].key] = i
+        }
+        timings.cacheMs += msSince(t0)
+
+        if let progress {
+            let coveredByCache = tasks.filter { t in t.pass == .region && t.outcome.map { confirmed($0) || (config.rule == .balanced && $0.disputed && !$0.refereeRan) } ?? false }
+            progress(.found(pending: tasks.filter { $0.pass == .region && !$0.judged }.map(\.rect),
+                            coveredByCache: coveredByCache.map(\.rect), estimatedMs: Double(pendingCost) * msPerJudgement))
+        }
+
+        // The fastest model first, over every chosen picture region; a flag is shown at once (provisional).
+        var fast: [Int: [String: Float]] = [:]
+        if progress != nil, let fm = fastestModel {
+            for i in chosen where tasks[i].pass == .region {
+                guard let top = topScore(frame, tasks[i], fm) else { continue }
+                fast[i] = [fm.id: top]
+                var flagged = top >= table.cutoffs(model: fm.id, band: Band(shortSide: tasks[i].rect.shortSide)).cover
+                #if KESTREL_LAB
+                // The lab stand-in stands in for the fast model's flag (it is checked after the model ran).
+                if let s = standIn, tasks[i].pieces.contains(where: { s.detects(frame, $0) }) { flagged = true }
+                #endif
+                if flagged {
+                    progress?(.fastFlag(RegionVerdict(rect: tasks[i].rect, display: config.rule == .either ? .cover : .contain,
+                                                      reason: .provisional, pass: .region)))
+                }
+            }
+        }
+
+        // Then every model the full rule needs (the fast model's score is not judged twice).
+        for i in chosen {
+            if let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) {
                 tasks[i].outcome = o; tasks[i].judged = true
                 cache.put(tasks[i].key, o)
             }
         }
+        for (i, j) in sameAs where tasks[j].judged { tasks[i].outcome = tasks[j].outcome; tasks[i].judged = true }
 
         // A window turns hot only after a both-family hit (SD-125, C06-3 d). The lab's grid trigger
         // (several low-level tiles) and the tie-breaker-confirmed trigger are removed.
@@ -307,9 +362,48 @@ public final class Detector {
     }
     #endif
 
+    /// Lifetime cost per model (preprocessing and inference), to pick the fastest and to estimate.
+    var modelCost: [String: (ms: Double, tiles: Int)] = [:]
+
+    /// About how long one judgement takes (all models alike), from what judging has cost so far.
+    var msPerJudgement: Double {
+        let ms = modelCost.values.reduce(0) { $0 + $1.ms }, n = modelCost.values.reduce(0) { $0 + $1.tiles }
+        return n > 0 ? ms / Double(n) : 10
+    }
+
+    /// The model of the pair that has cost least per tile so far (before any measure, the one with the
+    /// smallest input).
+    var fastestModel: ScoringModel? {
+        models.models.min { a, b in
+            let ca = modelCost[a.id].map { $0.ms / Double(max(1, $0.tiles)) } ?? Double(a.side), cb = modelCost[b.id].map { $0.ms / Double(max(1, $0.tiles)) } ?? Double(b.side)
+            return ca < cb
+        }
+    }
+
+    /// One model's highest score over a task's pieces, each with fresh jitter. The score stays here.
+    func topScore(_ frame: RGBAImage, _ t: Task, _ m: ScoringModel) -> Float? {
+        var tensors: [[UInt8]] = []
+        var t0 = nowNs()
+        for p in t.pieces {
+            guard let tensor = try? Preprocessor.run(frame, rect: p, side: m.side, jitterSeed: UInt32.random(in: 1...UInt32.max, using: &rng)) else { return nil }
+            tensors.append(tensor)
+        }
+        let pre = msSince(t0)
+        timings.preprocessMs[m.id, default: 0] += pre
+        t0 = nowNs()
+        guard let scores = try? m.flagScores(tensors) else { return nil }
+        let inf = msSince(t0)
+        timings.inferenceMs[m.id, default: 0] += inf
+        timings.tiles[m.id, default: 0] += tensors.count
+        let c = modelCost[m.id] ?? (0, 0)
+        modelCost[m.id] = (c.ms + pre + inf, c.tiles + tensors.count)
+        return scores.max() ?? 0
+    }
+
     /// Judges every piece of a task with every model (jitter before every judgement) and folds the
-    /// scores into outcome flags. Scores do not outlive this function.
-    func judgeTask(_ frame: RGBAImage, _ t: Task) -> TileOutcome? {
+    /// scores into outcome flags. Scores do not outlive this function. `precomputed` holds scores already
+    /// made for this task in this call (the fastest model's), so no model judges the same task twice.
+    func judgeTask(_ frame: RGBAImage, _ t: Task, precomputed: [String: Float] = [:]) -> TileOutcome? {
         let band = Band(shortSide: t.rect.shortSide)
         var o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
         #if KESTREL_LAB
@@ -320,18 +414,7 @@ public final class Detector {
         let judges = models.models + (small ? models.students : [])
         for m in judges {
             let cut = table.cutoffs(model: m.id, band: band)
-            var tensors: [[UInt8]] = []
-            var t0 = nowNs()
-            for p in t.pieces {
-                guard let tensor = try? Preprocessor.run(frame, rect: p, side: m.side, jitterSeed: UInt32.random(in: 1...UInt32.max, using: &rng)) else { return nil }
-                tensors.append(tensor)
-            }
-            timings.preprocessMs[m.id, default: 0] += msSince(t0)
-            t0 = nowNs()
-            guard let scores = try? m.flagScores(tensors) else { return nil }
-            timings.inferenceMs[m.id, default: 0] += msSince(t0)
-            timings.tiles[m.id, default: 0] += tensors.count
-            let top = scores.max() ?? 0
+            guard let top = precomputed[m.id] ?? topScore(frame, t, m) else { return nil }
             let flag = top >= cut.cover
             if top > cut.clean { o.clean = false }
             if top >= cut.gridMember { o.gridMember = true }

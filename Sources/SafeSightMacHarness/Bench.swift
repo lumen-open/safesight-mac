@@ -122,7 +122,7 @@ final class Bench {
         detector.resetTimings()
         var early: [(Double, CoverPlan)] = []
         let t0 = DispatchTime.now().uptimeNanoseconds
-        let plan = p.process(f, snapshot: snap ?? snapshot, now: now) { pl in
+        let plan = p.process(f, snapshot: snap ?? snapshot, now: now, pointer: pointer) { pl in
             early.append((Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6, pl))
         }
         let total = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
@@ -287,8 +287,13 @@ final class Bench {
         func plan(at t: Double) -> CoverPlan? { shown.last { $0.t <= t }?.plan }
     }
 
-    func busy(unlimited: Bool) -> [String: Any] {
+    /// Where the pointer rests in the pointer runs (bottom right of the page), and how near a photo must be.
+    var probe: CGPoint { CGPoint(x: display.bounds.width * 0.75, y: display.bounds.height * 0.75) }
+    let nearPoints: CGFloat = 220
+
+    func busy(unlimited: Bool, pointer: CGPoint? = nil) -> [String: Any] {
         var perPage: [[String: Any]] = []
+        var nearShown: [Double] = [], provisionalFirst: [Double] = [], coveredFirst: [Double] = [], fastFlags: [Double] = []
         var firstPlan: [Double] = [], standIn: [Double] = [], fully: [Double] = [], clearAt: [Double] = []
         var lateMedian: [Double] = [], lateWorst: [Double] = [], sharpUnjudged: [Double] = [], blurredShare: [Double] = []
         var firstSteps: [BenchStep] = []
@@ -303,8 +308,10 @@ final class Bench {
             var tl = Timeline()
             tl.shown.append((0, p.lastPlan))
             var t = appear
-            var s = step(p, frame(img, dirty: [PixelRect(x: 0, y: 0, w: W, h: H)], t: t), now: t)
+            var s = step(p, frame(img, dirty: [PixelRect(x: 0, y: 0, w: W, h: H)], t: t), now: t, pointer: pointer)
             firstSteps.append(s)
+            provisionalFirst.append(s.pipe.provisionalMs.first ?? s.totalMs)
+            coveredFirst.append(Double(s.pipe.coveredFirst)); fastFlags.append(Double(s.pipe.fastFlags))
             tl.add(s, start: t)
             let standInAt = s.coverMs(toGlobal(spot)).map { $0 / 1000 }
             var calls = 1, computeMs = s.totalMs
@@ -314,7 +321,7 @@ final class Bench {
             // Idle frames (nothing changes on screen) every 0.1 s, or as soon as judging is free.
             while calls < 600 && t < appear + 90 {
                 t += max(0.1, s.totalMs / 1000)
-                s = step(p, frame(nil, dirty: [], status: .idle, t: t), now: t)
+                s = step(p, frame(nil, dirty: [], status: .idle, t: t), now: t, pointer: pointer)
                 calls += 1; computeMs += s.totalMs
                 tl.add(s, start: t)
                 if standInCovered == nil, let c = s.coverMs(toGlobal(spot)) { standInCovered = t + c / 1000 }
@@ -331,6 +338,7 @@ final class Bench {
             var blurred = 0
             for ph in photos {
                 let g = toGlobal(ph)
+                let near = hypot(max(0, max(g.minX - probe.x, probe.x - g.maxX)), max(0, max(g.minY - probe.y, probe.y - g.maxY))) <= nearPoints
                 var lastCovered: Double? = nil, firstCovered: Double? = nil
                 for (i, sp) in tl.shown.enumerated() where sp.t >= appear {
                     if coveredFraction(sp.plan, g) >= 0.5 {
@@ -339,6 +347,7 @@ final class Bench {
                     }
                 }
                 if let l = lastCovered { blurred += 1; late.append(l - appear) } else { late.append(0) }
+                if near { nearShown.append(lastCovered.map { $0 - appear } ?? 0) }
                 unjudged.append((firstCovered ?? tl.shown.first { $0.t >= appear }?.t ?? appear) - appear)
             }
             let ff = (s.plans.first?.ms ?? 0)
@@ -359,6 +368,9 @@ final class Bench {
             print("busy \(unlimited ? "unlimited" : "register") \(page.name): first call \(Int(firstSteps.last!.totalMs)) ms (\(firstSteps.last!.pipe.overloaded) overloaded), stand-in covered after \(standInCovered.map { Int(($0 - appear) * 1000) } ?? -1) ms, fully judged after \(fullyAt.map { r1($0 - appear) } ?? -1) s, all harmless shown after \(r1(clearTime - appear)) s")
         }
         return ["budget": unlimited ? "unlimited (compute-bound; DETECTOR_CALL_CAP still applies)" : "register (JUDGEMENT_BUDGET 40/s, JUDGEMENT_BURST 400)",
+                "pointer": pointer.map { "at \(Int($0.x)), \(Int($0.y)) points" } ?? "none",
+                "photosNearProbeShownAfterS": stat(nearShown), "probe": "photos within \(Int(nearPoints)) points of \(Int(probe.x)), \(Int(probe.y))",
+                "firstPlanHandedOutMs": stat(provisionalFirst), "regionsCoveredFirst": stat(coveredFirst), "fastModelFlags": stat(fastFlags),
                 "pages": perPage.count, "firstCallMs": stat(firstPlan), "standInTimeToCoverMs": stat(standIn),
                 "fullyJudgedAfterS": stat(fully), "allHarmlessShownAfterS": stat(clearAt),
                 "photoShownLateMedianS": stat(lateMedian), "photoShownLateWorstS": stat(lateWorst),
@@ -574,7 +586,9 @@ final class Bench {
         _ = primed()
         if o.cases.contains("single") { single() }
         if o.cases.contains("grid") { grid() }
-        if o.cases.contains("busy") { doc["busy"] = ["register": busy(unlimited: false), "unlimited": busy(unlimited: true)] }
+        if o.cases.contains("busy") {
+            doc["busy"] = ["register": busy(unlimited: false), "unlimited": busy(unlimited: true), "registerPointer": busy(unlimited: false, pointer: probe)]
+        }
         if o.cases.contains("scroll") {
             var sc: [String: Any] = [:]
             for sp in o.scrollSpeeds { sc["\(sp)px-register"] = scroll(speed: sp, unlimited: false); sc["\(sp)px-unlimited"] = scroll(speed: sp, unlimited: true) }

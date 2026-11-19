@@ -43,6 +43,9 @@ public final class DisplayPipeline {
     var rowCache: [JudgeTarget: (serial: Int, area: PixelRect, rows: [UInt64?])] = [:]
     var frameSerial = 0
     var lastFrameTime: TimeInterval?
+    /// Cover first when judging a window's new pictures would end later than this after the frame arrived
+    /// (`COVER_GOAL`; tests that run unoptimised builds raise it).
+    public var coverGoalMs = Register.COVER_GOAL * 1000
     /// How long a judging run takes (the recent longest, fading by a fifth a run): how far ahead a moving
     /// cover must reach.
     var runEstimateMs = 0.0
@@ -79,11 +82,16 @@ public final class DisplayPipeline {
     /// Handles one frame and returns everything to draw on this display.
     ///
     /// `provisional`, when given, receives plans to draw at once, before judging ends: covers moved with
-    /// content that scrolled. Every provisional plan holds every cover the last plan held (moved where its
-    /// picture moved), so drawing one never shows anything the last plan covered. The returned plan is the
-    /// final one for this frame and replaces them.
+    /// content that scrolled; new pictures blurred first when judging them would take longer than
+    /// `COVER_GOAL`; and a blur (a cover under Either) on any picture the fastest model flags, before the full
+    /// rule decides. Every provisional plan holds every cover the last plan held (moved where its picture
+    /// moved), plus every cover already decided in this frame, so drawing one never shows anything the last
+    /// plan covered. The returned plan is the final one for this frame and replaces them: only the full rule
+    /// lifts anything, and only by `VIDEO_VOTE`.
+    ///
+    /// `pointer` (global points), when known, puts the window under it, and the pictures nearest it, first.
     public func process(_ f: CapturedFrame, snapshot: WindowSnapshot, now: TimeInterval, date: Date = Date(),
-                        provisional: ((CoverPlan) -> Void)? = nil) -> CoverPlan {
+                        pointer: CGPoint? = nil, provisional: ((CoverPlan) -> Void)? = nil) -> CoverPlan {
         display = f.display
         switch f.status {
         case .blank, .suspended, .stopped:
@@ -93,7 +101,7 @@ public final class DisplayPipeline {
         case .idle:
             // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels.
             guard judged, let img = lastImage, let map = lastMap, !(held.isEmpty && pending.isEmpty) else { return lastPlan }
-            return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, provisional: provisional)
+            return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
         case .complete:
             guard let img = f.image, let map = f.map, map.pixelWidth == img.width, map.pixelHeight == img.height, map.coversDisplay else {
                 return cover(because: .badFrameMetadata)
@@ -102,7 +110,7 @@ public final class DisplayPipeline {
             let dt = lastFrameTime.map { f.time - $0 } ?? 0
             lastImage = img; lastMap = map; lastFrameTime = f.time
             frameSerial += 1
-            return run(img, previous: previous, frameInterval: dt, map: map, dirty: f.dirty, snapshot: snapshot, now: now, date: date, provisional: provisional)
+            return run(img, previous: previous, frameInterval: dt, map: map, dirty: f.dirty, snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
         }
     }
 
@@ -111,7 +119,7 @@ public final class DisplayPipeline {
     }
 
     func run(_ img: RGBAImage, previous: RGBAImage?, frameInterval: TimeInterval, map: CaptureMap, dirty: [PixelRect]?, snapshot: WindowSnapshot,
-             now: TimeInterval, date: Date, provisional: ((CoverPlan) -> Void)?) -> CoverPlan {
+             now: TimeInterval, date: Date, pointer: CGPoint? = nil, provisional: ((CoverPlan) -> Void)?) -> CoverPlan {
         var timing = PipelineTimings()
         let tRun = PipelineTimings.now()
         defer {
@@ -140,9 +148,21 @@ public final class DisplayPipeline {
         }
         pending = []
 
-        // 2. Split by window: one judge call per window (C05-6). Hot windows first.
+        // 2. Split by window: one judge call per window (C05-6). Hot windows first; then the window under the
+        //    pointer and the ones nearest it; otherwise front to back (SD-120's order of work).
         var parts = snapshot.split(changed: areas, display: display, ignoring: ignoredPIDs)
-        parts.sort { hot.contains($0.target) && !hot.contains($1.target) }
+        func pointerDistance(_ p: TargetArea) -> CGFloat {
+            guard let q = pointer else { return 0 }
+            return p.visible.map { r in hypot(max(0, max(r.minX - q.x, q.x - r.maxX)), max(0, max(r.minY - q.y, q.y - r.maxY))) }.min() ?? .infinity
+        }
+        let order = Dictionary(uniqueKeysWithValues: parts.enumerated().map { ($0.element.target, $0.offset) })
+        parts.sort { a, b in
+            let ha = hot.contains(a.target), hb = hot.contains(b.target)
+            if ha != hb { return ha }
+            let da = pointerDistance(a), db = pointerDistance(b)
+            if da != db { return da < db }
+            return order[a.target]! < order[b.target]!
+        }
         timing.changeMs = PipelineTimings.ms(since: tStage)
 
         // 2b. Content that moved by a translation (scrolling): its covers move with it now, in this update,
@@ -161,16 +181,55 @@ public final class DisplayPipeline {
 
         // 3. Judge and turn classes into covers.
         var fresh: [Held] = []
+        // Covers and blurs handed out early in this frame (cover first, fast flags): drawn in provisional plans
+        // only. The final plan comes from the full rule alone.
+        var early: [CoverItem] = []
+        func publishEarly() {
+            guard let provisional, judged else { return }
+            provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead + fresh) + early))
+            timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
+        }
         for p in parts {
             guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
                   let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
             bucket.refill(now: now)
             // The first judgement after the display was covered whole is not limited by the budget (SD-120).
             let budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
+            let focus = pointer.flatMap { q in map.toPixels(CGRect(x: q.x - 1, y: q.y - 1, width: 2, height: 2)) }
             let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
-                                   sliceAnchor: sliceAnchor(p.target, snapshot, map))
+                                   sliceAnchor: sliceAnchor(p.target, snapshot, map), focus: focus)
+            let vis = p.visible
+            func item(_ r: PixelRect, _ kind: CoverKind) -> [CoverItem] {
+                vis.clipped(to: map.toGlobal(r)).map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: kind) }
+            }
+            func blur(_ r: PixelRect) -> CoverKind { ContainBlur.make(img, r).map { .blur($0) } ?? .plain }
+            let callStart = PipelineTimings.now()
+            let progress: ((JudgeProgress) -> Void)? = provisional == nil || !judged ? nil : { event in
+                switch event {
+                case let .found(pending, coveredByCache, estimatedMs):
+                    // A cached cover is shown at once if it is not on screen already (a flagged picture seen
+                    // before, back in view). Cover first: if judging the new pictures would overrun the goal,
+                    // blur them until judged.
+                    let shown = (self.held + lead + fresh).filter { $0.target == p.target }.compactMap { self.globalRect($0, snapshot, visible) }
+                    var added = coveredByCache.filter { r in
+                        let gr = map.toGlobal(r).insetBy(dx: map.pointsPerPixel, dy: map.pointsPerPixel)
+                        return !shown.contains { $0.contains(gr) }
+                    }.flatMap { item($0, .plain) }
+                    let spent = PipelineTimings.ms(since: tRun)
+                    if !pending.isEmpty && spent + estimatedMs > self.coverGoalMs {
+                        added += pending.flatMap { item($0, blur($0)) }
+                        timing.coveredFirst += pending.count
+                    }
+                    if !added.isEmpty { early += added; publishEarly() }
+                case let .fastFlag(rv):
+                    early += item(rv.rect, rv.display == .cover ? .plain : blur(rv.rect))
+                    timing.fastFlags += 1
+                    publishEarly()
+                }
+                _ = callStart
+            }
             tStage = PipelineTimings.now()
-            let v = judger.judgeArea(img, context: ctx, within: area, budget: budget)
+            let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: progress)
             timing.judgeMs += PipelineTimings.ms(since: tStage)
             timing.calls += 1
             timing.judgements += v.judgements

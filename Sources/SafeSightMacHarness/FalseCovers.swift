@@ -21,8 +21,9 @@ final class RecordingJudger: Judging {
     let inner: Detector
     var verdicts: [FrameVerdict] = []
     init(_ d: Detector) { inner = d }
-    func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict {
-        let v = inner.judgeArea(frame, context: context, within: area, budget: budget)
+    func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                   progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+        let v = inner.judgeArea(frame, context: context, within: area, budget: budget, progress: progress)
         verdicts.append(v)
         return v
     }

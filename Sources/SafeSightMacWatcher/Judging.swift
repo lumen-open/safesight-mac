@@ -7,13 +7,23 @@ import Foundation
 import Preprocess
 
 public protocol Judging: AnyObject {
-    func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict
+    /// `progress` hears, before the call returns, what is still to be judged and any early flag of the
+    /// fastest model (classes only); see `Detector.judge`.
+    func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                   progress: ((JudgeProgress) -> Void)?) -> FrameVerdict
     func setRule(_ rule: DetectorRule)
 }
 
-extension Detector: Judging {
+extension Judging {
     public func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict {
-        judge(frame, context: context, within: area, budget: budget)
+        judgeArea(frame, context: context, within: area, budget: budget, progress: nil)
+    }
+}
+
+extension Detector: Judging {
+    public func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                          progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+        judge(frame, context: context, within: area, budget: budget, progress: progress)
     }
 }
 
@@ -59,6 +69,10 @@ public struct PipelineTimings: Sendable, Equatable {
     /// Plans handed out before the final one (moved covers, cover-first blurs, fast-model blurs), with the
     /// time each was ready, from the start of the call.
     public var provisionalMs: [Double] = []
+    /// New picture regions blurred first because judging them would overrun `COVER_GOAL`.
+    public var coveredFirst = 0
+    /// Pictures the fastest model flagged, shown blurred before the full rule decided.
+    public var fastFlags = 0
     public init() {}
 
     static func now() -> UInt64 { DispatchTime.now().uptimeNanoseconds }

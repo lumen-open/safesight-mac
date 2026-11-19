@@ -8,6 +8,7 @@ import Preprocess
 import Testing
 @testable import DetectorCore
 @testable import SafeSightMacWatcher
+import RegionFinder
 
 @Suite struct VerdictCacheInThePipelineTests {
     let display = DisplayDescriptor(id: 5, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
@@ -85,6 +86,7 @@ import Testing
         let pic = PixelRect(x: 380, y: 200, w: 120, h: 120)
         Fixtures.paintFlagged(&page, pic)
         let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [])
+        p.coverGoalMs = 1e9   // this test is about motion alone
         #expect(p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0).covers(CGRect(x: 380, y: 200, width: 120, height: 120)))
         // The page scrolls up by 60 pixels.
         let next = Self.shifted(page, dx: 0, dy: -60)
@@ -120,6 +122,7 @@ import Testing
         var page = Self.page(600, 400, seed: 7)
         Fixtures.paintFlagged(&page, PixelRect(x: 380, y: 200, w: 120, h: 120))
         let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [])
+        p.coverGoalMs = 1e9   // this test is about motion alone
         _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
         var changed = page
         Fixtures.paint(&changed, PixelRect(x: 20, y: 20, w: 50, h: 50), channel: nil, seed: 8)
@@ -127,5 +130,151 @@ import Testing
         let plan = p.process(Fixtures.frame(changed, display: display, scale: 1, dirty: [PixelRect(x: 16, y: 16, w: 64, h: 64)], t: 0.1), snapshot: window, now: 0.1) { early.append($0) }
         #expect(early.isEmpty)
         #expect(plan.covers(CGRect(x: 380, y: 200, width: 120, height: 120)))
+    }
+}
+
+/// A marker model that takes about as long as a real one, so that the cover layer's estimate is realistic.
+final class SlowModel: ScoringModel {
+    let inner: MarkerModel
+    let msPerTile: Double
+    var id: String { inner.id }
+    var family: Family { inner.family }
+    var side: Int { inner.side }
+    init(_ inner: MarkerModel, msPerTile: Double) { self.inner = inner; self.msPerTile = msPerTile }
+    func flagScores(_ tensors: [[UInt8]]) throws -> [Float] {
+        usleep(useconds_t(msPerTile * 1000 * Double(tensors.count)))
+        return try inner.flagScores(tensors)
+    }
+}
+
+/// Keeps the order of judge calls (by context) and forwards to the detector.
+final class OrderJudger: Judging {
+    let inner: Detector
+    var order: [UInt64] = []
+    init(_ d: Detector) { inner = d }
+    func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                   progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+        order.append(context.windowID)
+        return inner.judgeArea(frame, context: context, within: area, budget: budget, progress: progress)
+    }
+    func setRule(_ rule: DetectorRule) { inner.setRule(rule) }
+}
+
+@Suite struct CoverFirstTests {
+    let display = DisplayDescriptor(id: 7, bounds: CGRect(x: 0, y: 0, width: 800, height: 500))
+    var window: WindowSnapshot { Fixtures.oneWindow(display.bounds) }
+    let whole = [PixelRect(x: 0, y: 0, w: 800, h: 500)]
+
+    func slowDetector(ms: Double = 4) -> Detector {
+        let a = SlowModel(MarkerModel(id: "fa", family: .a, channel: 0), msPerTile: ms), b = SlowModel(MarkerModel(id: "fb", family: .b, channel: 2), msPerTile: ms)
+        let c = Cutoffs(cover: 0.3, clean: 0.05, strike: 0.8, gridMember: 0.3, gridLow: 0.3)
+        let table = ThresholdTable(schema: "test", models: ["fa": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) }),
+                                                            "fb": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) })])
+        return Detector(models: ModelSet(models: [a, b], bundleVersion: "slow"), table: table, config: DetectorConfig(), finder: RegionFinder())
+    }
+
+    func busyPage(seed: UInt32) -> (RGBAImage, [PixelRect]) {
+        var img = Fixtures.blank(800, 500)
+        var pics: [PixelRect] = []
+        for i in 0..<3 { for j in 0..<5 {
+            let r = PixelRect(x: 20 + j * 155, y: 20 + i * 160, w: 120, h: 120)
+            Fixtures.paint(&img, r, channel: nil, seed: seed &+ UInt32(i * 5 + j)); pics.append(r)
+        } }
+        return (img, pics)
+    }
+
+    func g(_ r: PixelRect) -> CGRect { CGRect(x: CGFloat(r.x), y: CGFloat(r.y), width: CGFloat(r.w), height: CGFloat(r.h)) }
+
+    @Test func aBusyPageIsBlurredFirstAndShownWhenCleared() {
+        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [])
+        _ = p.process(Fixtures.frame(Fixtures.blank(800, 500), display: display, scale: 1, t: 0), snapshot: window, now: 0)
+        let (page, pics) = busyPage(seed: 10)
+        var early: [CoverPlan] = []
+        let final = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: 1), snapshot: window, now: 1) { early.append($0) }
+        #expect(p.lastTimings.coveredFirst >= pics.count)
+        let first = early.first
+        #expect(first != nil, "a plan is handed out before judging ends")
+        for r in pics { #expect(first?.covers(g(r)) == true, "new picture blurred until judged") }
+        #expect(first?.items.allSatisfy { $0.kind != .plain } == true, "blurs, not covers")
+        for r in pics { #expect(!final.covers(g(r)), "shown once cleared") }
+    }
+
+    @Test func newPicturesAreBlurredFirstOnlyWhenJudgingWouldOverrunTheGoal() {
+        // The same new picture, once with a goal judging easily meets and once with one it cannot meet.
+        // (Unoptimised test builds are too slow to time the 0.1 s goal itself; the bench does that.)
+        for (goal, blurred) in [(1e9, false), (0.0, true)] {
+            let p = DisplayPipeline(display: display, judger: Fixtures.detector(), budgetShare: 1e9, ignoredPIDs: [])
+            p.coverGoalMs = goal
+            _ = p.process(Fixtures.frame(Fixtures.blank(800, 500), display: display, scale: 1, t: 0), snapshot: window, now: 0)
+            var img = Fixtures.blank(800, 500)
+            let r = PixelRect(x: 400, y: 100, w: 120, h: 120)
+            Fixtures.paint(&img, r, channel: nil, seed: 4)
+            var early: [CoverPlan] = []
+            let final = p.process(Fixtures.frame(img, display: display, scale: 1, dirty: [r], t: 1), snapshot: window, now: 1) { early.append($0) }
+            #expect((p.lastTimings.coveredFirst > 0) == blurred)
+            #expect((early.first?.covers(g(r)) ?? false) == blurred)
+            #expect(!final.covers(g(r)), "harmless: shown once judged either way")
+        }
+    }
+
+    @Test func aFastFlagIsBlurredBeforeTheFullRuleCovers() {
+        let p = DisplayPipeline(display: display, judger: slowDetector(ms: 1), budgetShare: 1e9, ignoredPIDs: [])
+        _ = p.process(Fixtures.frame(Fixtures.blank(800, 500), display: display, scale: 1, t: 0), snapshot: window, now: 0)
+        var img = Fixtures.blank(800, 500)
+        let r = PixelRect(x: 300, y: 150, w: 120, h: 120)
+        Fixtures.paintFlagged(&img, r)
+        var early: [CoverPlan] = []
+        let final = p.process(Fixtures.frame(img, display: display, scale: 1, dirty: [r], t: 1), snapshot: window, now: 1) { early.append($0) }
+        #expect(p.lastTimings.fastFlags >= 1)
+        #expect(early.contains { $0.covers(g(r)) && $0.items.contains { $0.kind != .plain } }, "blurred as soon as the fastest model flagged")
+        #expect(final.covers(g(r), kind: .plain), "then covered by the full rule")
+    }
+
+    @Test func earlyPlansKeepEveryCoverAlreadyShown() {
+        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [])
+        var base = Fixtures.blank(800, 500)
+        let flagged = PixelRect(x: 640, y: 340, w: 120, h: 120)
+        Fixtures.paintFlagged(&base, flagged)
+        #expect(p.process(Fixtures.frame(base, display: display, scale: 1, t: 0), snapshot: window, now: 0).covers(g(flagged), kind: .plain))
+        var (page, _) = busyPage(seed: 30)
+        Fixtures.paintFlagged(&page, flagged)
+        var early: [CoverPlan] = []
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 620, h: 500)], t: 1), snapshot: window, now: 1) { early.append($0) }
+        #expect(!early.isEmpty)
+        for e in early { #expect(e.covers(g(flagged), kind: .plain), "the earlier cover stays in every early plan") }
+    }
+
+    @Test func noEarlyPlanWhileTheDisplayIsCoveredWhole() {
+        let p = DisplayPipeline(display: display, judger: slowDetector(), budgetShare: 1e9, ignoredPIDs: [])
+        let (page, _) = busyPage(seed: 40)
+        var early: [CoverPlan] = []
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0) { early.append($0) }
+        #expect(early.isEmpty, "until its first judged frame the display stays covered whole")
+    }
+
+    @Test func theWindowUnderThePointerIsJudgedFirst() {
+        let d = DisplayDescriptor(id: 8, bounds: CGRect(x: 0, y: 0, width: 800, height: 400))
+        let left = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let right = WindowInfo(number: 2, ownerPID: 501, layer: 0, bounds: CGRect(x: 400, y: 0, width: 400, height: 400))
+        let snap = WindowSnapshot(windows: [left, right], time: 0)
+        let j = OrderJudger(Fixtures.detector())
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e9, ignoredPIDs: [])
+        _ = p.process(Fixtures.frame(Fixtures.blank(800, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        var img = Fixtures.blank(800, 400)
+        Fixtures.paint(&img, PixelRect(x: 50, y: 50, w: 100, h: 100), channel: nil, seed: 1)
+        Fixtures.paint(&img, PixelRect(x: 550, y: 50, w: 100, h: 100), channel: nil, seed: 2)
+        let dirty = [PixelRect(x: 48, y: 48, w: 104, h: 104), PixelRect(x: 548, y: 48, w: 104, h: 104)]
+        j.order = []
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: dirty, t: 1), snapshot: snap, now: 1, pointer: CGPoint(x: 700, y: 300))
+        let rightID = JudgeTarget.window(number: 2, ownerPID: 501).contextID, leftID = JudgeTarget.window(number: 1, ownerPID: 500).contextID
+        #expect(j.order.first == rightID)
+        #expect(Set(j.order) == [rightID, leftID], "both are still judged")
+        j.order = []
+        var img2 = img
+        Fixtures.paint(&img2, PixelRect(x: 50, y: 200, w: 100, h: 100), channel: nil, seed: 3)
+        Fixtures.paint(&img2, PixelRect(x: 550, y: 200, w: 100, h: 100), channel: nil, seed: 4)
+        let dirty2 = [PixelRect(x: 48, y: 198, w: 104, h: 104), PixelRect(x: 548, y: 198, w: 104, h: 104)]
+        _ = p.process(Fixtures.frame(img2, display: d, scale: 1, dirty: dirty2, t: 2), snapshot: snap, now: 2)
+        #expect(j.order.first == leftID, "with no pointer, front to back as before")
     }
 }

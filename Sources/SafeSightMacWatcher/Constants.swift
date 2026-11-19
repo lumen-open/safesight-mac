@@ -8,7 +8,12 @@ public enum Register {
     /// region, video or still (SD-230). As built.
     public static let VIDEO_VOTE = 4
     /// `TIME_TO_COVER`: 0.5 s, the mark for one new picture on an otherwise still screen. Proposal (ST-031).
+    /// It also stays the step-2 rule: a window left with unjudged entries this long is covered whole.
     public static let TIME_TO_COVER: TimeInterval = 0.5
+    /// The owner's goal (18 November 2026), tighter than `TIME_TO_COVER`: about 0.1 s from a new picture to
+    /// its cover. Not a register value. When judging a window's new pictures would take longer than this, they
+    /// are blurred first and shown when cleared (cover first).
+    public static let COVER_GOAL: TimeInterval = 0.1
     /// `FULL_REJUDGE` for show-first: every window is re-judged in full at least this often. Proposal (ST-038).
     public static let FULL_REJUDGE_SHOW_FIRST: TimeInterval = 30
     /// `JUDGEMENT_BUDGET`: sustained model judgements per second, shared equally among displays. Proposal (ST-038).
