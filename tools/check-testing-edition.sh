@@ -1,0 +1,140 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Checks the Testing edition's guarantees on what is actually built (docs/TESTING-EDITION.md), the way
+# check-no-standin.sh checks release builds:
+#  1. Its app is built from the modules it should be, and no others: no lock, keeper, installer or helper module,
+#     and no outside package, can slip in.
+#  2. Its binary links no framework and names no function, class or path that could install a launch daemon or
+#     agent, a login item, a privileged helper, a system extension or a profile; create an account or change a
+#     password; ask for an administrator or use the keychain; run another program or script; reach the network;
+#     save a picture of the screen; or take the screen, the keyboard or the pointer away from the person.
+#  3. Its bundle is a plain app (nothing in it that macOS would install or start), with the Testing name and an
+#     identifier ending in .testing, signed with exactly one entitlement: the App Sandbox.
+#  4. The release app contains no part of the Testing edition (no emergency quit), and no Testing build is a lab
+#     build.
+# Writes only under .build-testing/ and a temporary folder it removes. Installs nothing, runs nothing it builds.
+set -eu
+cd "$(dirname "$0")/.."
+unset SAFESIGHTMAC_LAB KESTREL_LAB
+scratch=.build-testing
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/safesightmac-testing-check.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+fail=0
+bad() { echo "FAIL: $*"; fail=1; }
+
+# 1. The modules the Testing app is made of.
+SAFESIGHTMAC_TESTING=1 swift package describe --type json > "$tmp/describe.json"
+python3 - "$tmp/describe.json" "$tmp/modules.txt" <<'EOF' || fail=1
+import json, sys
+d = json.load(open(sys.argv[1]))
+targets = {t["name"]: t for t in d["targets"]}
+allowed = {"SafeSightMacApp", "SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCapture", "SafeSightMacCover",
+           "SafeSightMacTestingEdition", "DetectorCore", "Preprocess", "RegionFinder"}
+seen, todo = set(), ["SafeSightMacApp"]
+while todo:
+    n = todo.pop()
+    if n in seen: continue
+    seen.add(n)
+    t = targets[n]
+    if t.get("product_dependencies"):
+        print("FAIL: %s depends on an outside package: %s" % (n, t["product_dependencies"])); sys.exit(1)
+    todo += t.get("target_dependencies", [])
+if seen != allowed:
+    print("FAIL: the Testing app's modules changed. Added: %s. Missing: %s." % (sorted(seen - allowed), sorted(allowed - seen)))
+    print("A module added to the Testing app must be reviewed and listed here, in tools/check-testing-edition.sh.")
+    sys.exit(1)
+if d.get("dependencies"):
+    print("FAIL: the package depends on outside packages: %s" % d["dependencies"]); sys.exit(1)
+open(sys.argv[2], "w").write("\n".join(sorted(seen)) + "\n")
+print("Modules: the Testing app is built from %d known modules and no outside package" % len(seen))
+EOF
+
+# Their sources, as the Testing build compiles them (short string literals never reach the binary's strings).
+# shellcheck disable=SC2046
+python3 tools/testing_edition_scan.py Sources $(cat "$tmp/modules.txt") || fail=1
+
+# 2. The binary.
+SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --product safesight-mac >/dev/null
+tools/make-app.sh --testing --no-models org.example.safesightmac.testing "$tmp" >"$tmp/make.txt" 2>&1 \
+  || { cat "$tmp/make.txt"; echo "FAIL: the Testing app could not be assembled"; exit 1; }
+app="$tmp/SafeSight Mac Testing.app"
+bin="$app/Contents/MacOS/safesight-mac"
+[ -x "$bin" ] || { echo "FAIL: no Testing app was assembled"; exit 1; }
+
+# Frameworks and libraries it may never link.
+otool -L "$bin" > "$tmp/libs.txt"
+libs='ServiceManagement|SystemExtensions|/Security\.framework|SecurityFoundation|SecurityInterface|OpenDirectory|Collaboration|DirectoryService|NetworkExtension|/Network\.framework|CFNetwork|WebKit|EndpointSecurity|DriverKit|/IOKit\.framework|ConfigurationProfiles|ManagedClient|LocalAuthentication|AuthenticationServices|ScriptingBridge|OSAKit|AppleScriptObjC|/AVFoundation\.framework|Photos|Contacts|EventKit|CoreWLAN|CoreBluetooth|CoreLocation'
+if grep -E "$libs" "$tmp/libs.txt"; then bad "it links a framework that can install, authorise, reach the network or record"; fi
+
+# Functions and classes it may never call (nm -u: what the binary imports).
+nm -u "$bin" > "$tmp/imports.txt"
+calls='^_SMAppService|_OBJC_CLASS_\$_SMAppService|^_SMJob|^_SMLoginItem|^_SMCopyAllJob|^_LSSharedFileList|^_kLSSharedFileList'
+calls="$calls"'|^_Authorization|_OBJC_CLASS_\$_SFAuthorization|^_SecKeychain|^_SecItem|^_SecTrustSettingsSet|^_SecCertificateAddToKeychain|^_SecAccess'
+calls="$calls"'|_OBJC_CLASS_\$_OSSystemExtension|^_KextManager|^_es_new_client|^_CSIdentity|_OBJC_CLASS_\$_OD(Node|Record|Session|Query)|_OBJC_CLASS_\$_CB(User)?Identity'
+calls="$calls"'|^_set(e|re|res)?[ug]id$|^_initgroups$|^_[lf]?chown$|^_posix_spawnp?$|^_exec(l|lp|le|v|ve|vp|vP)$|^_v?fork$|^_system$|^_popen$|^_kill(pg)?$|^_ptrace$|^_task_for_pid$'
+calls="$calls"'|_OBJC_CLASS_\$_NSTask$|_OBJC_CLASS_\$_NSAppleScript|_OBJC_CLASS_\$_NSUser(Unix|AppleScript|Automator)?(Script)?Task|_OBJC_CLASS_\$_OSAScript|^_AESendMessage|^_AECreateAppleEvent|_OBJC_CLASS_\$_SBApplication'
+calls="$calls"'|^_xpc_connection_create|_OBJC_CLASS_\$_NSXPCConnection|_OBJC_CLASS_\$_NSXPCListener'
+calls="$calls"'|^_socket$|^_connect$|^_bind$|^_listen$|^_accept$|^_sendto$|^_getaddrinfo$|^_gethostbyname|_OBJC_CLASS_\$_NSURL(Session|Connection|Request)|^_CFSocket|^_CFStreamCreatePairWithSocket|^_nw_|^_SCNetworkReachability|^_CFHTTP|_OBJC_CLASS_\$_WKWebView'
+calls="$calls"'|^_CGImageDestination|_OBJC_CLASS_\$_AVAssetWriter|_OBJC_CLASS_\$_SCRecordingOutput|_OBJC_CLASS_\$_NSPasteboard|^_CGWindowListCreateImage|^_CGDisplayCreateImage'
+calls="$calls"'|^_CGDisplayCapture|^_CGCaptureAllDisplays|^_CGShieldingWindow|^_SetSystemUIMode|^_CGAssociateMouseAndMouseCursorPosition|^_CGDisplayHideCursor|^_CGWarpMouseCursorPosition'
+calls="$calls"'|^_CGEventTapCreate|^_CGEventPost|^_CGBeginDisplayConfiguration|^_CGSetDisplayTransfer|^_CGDisplaySetDisplayMode|^_IOPM|^_IORegistryEntrySet|^_SACLockScreen'
+if grep -E "$calls" "$tmp/imports.txt"; then bad "it imports a function or class that could install, authorise, spawn, connect, record or take over the screen"; fi
+
+# Words and paths it may never hold: launchd and helper places, system folders, commands, and the Objective-C
+# methods for kiosk mode, the desktop picture, other apps' settings, killing apps and saving pictures.
+strings -a "$bin" > "$tmp/strings.txt"
+words='launchctl|LaunchDaemons|LaunchAgents|PrivilegedHelperTools|StartupItems|LoginItems|SMPrivilegedExecutables|SMAuthorizedClients|RunAtLoad|KeepAlive|ProgramArguments|BundleProgram'
+words="$words"'|sudo|osascript|dscl|sysadminctl|dseditgroup|pwpolicy|createhomedir|kickstart|tccutil|spctl|csrutil|systemsetup|mobileconfig|administrator privileges'
+words="$words"'|setPresentationOptions|setDesktopImageURL|setPersistentDomain|forceTerminate|representationUsingType|TIFFRepresentation|writeToFile'
+words="$words"'|standin|labforced|checkerstandin|labtilescores|LabTile'
+if grep -niwE "$words" "$tmp/strings.txt"; then bad "it holds a word that belongs to installing, running commands, other apps or the lab"; fi
+paths='(^|[^~A-Za-z0-9_])/(Library|System|usr|bin|sbin|etc|private|var|opt|Applications)/'
+if grep -nE "$paths" "$tmp/strings.txt"; then bad "it names a system path (it may write only inside its own sandbox container)"; fi
+grep -q 'Testing edition: no lock. Quit any time with' "$tmp/strings.txt" || bad "the Testing line is missing: is this the Testing build?"
+grep -q '_RegisterEventHotKey' "$tmp/imports.txt" || bad "the emergency quit (RegisterEventHotKey) is missing"
+
+# 3. The bundle: shape, Info.plist, signature and entitlements.
+(cd "$app" && find . -mindepth 1 | sort) > "$tmp/shape.txt"
+printf '%s\n' ./Contents ./Contents/Info.plist ./Contents/MacOS ./Contents/MacOS/safesight-mac ./Contents/Resources \
+  ./Contents/_CodeSignature ./Contents/_CodeSignature/CodeResources | sort > "$tmp/shape-want.txt"
+diff -u "$tmp/shape-want.txt" "$tmp/shape.txt" || bad "the bundle holds something other than the app itself (no Library, PlugIns, XPCServices, Helpers or Frameworks)"
+plutil -convert json -o "$tmp/info.json" "$app/Contents/Info.plist"
+codesign -d --entitlements - --xml "$app" 2>/dev/null > "$tmp/ent.plist" || true
+plutil -convert json -o "$tmp/ent.json" "$tmp/ent.plist" 2>/dev/null || echo '{}' > "$tmp/ent.json"
+codesign -dv "$app" > "$tmp/sig.txt" 2>&1 || true
+python3 - "$tmp/info.json" "$tmp/ent.json" "$tmp/sig.txt" <<'EOF' || fail=1
+import json, sys
+info, ent, sig = json.load(open(sys.argv[1])), json.load(open(sys.argv[2])), open(sys.argv[3]).read()
+ok = True
+want = {"CFBundleExecutable", "CFBundleIdentifier", "CFBundleName", "CFBundleDisplayName", "CFBundlePackageType",
+        "CFBundleShortVersionString", "CFBundleVersion", "LSMinimumSystemVersion", "LSUIElement", "NSHumanReadableCopyright"}
+if set(info) != want:
+    print("FAIL: Info.plist keys changed. Added: %s. Missing: %s." % (sorted(set(info) - want), sorted(want - set(info)))); ok = False
+if not info.get("CFBundleIdentifier", "").endswith(".testing"):
+    print("FAIL: the identifier does not end in .testing"); ok = False
+if info.get("CFBundleName") != "SafeSight Mac Testing" or info.get("CFBundleDisplayName") != "SafeSight Mac Testing":
+    print("FAIL: the app is not named SafeSight Mac Testing"); ok = False
+if info.get("LSUIElement") is not True:
+    print("FAIL: it would get a Dock icon"); ok = False
+if ent != {"com.apple.security.app-sandbox": True}:
+    print("FAIL: its entitlements are %s, not exactly the App Sandbox" % ent); ok = False
+if "Signature=adhoc" not in sig or "runtime" not in sig:
+    print("FAIL: not signed ad hoc with the hardened runtime:\n" + sig); ok = False
+if ok:
+    print("Bundle: a plain app named SafeSight Mac Testing (%s); one entitlement: %s" % (info["CFBundleIdentifier"], ", ".join(ent)))
+sys.exit(0 if ok else 1)
+EOF
+codesign --verify --strict "$app" || bad "the signature does not verify"
+
+# 4. The release app has no part of the Testing edition.
+swift build -c release --product safesight-mac >/dev/null
+rel="$(swift build -c release --show-bin-path)/safesight-mac"
+if nm -u "$rel" | grep -E '_RegisterEventHotKey|_InstallEventHandler'; then bad "the release app contains the emergency quit"; fi
+if nm "$rel" | grep -q 'SafeSightMacTestingEdition'; then bad "the release app links the Testing edition module"; fi
+
+if [ "$fail" = 0 ]; then
+  echo "Testing edition check: no lock, installer, account, admin, launchd, login-item, helper, extension, profile,"
+  echo "process, network, recording or screen-takeover API; sandboxed with one entitlement; release app unchanged"
+else
+  echo "FAIL"; exit 1
+fi
