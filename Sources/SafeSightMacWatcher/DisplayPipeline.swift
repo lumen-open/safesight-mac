@@ -49,6 +49,9 @@ public final class DisplayPipeline {
     /// When the reported changed areas were last checked against the pixels (`DIRTY_CHECK_EVERY`), and how often they
     /// were found wrong (a count only).
     var lastDirtyCheck: TimeInterval?
+    /// The frame of the last check, and every changed area reported since (frame pixels). Holds one frame's pixels.
+    var checkBase: (image: RGBAImage, map: CaptureMap, generation: Int)?
+    var reportedSince: [PixelRect] = []
     public private(set) var dirtyMismatches = 0
     var lastFrameTime: TimeInterval?
     /// Cover first when judging a window's new pictures would end later than this after the frame arrived
@@ -101,7 +104,7 @@ public final class DisplayPipeline {
     public func reset() {
         held = []; pending = []; lastImage = nil; lastMap = nil; lastFullPass = nil
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
-        judgedGeneration = nil; lastDirtyCheck = nil
+        judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []
         cover(because: .notYetJudged)
     }
 
@@ -140,12 +143,21 @@ public final class DisplayPipeline {
             // The first frame of another stream is judged whole, with no motion carried over from the old stream.
             let sameStream = judgedGeneration == f.generation
             let previous = sameStream && lastMap.map { $0 == map } == true ? lastImage : nil
-            // The reported changed areas are checked against the pixels now and then: a change anywhere else means they
+            // The reported changed areas are checked against the pixels now and then: this frame is compared with the frame
+            // of the last check, outside every area reported since. A change anywhere else, in any frame between, means they
             // cannot be trusted, and the whole frame is judged.
             var dirty = sameStream ? f.dirty : nil
-            if let reported = dirty, let prev = previous, f.time - (lastDirtyCheck ?? -.infinity) >= Register.DIRTY_CHECK_EVERY {
-                lastDirtyCheck = f.time
-                if DirtyRegions.changedOutside(old: prev, new: img, reported: reported) { dirty = nil; dirtyMismatches += 1 }
+            if let reported = dirty, let base = checkBase, base.map == map, base.generation == f.generation {
+                reportedSince += reported
+                if reportedSince.count > 256 { reportedSince = DirtyRegions.prepare(reportedSince, width: img.width, height: img.height) }
+                if f.time - (lastDirtyCheck ?? -.infinity) >= Register.DIRTY_CHECK_EVERY {
+                    if DirtyRegions.changedOutside(old: base.image, new: img, reported: reportedSince) { dirty = nil; dirtyMismatches += 1 }
+                    checkBase = (img, map, f.generation); reportedSince = []; lastDirtyCheck = f.time
+                }
+            } else {
+                // Judged whole (or the first frame of a stream or size): the next check starts from this frame.
+                checkBase = (img, map, f.generation); reportedSince = []
+                if lastDirtyCheck == nil { lastDirtyCheck = f.time }
             }
             let dt = lastFrameTime.map { f.time - $0 } ?? 0
             lastImage = img; lastMap = map; lastFrameTime = f.time

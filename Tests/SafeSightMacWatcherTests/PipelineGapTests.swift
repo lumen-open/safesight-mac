@@ -462,6 +462,22 @@ final class VerdictScript: Judging {
         #expect(p.dirtyMismatches == 1)
     }
 
+    @Test func aOneOffMisreportBetweenChecksIsStillFound() {
+        let p = pipeline()
+        let img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        _ = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: corner, t: 1.0), snapshot: snap, now: 1.0)   // checked: honest
+        // One frame between checks shows a flagged picture but reports only the corner.
+        var lie = touched(img, 2)
+        Fixtures.paintFlagged(&lie, PixelRect(x: 300, y: 150, w: 120, h: 120))
+        _ = p.process(Fixtures.frame(lie, display: d, scale: 1, dirty: corner, t: 1.1), snapshot: snap, now: 1.1)
+        // Later frames report honestly; the next check compares with the frame of the last check.
+        var next = lie; next.pixels[(395 * 600 + 595) * 4] = 3
+        let plan = p.process(Fixtures.frame(next, display: d, scale: 1, dirty: corner, t: 2.1), snapshot: snap, now: 2.1)
+        #expect(p.dirtyMismatches == 1)
+        #expect(plan.covers(CGRect(x: 300, y: 150, width: 120, height: 120)))
+    }
+
     @Test func noStreamStartsWithoutTheAppsOwnWindowsLeftOut() {
         #expect(CaptureExclusion.own([Int32(10), 11], pid: { $0 }, ownPID: 42) == nil)
         #expect(CaptureExclusion.own([Int32](), pid: { $0 }, ownPID: 42) == nil)
