@@ -2,7 +2,7 @@
 //! Fake implementations of the boundary traits, for tests only. This module is compiled
 //! only under `cfg(test)`: no fake clock, beacon or random source can reach a release.
 
-use crate::boundary::{RandomSource, RoundVerifier, TimeSource};
+use crate::boundary::{RandomSource, RandomUnavailable, RawClocks, RoundVerifier, TimeSource};
 use crate::constants::{BEACON_CHAIN_HASH, BEACON_GENESIS_UNIX_SECONDS, BEACON_PERIOD_SECONDS};
 use crate::records::RoundRecord;
 
@@ -112,5 +112,176 @@ impl RandomSource for FakeRandom {
     fn request_id(&mut self) -> [u8; 16] {
         self.next = self.next.wrapping_add(1);
         [self.next; 16]
+    }
+
+    fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable> {
+        self.next = self.next.wrapping_add(1);
+        for byte in out.iter_mut() {
+            *byte = self.next;
+        }
+        Ok(())
+    }
+}
+
+/// A random source for the cryptographic tests: bytes that look random and are the same
+/// on every run, so that a test can compare with a vector made by another implementation.
+/// Call n of `fill` gives SHA-256("safesightmac test random" || seed || n as 4 bytes
+/// little-endian || block as 4 bytes little-endian) for blocks 0, 1, ..., cut to length.
+/// It holds no real secret and none of its output is one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeededRandom {
+    seed: u8,
+    calls: u32,
+}
+
+impl SeededRandom {
+    pub fn new(seed: u8) -> SeededRandom {
+        SeededRandom { seed, calls: 0 }
+    }
+}
+
+impl RandomSource for SeededRandom {
+    fn request_id(&mut self) -> [u8; 16] {
+        let mut out = [0u8; 16];
+        let _ = self.fill(&mut out);
+        out
+    }
+
+    fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable> {
+        use sha2::{Digest, Sha256};
+        let mut filled = 0;
+        let mut block: u32 = 0;
+        while filled < out.len() {
+            let mut hash = Sha256::new();
+            hash.update(b"safesightmac test random");
+            hash.update([self.seed]);
+            hash.update(self.calls.to_le_bytes());
+            hash.update(block.to_le_bytes());
+            let digest = hash.finalize();
+            let take = if out.len() - filled < 32 { out.len() - filled } else { 32 };
+            out[filled..filled + take].copy_from_slice(&digest.as_slice()[..take]);
+            filled += take;
+            block += 1;
+        }
+        self.calls += 1;
+        Ok(())
+    }
+}
+
+/// A random generator that has failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BrokenRandom;
+
+impl RandomSource for BrokenRandom {
+    fn request_id(&mut self) -> [u8; 16] {
+        [0u8; 16]
+    }
+
+    fn fill(&mut self, _out: &mut [u8]) -> Result<(), RandomUnavailable> {
+        Err(RandomUnavailable)
+    }
+}
+
+/// A fresh, private scratch folder for one test, removed when the test ends. Inside the
+/// system's temporary folder; nothing is written anywhere else.
+#[derive(Debug)]
+pub struct TestDir {
+    pub path: std::path::PathBuf,
+}
+
+impl TestDir {
+    pub fn new(name: &str) -> TestDir {
+        use std::os::unix::fs::DirBuilderExt;
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let number = NEXT.fetch_add(1, Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!(
+            "safesightmac-keeper-test-{}-{}-{}",
+            std::process::id(),
+            number,
+            name
+        ));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::DirBuilder::new().mode(0o700).create(&path).unwrap();
+        // The mode asked for is narrowed by the process's mask; set it exactly.
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        TestDir { path }
+    }
+}
+
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// A Mac's raw clocks across boots, and the real time beside them. Each boot starts both
+/// raw clocks at zero and takes a new boot identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FakeMac {
+    pub continuous_ms: u64,
+    pub absolute_ms: u64,
+    pub boot_session: [u8; 16],
+    pub true_unix_ms: u64,
+    pub wall_unix_ms: u64,
+}
+
+impl FakeMac {
+    /// A Mac whose date is right, at the moment the beacon reaches `round`, booted
+    /// `uptime_ms` ago and awake all that time.
+    pub fn booted_at_round(round: u64, uptime_ms: u64) -> FakeMac {
+        let unix_ms = (BEACON_GENESIS_UNIX_SECONDS + BEACON_PERIOD_SECONDS * (round - 1)) * 1_000;
+        FakeMac {
+            continuous_ms: uptime_ms,
+            absolute_ms: uptime_ms,
+            boot_session: [0xB0; 16],
+            true_unix_ms: unix_ms,
+            wall_unix_ms: unix_ms,
+        }
+    }
+
+    pub fn pass_awake_ms(&mut self, ms: u64) {
+        self.continuous_ms += ms;
+        self.absolute_ms += ms;
+        self.true_unix_ms += ms;
+        self.wall_unix_ms += ms;
+    }
+
+    pub fn pass_asleep_ms(&mut self, ms: u64) {
+        self.continuous_ms += ms;
+        self.true_unix_ms += ms;
+        self.wall_unix_ms += ms;
+    }
+
+    /// Switched off for `off_ms`, then switched on: a new boot.
+    pub fn power_cycle(&mut self, off_ms: u64) {
+        self.true_unix_ms += off_ms;
+        self.wall_unix_ms += off_ms;
+        self.continuous_ms = 0;
+        self.absolute_ms = 0;
+        let mut i = 0;
+        while i < 16 {
+            self.boot_session[i] = self.boot_session[i].wrapping_add((i as u8) + 1);
+            i += 1;
+        }
+    }
+}
+
+impl RawClocks for FakeMac {
+    fn continuous_ms(&self) -> u64 {
+        self.continuous_ms
+    }
+
+    fn absolute_ms(&self) -> u64 {
+        self.absolute_ms
+    }
+
+    fn boot_session(&self) -> [u8; 16] {
+        self.boot_session
+    }
+
+    fn wall_clock_unix_seconds(&self) -> u64 {
+        self.wall_unix_ms / 1_000
     }
 }

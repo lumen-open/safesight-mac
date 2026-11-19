@@ -491,12 +491,16 @@ impl WaitRecord {
 /// boot-counter value when that round was verified (8); estimate base: a round (8) and
 /// the boot-counter value when it was taken (8); boot counter carried total (8); awake
 /// counter carried total (8); last reading of the boot clock (8) and of the awake clock
-/// (8) in this boot. Counter values are in milliseconds.
+/// (8) in this boot; this boot's identifier (16). Counter values are in milliseconds.
 // OPEN: SD-037 / register 8a (clock record) - the unit of the carried counters is not
 // specified. Working value: milliseconds.
 // OPEN: register 8a (clock record) - "last reading of each clock in this boot" is in
 // chapter 03 section 2 and not in the register's field list; the sequence number is in
 // chapter 02's two-slot rule and not in the list either. Both are laid out here.
+// OPEN: register 8a (clock record) - chapter 03 section 2 detects a new boot by a lower
+// reading "cross-checked with kern.bootsessionuuid". A cross-check across a restart needs
+// the identifier of the boot the readings were taken in, which 8a does not list. It is
+// laid out here as the last field (see `counters`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClockRecord {
     pub sequence: u64,
@@ -509,10 +513,11 @@ pub struct ClockRecord {
     pub awake_total_ms: u64,
     pub last_boot_reading_ms: u64,
     pub last_awake_reading_ms: u64,
+    pub boot_session: [u8; 16],
 }
 
 impl ClockRecord {
-    pub const LEN: usize = FRAME_OVERHEAD + 8 + 8 + 48 + 8 + 8 + 8 + 8 + 8 + 8 + 8;
+    pub const LEN: usize = FRAME_OVERHEAD + 8 + 8 + 48 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 16;
 
     fn validate(&self) -> Result<(), RecordError> {
         if self.high_water_round == 0 || self.estimate_base_round == 0 {
@@ -556,6 +561,7 @@ impl ClockRecord {
         w.put_u64(self.awake_total_ms);
         w.put_u64(self.last_boot_reading_ms);
         w.put_u64(self.last_awake_reading_ms);
+        w.put_bytes(&self.boot_session);
         w.finish()
     }
 
@@ -572,6 +578,8 @@ impl ClockRecord {
         let awake_total_ms = r.read_u64()?;
         let last_boot_reading_ms = r.read_u64()?;
         let last_awake_reading_ms = r.read_u64()?;
+        let mut boot_session = [0u8; 16];
+        boot_session.copy_from_slice(r.take(16)?);
         r.close()?;
         let record = ClockRecord {
             sequence,
@@ -584,6 +592,7 @@ impl ClockRecord {
             awake_total_ms,
             last_boot_reading_ms,
             last_awake_reading_ms,
+            boot_session,
         };
         record.validate()?;
         Ok(record)
@@ -1209,12 +1218,13 @@ mod tests {
             awake_total_ms: 6_000_000,
             last_boot_reading_ms: 77_000,
             last_awake_reading_ms: 55_000,
+            boot_session: [0x5C; 16],
         }
     }
 
     #[test]
     fn clock_record_round_trips() {
-        assert_eq!(ClockRecord::LEN, 136);
+        assert_eq!(ClockRecord::LEN, 152);
         let record = sample_clock();
         let bytes = record.encode().unwrap();
         assert_eq!(bytes.len(), ClockRecord::LEN);

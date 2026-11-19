@@ -4,8 +4,9 @@
 //! Everything that decides lives in the pure modules and runs on CI. Everything that
 //! touches the real system (clocks, the beacon signature check, the password dialog, the
 //! random generator, the keyholder's signature, files) is behind one of the traits here.
-//! This pass has fake implementations only, in the test-only module `fakes`. No real
-//! implementation exists yet, and none is linked into a release build.
+//! The fakes are in the test-only module `fakes`. The one real implementation so far is
+//! the round check, `beacon::QuicknetVerifier`; the others belong to the hands layer and
+//! are not written yet.
 
 /// The Mac's clocks, as the keeper reads them itself (SD-037). Never taken from a message.
 pub trait TimeSource {
@@ -24,15 +25,43 @@ pub trait TimeSource {
     fn wall_clock_unix_seconds(&self) -> u64;
 }
 
+/// The Mac's own clocks as the hands layer reads them, before anything is carried
+/// (chapter 03 section 2, "The counters"). `counters::CarriedClock` turns them into the
+/// carried totals of `TimeSource`.
+pub trait RawClocks {
+    /// The continuous clock in milliseconds (`mach_continuous_time`): counts sleep,
+    /// ignores the date, and restarts from zero at each boot.
+    fn continuous_ms(&self) -> u64;
+
+    /// The absolute clock in milliseconds (`mach_absolute_time`): does not count sleep,
+    /// and restarts from zero at each boot.
+    fn absolute_ms(&self) -> u64;
+
+    /// This boot's identifier (`kern.bootsessionuuid`), as 16 bytes.
+    fn boot_session(&self) -> [u8; 16];
+
+    /// The Mac's date and time in Unix seconds. Only passed on to `clock`.
+    fn wall_clock_unix_seconds(&self) -> u64;
+}
+
 /// The check of a beacon round's signature against the chain public key pinned in the
-/// lock core (SD-038, SD-043). The real one is a BLS check from the reviewed crate list.
+/// lock core (SD-038, SD-043). The real one is `beacon::QuicknetVerifier`.
 pub trait RoundVerifier {
     fn verify_round(&self, round: u64, signature: &[u8; 48]) -> bool;
 }
 
-/// The system random generator, for request IDs (chapter 03 section 3: random, 16 bytes).
+/// The system random generator could not give bytes. Whatever needed them does not
+/// happen, and nothing is changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RandomUnavailable;
+
+/// The system random generator: request IDs (chapter 03 section 3: random, 16 bytes), and
+/// the keys and nonces of a capsule (SD-035, SD-056).
 pub trait RandomSource {
     fn request_id(&mut self) -> [u8; 16];
+
+    /// Fills `out` with fresh random bytes.
+    fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable>;
 }
 
 /// Whether the typed login password has proven the owner for this one message (SD-051).
