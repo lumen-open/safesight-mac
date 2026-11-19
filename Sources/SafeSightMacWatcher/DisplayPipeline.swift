@@ -277,6 +277,9 @@ public final class DisplayPipeline {
     /// Every held region, clipped to where its target is visible; for a window that just moved, its old place
     /// too, for this update (old and new frames are both covered); and the lead of covers that moved with
     /// scrolled content.
+    ///
+    /// A whole-window cover leaves the window's control band (`WayOut.controlBand`) uncovered, so the owner
+    /// can see how to leave. Every other cover is drawn in full, inside the band too.
     func drawItems(_ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]], _ map: CaptureMap,
                    moved: [(JudgeTarget, CGRect, CGRect)], lead: [Held]) -> [CoverItem] {
         let d = display.bounds
@@ -284,7 +287,13 @@ public final class DisplayPipeline {
         for h in held + lead {
             guard let vis = visible[h.target] else { continue }
             let o = origin(of: h.target, snapshot)
-            let rects = h.whole ? vis : vis.clipped(to: h.rel.offsetBy(dx: o.x, dy: o.y))
+            var rects: [CGRect]
+            if h.whole {
+                rects = vis
+                if let w = snapshot.info(of: h.target), let band = WayOut.controlBand(of: w, display: d) { rects = rects.subtracting(band) }
+            } else {
+                rects = vis.clipped(to: h.rel.offsetBy(dx: o.x, dy: o.y))
+            }
             items += rects.map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: h.kind) }
         }
         for (t, old, _) in moved {
@@ -363,7 +372,8 @@ public final class DisplayPipeline {
     }
 
     /// The contract's duties (SD-133): a region-pass `cover` covers that picture whole; a slice-pass
-    /// `cover` covers every picture region the slice touches, or the whole window if it touches none; a
+    /// `cover` covers every picture region the slice touches, or the whole window and the slice itself if it
+    /// touches none (the whole-window cover leaves the control band, the slice cover does not); a
     /// whole-pass `cover` or the cover-window flag covers the whole window. `contain` is blurred. An
     /// entry left unjudged (`overload`) keeps the detector's class and is judged again.
     ///
@@ -392,7 +402,11 @@ public final class DisplayPipeline {
                     out.append(Held(target: target, rel: rel(e.rect), whole: false, kind: .plain, clean: 0))
                 } else if e.pass == .slice {
                     let touched = regionEntries.filter { $0.rect.intersects(e.rect) }
-                    if touched.isEmpty { out.append(Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0)) }
+                    if touched.isEmpty {
+                        out.append(Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0))
+                        // The whole-window cover leaves the control band; the flagged slice stays covered there too.
+                        out.append(Held(target: target, rel: rel(e.rect), whole: false, kind: .plain, clean: 0))
+                    }
                     for r in touched { out.append(Held(target: target, rel: rel(r.rect), whole: false, kind: .plain, clean: 0)) }
                 } else {
                     out += wholeOrArea()

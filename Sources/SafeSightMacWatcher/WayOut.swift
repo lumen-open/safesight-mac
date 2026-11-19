@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: Apache-2.0
+// The way out (owner, 18 November 2026: "if pages get covered up, user NEEDS TO BE ABLE TO EXIT THE PAGE").
+//
+// Covers never take the pointer or the keyboard, so clicks, ⌘W and ⌘[ always reach the app underneath.
+// What a big cover can hide is the controls for leaving. So:
+// - a whole-window cover leaves the window's top control band uncovered (title bar, tab strip, toolbar).
+//   Pictures in the band are still judged, and any cover or blur over them is still drawn;
+// - a whole-display cover leaves the menu bar uncovered when the menu bar is on screen. The Dock stays
+//   covered (its thumbnails of minimised windows can show pictures);
+// - whole-window and whole-display covers carry one plain line saying how to leave (drawn by the cover layer).
+// Nothing else is judged or covered less.
+import CoreGraphics
+import Foundation
+
+public enum WayOut {
+    /// The control band: the top of a window that a whole-window cover leaves uncovered, in points.
+    /// Working value, not measured on real windows (ST-032): Safari, Chrome and Firefox keep their tab strip and
+    /// toolbar (close and back buttons, the address field) within about 80 points of the window's top on
+    /// macOS 26, and 92 leaves a little margin. A bookmarks bar below that stays covered.
+    public static let controlBand: CGFloat = 92
+    /// The title bar alone (the close button): a short window keeps at least this much, or half its height.
+    public static let titleBar: CGFloat = 28
+    /// The band never takes more than this share of a window's height.
+    public static let bandShareMax: CGFloat = 1.0 / 3
+
+    /// The band's height for a window of this height.
+    public static func bandHeight(windowHeight h: CGFloat) -> CGFloat {
+        guard h > 0, h.isFinite else { return 0 }
+        return min(controlBand, max(min(titleBar, h / 2), h * bandShareMax))
+    }
+
+    /// The control band a whole-window cover leaves, in global points, or nil when it leaves none. Only
+    /// ordinary windows (layer 0) have one. A full-screen window has none: its toolbar is hidden, and the
+    /// top of the window is content.
+    public static func controlBand(of w: WindowInfo, display: CGRect) -> CGRect? {
+        guard w.layer == 0, w.bounds.hasArea else { return nil }
+        if w.bounds.insetBy(dx: -1, dy: -1).contains(display) { return nil }
+        let h = bandHeight(windowHeight: w.bounds.height)
+        guard h > 0 else { return nil }
+        return CGRect(x: w.bounds.minX, y: w.bounds.minY, width: w.bounds.width, height: h)
+    }
+
+    /// Whether a whole cover over this window carries the way-out line: ordinary windows (layer 0) only,
+    /// not the Dock, menus, the desktop picture or other system surfaces.
+    public static func carriesLine(_ w: WindowInfo) -> Bool { w.layer == 0 }
+}
