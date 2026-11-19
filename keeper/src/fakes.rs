@@ -181,3 +181,37 @@ impl RandomSource for BrokenRandom {
         Err(RandomUnavailable)
     }
 }
+
+/// A fresh, private scratch folder for one test, removed when the test ends. Inside the
+/// system's temporary folder; nothing is written anywhere else.
+#[derive(Debug)]
+pub struct TestDir {
+    pub path: std::path::PathBuf,
+}
+
+impl TestDir {
+    pub fn new(name: &str) -> TestDir {
+        use std::os::unix::fs::DirBuilderExt;
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let number = NEXT.fetch_add(1, Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!(
+            "safesightmac-keeper-test-{}-{}-{}",
+            std::process::id(),
+            number,
+            name
+        ));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::DirBuilder::new().mode(0o700).create(&path).unwrap();
+        // The mode asked for is narrowed by the process's mask; set it exactly.
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        TestDir { path }
+    }
+}
+
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}

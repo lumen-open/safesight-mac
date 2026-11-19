@@ -3,9 +3,9 @@
 //!
 //! Step 2: the core. The constants the register fixes, the fixed-layout records, the
 //! clock and the wait state machine, the real check of a beacon round, the time lock and
-//! the capsule, with every other edge of the real system behind a trait in `boundary`.
-//! Nothing here touches the Mac: no launch item, no account, no password, no Secure
-//! Enclave, no network.
+//! the capsule, and the store on disk in a folder it is given, with every other edge of the
+//! real system behind a trait in `boundary`. Nothing here touches the Mac beyond that
+//! folder: no launch item, no account, no password, no Secure Enclave, no network.
 //! `docs/STEP-2-STATUS.md` says what exists, what is open and what comes next.
 
 #![forbid(unsafe_code)]
@@ -18,6 +18,7 @@ pub mod clock;
 pub mod constants;
 pub mod frame;
 pub mod records;
+pub mod store;
 pub mod timelock;
 pub mod waits;
 
