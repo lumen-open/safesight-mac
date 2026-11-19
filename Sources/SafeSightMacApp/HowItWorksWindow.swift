@@ -17,7 +17,7 @@ final class HowItWorksWindow {
         let size = CGSize(width: page.frame.width, height: min(page.frame.height, max(room, 480)))
         window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled, .closable],
                           backing: .buffered, defer: false)
-        window.title = "How SafeSight Mac works"
+        window.title = AppText.howItWorksTitle
         window.isReleasedWhenClosed = false
         window.level = CoverLevels.appAbove
         window.titlebarAppearsTransparent = true

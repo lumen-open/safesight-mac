@@ -192,7 +192,7 @@ enum WayOutScenes {
             let img = frame { ctx in desktop(ctx, p) }
             let file = out.appendingPathComponent("howitworks-\(look).png")
             if let cg = Composite.render(img, CoverPlan(display: display, items: []), scale: scale, theme: theme, above: { ctx in
-                Composite.drawWindow(ctx, page, title: "How SafeSight Mac works", at: r, titleBar: titleBar, theme: theme)
+                Composite.drawWindow(ctx, page, title: AppText.howItWorksTitle, at: r, titleBar: titleBar, theme: theme)
             }) { Composite.writePNG(cg, to: file) }
             let line: [String: Any] = ["scene": "howitworks", "appearance": look, "file": file.path, "window": rectJSON(r)]
             print(String(data: try! JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]), encoding: .utf8)!)

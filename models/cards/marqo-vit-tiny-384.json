@@ -11,7 +11,7 @@
     "NSFW"
   ],
   "licence": "Apache-2.0",
-  "licenceFile": "LICENSES/Apache-2.0.txt",
+  "licenceFile": "LICENSE",
   "licenceEvidence": {
     "where": "https://huggingface.co/Marqo/nsfw-image-detection-384 model card front matter at revision 0c26ec22111b83f106d72a55f611ec35962bcb65",
     "text": "license: apache-2.0",

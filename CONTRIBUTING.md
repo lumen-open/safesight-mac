@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping. Please read the [code of conduct](CODE_OF_CONDUCT.md) first. If you use an AI coding tool, point it at [AGENTS.md](AGENTS.md).
+Thank you for helping. Please read the [code of conduct](CODE_OF_CONDUCT.md) first. If you use an AI coding tool, point it at [AGENTS.md](AGENTS.md). New here? [ARCHITECTURE.md](ARCHITECTURE.md) shows how the parts fit together, and [docs/HANDOVER.md](docs/HANDOVER.md) covers adopting the project as a whole.
 
 ## Where to start
 
