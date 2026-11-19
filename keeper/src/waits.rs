@@ -804,10 +804,11 @@ impl WaitMachine {
     ///
     /// - The applied wait rises, and an open Pending request waits the new wait from its
     ///   start round: its target moves later, never earlier.
-    /// - A keyholder that has power loses it and waits again, as a keyholder newly
-    ///   enrolled: the wait now in force, counted from this raise on the boot counter, or
-    ///   from the first round after it that passes SD-039. A keyholder already waiting
-    ///   waits the new wait from where its wait began. A lowering never gives power back.
+    /// - Every keyholder waits again, as a keyholder newly enrolled: the wait now in
+    ///   force, counted from this raise on the boot counter, or from the first round after
+    ///   it that passes SD-039 (SD-365). For one that had power, it loses it; for one still
+    ///   waiting, its date of power moves to the later of the two. A lowering never gives
+    ///   power back.
     /// - A shortcut that an approval gave the open request, and that has not yet matured
     ///   it (awaiting its start round, or applied), is void: the target goes back to the
     ///   start round plus the new wait, and the approval stays used. This is the stricter
@@ -825,14 +826,11 @@ impl WaitMachine {
         self.applied_wait_days = new_wait_days;
         let new_rounds = wait_rounds(new_wait_days);
         if let Some(ref mut keyholder) = self.keyholder {
-            if keyholder.power == Power::Has {
-                keyholder.power =
-                    Power::Waiting { wait_rounds: new_rounds, boot_ms_at_enrolment: boot_now, start_round: None };
-            } else if let Power::Waiting { wait_rounds: ref mut waiting_rounds, .. } = keyholder.power {
-                if new_rounds > *waiting_rounds {
-                    *waiting_rounds = new_rounds;
-                }
-            }
+            // With power or still waiting, the keyholder now waits the new wait from this
+            // raise (SD-365). For one still waiting this is always a later date than the
+            // one it had, since the new wait is no shorter and the raise is no earlier than
+            // its enrolment: it can only tighten.
+            keyholder.power = Power::Waiting { wait_rounds: new_rounds, boot_ms_at_enrolment: boot_now, start_round: None };
         }
         self.reseal_owed = match self.reseal_owed {
             Some(owed) if owed >= new_wait_days => Some(owed),
@@ -2178,25 +2176,58 @@ mod tests {
         w.tick();
         assert!(has_power(&w));
 
-        // The public route: the keyholder's start round stays, and its date moves out.
+        // A raise counts the new wait from the raise (SD-365), not from the enrolment.
+        let mut w = world(7);
+        assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
+        w.time.pass_asleep_ms(6 * DAY_MS);
+        w.tick();
+        let boot_at_raise = w.time.boot_ms;
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        assert_eq!(
+            w.m.keyholder().unwrap().power,
+            Power::Waiting { wait_rounds: 30 * DAY, boot_ms_at_enrolment: boot_at_raise, start_round: None }
+        );
+        // Thirty days from the enrolment: not yet. Thirty from the raise: power.
+        w.time.pass_asleep_ms(24 * DAY_MS);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(6 * DAY_MS - 1);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(1);
+        w.tick();
+        assert!(has_power(&w));
+
+        // The public route: the keyholder's start round is set again by the first round
+        // after the raise that passes SD-039, and its date counts from there.
         let mut w = world(7);
         w.awake_rounds(10);
         assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
         w.awake_rounds(1);
         let start = w.deliver_latest();
-        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
-        w.off_rounds(7 * DAY);
+        w.off_rounds(5 * DAY);
         w.deliver_latest();
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        match w.m.keyholder().unwrap().power {
+            Power::Waiting { start_round, .. } => assert_eq!(start_round, None),
+            other => panic!("not waiting: {:?}", other),
+        }
+        w.off_rounds(1);
+        let restart = w.deliver_latest();
+        assert_eq!(restart, start + 5 * DAY + 1);
+        // The enrolment's start round plus 30 days is not enough any more.
+        w.off_rounds(25 * DAY - 1);
+        assert_eq!(w.deliver_latest(), start + 30 * DAY);
         assert!(!has_power(&w));
-        w.off_rounds(23 * DAY - 1);
-        assert_eq!(w.deliver_latest(), start + 30 * DAY - 1);
+        w.off_rounds(5 * DAY);
+        assert_eq!(w.deliver_latest(), restart + 30 * DAY - 1);
         assert!(!has_power(&w));
         w.off_rounds(1);
         w.deliver_latest();
         assert!(has_power(&w));
 
         // Enrolled under 7 days, raised to 30, then to 365 through the guard and the
-        // private yes: no power, and so no one-day exit, before 365 days from enrolment.
+        // private yes: no power, and so no one-day exit, before 365 days from the yes.
         let mut w = world(7);
         assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
         assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
@@ -2215,7 +2246,12 @@ mod tests {
         w.deliver_latest();
         refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.approve(id));
         assert_eq!(w.m.stay(&w.time), StayReply);
-        w.time.pass_asleep_ms(365 * DAY_MS - 38 * DAY_MS - 3 * 1_000 - 1);
+        // 365 days from the enrolment: not yet.
+        w.time.pass_asleep_ms(365 * DAY_MS - 38 * DAY_MS - 3 * 1_000);
+        w.tick();
+        assert!(!has_power(&w));
+        // 365 days from the yes, eight days later.
+        w.time.pass_asleep_ms(8 * DAY_MS - 1);
         w.tick();
         assert!(!has_power(&w));
         w.time.pass_asleep_ms(1);
@@ -2286,14 +2322,17 @@ mod tests {
         assert_eq!(w.deliver_latest(), start + 30 * DAY);
         assert!(has_power(&w));
 
-        // A second raise while it waits pushes it out again, from where its wait began.
+        // A second raise while it waits counts the new wait from that raise (SD-365).
         let mut w = world_with(7, None, false, true);
         assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
         w.awake_rounds(7 * DAY);
         assert!(w.raise_to(90).is_ok());
         w.awake_rounds(DAY);
         assert_eq!(w.m.long_wait_answer(OWNER, true, &w.time), Ok(Reply::RaiseApplied { applied_wait_days: 90 }));
-        w.time.pass_asleep_ms(82 * DAY_MS - 1);
+        w.time.pass_asleep_ms(82 * DAY_MS);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(8 * DAY_MS - 1);
         w.tick();
         assert!(!has_power(&w));
         w.time.pass_asleep_ms(1);
@@ -2381,8 +2420,8 @@ mod tests {
     // Raises, approvals, Leave and Stay, sleep, power-offs and rounds in a random mix, with
     // a keyholder that had power from Lock. Whenever a request matures, it has waited its
     // full wait (as raised), or 24 hours since an approval no raise has voided; whenever an
-    // approval is taken after a raise that reset the keyholder, the wait then in force has
-    // passed since that reset. Each to within `ANCHOR_CLOCK_TOLERANCE`, as SD-039 is.
+    // approval is taken after a raise, the wait then in force has passed since the last
+    // raise (SD-365), whether the keyholder had power at it or was still waiting. Each to within `ANCHOR_CLOCK_TOLERANCE`, as SD-039 is.
     #[test]
     fn no_mix_of_raises_and_approvals_matures_a_request_before_the_rules_allow() {
         let tolerance_ms = rounds_to_ms(crate::constants::ANCHOR_CLOCK_TOLERANCE_ROUNDS);
@@ -2403,7 +2442,6 @@ mod tests {
                 let amount = (seed >> 40) % (DAY_MS / 2);
                 let now = w.time.true_unix_ms;
                 let mut raised = false;
-                let had_power = has_power(&w);
                 if choice == 0 {
                     w.time.pass_awake_ms(amount);
                 } else if choice == 1 {
@@ -2456,9 +2494,8 @@ mod tests {
                     }
                 }
                 if raised {
-                    if had_power {
-                        reset_at = Some(now);
-                    }
+                    // Every raise sets the keyholder's wait going again from now (SD-365).
+                    reset_at = Some(now);
                     if let Slot::Open(request) = w.m.slot() {
                         if request.phase == Phase::Pending {
                             approved_at = None;
