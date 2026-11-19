@@ -2,6 +2,8 @@
 
 **Free, open-source blocking of explicit images and video on your Mac. Once it's on, it stays on.**
 
+**[Visit the website](https://lumen-open.github.io/safesight-mac/)** for a quick tour and straight answers to the hard questions, like streaming, downloads and other browsers.
+
 SafeSight Mac covers explicit images and video as soon as they appear on your screen: in any app, in any browser, on every display. Everything else is left alone. Your work, your calls, your music and your code carry on as normal.
 
 What makes it different is that it stays on. There's no off switch for a bad night, no password to beg for, and nobody who can unlock it early, not even us. When you set it up, you choose how long getting out should take, anywhere from a week to a year, and you can always make it longer. If you ever ask to leave, the countdown starts; change your mind, press **Stay**, and it's as if you never asked. The only shortcut is an optional friend you choose to add, who can bring the wait down to a day but can never stop you leaving.
@@ -20,9 +22,15 @@ Nobody looks over your shoulder, nothing is reported to anyone, and there's no l
 
 This is about freedom. Not the thin kind, where you do whatever the next five minutes want, but the real kind: being the same person at midnight that you were at noon.
 
+## Why we build it with AI
+
+The technology on the other side keeps getting better. Feeds learn exactly what keeps you scrolling, recommendations learn what you can't resist, and AI can now make explicit images of anything, on demand. Every year it gets easier to get pulled in and lose yourself to the void.
+
+Those tools are improving fast, and the way to keep up is to turn the same power around and use it for good. So we build SafeSight Mac with AI, on purpose, to fight back: it lets a small project build faster and probe its own defences harder than it ever could alone. Every line is public, every change has to pass the project's checks, and the lock's core needs a second human reader before it ships.
+
 ## Hard to get around, by design
 
-Most blockers fall to a five-minute trick, and everyone who's needed one knows the tricks. SafeSight Mac is designed so the usual ones don't work.
+Most blockers fall to a five-minute trick, and everyone who's needed one knows the tricks. SafeSight Mac is built to be airtight. Here's what happens to the usual ones.
 
 | The usual way around it | Most blockers | SafeSight Mac |
 |---|---|---|

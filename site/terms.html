@@ -1,0 +1,259 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-alaP3tboSWrs+YEtSgKZBwl0S2vqRrg1RvnG26vqgPE='; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#eff1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c1222" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Who SafeSight Mac is for, what can go wrong, and what it doesn't promise. Please read it before you install.">
+<title>Terms and risks · SafeSight Mac</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 16a14 14 0 0 1 28 0v9a7 7 0 0 1-7 7H9a7 7 0 0 1-7-7Z' fill='%230b7363'/%3E%3Ccircle cx='16' cy='18' r='7.5' fill='none' stroke='%23fff' stroke-width='2.4'/%3E%3Ccircle cx='16' cy='18' r='3' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root {
+  /* Desert study: the same tokens as the home page. See DESIGN-desert.md. */
+  --bg: #eff1ec;
+  --card: #fbfbf8;
+  --text: #151c1b;
+  --muted: #45504d;
+  --line: #d8dcd3;
+  --accent: #0b7363;
+  --accent-press: #085e51;
+  --accent-soft: #e0ede7;
+  --on-accent: #ffffff;
+  --accent-text: #06594d;
+  --link: #06594d;
+  --hover: rgba(21, 28, 27, .05);
+  --glow: rgba(196, 160, 82, .09);
+  --shadow: 0 1px 2px rgba(21, 28, 27, .04), 0 10px 30px -12px rgba(21, 28, 27, .10);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --radius: 20px;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c1222;
+    --card: #131a2d;
+    --text: #eceee6;
+    --muted: #a9b1bf;
+    --line: #252e46;
+    --accent: #5cd3bc;
+    --accent-press: #49c2aa;
+    --accent-soft: #13303a;
+    --on-accent: #071d19;
+    --accent-text: #6fd9c4;
+    --link: #6fd9c4;
+    --hover: rgba(236, 238, 230, .06);
+    --glow: rgba(201, 169, 97, .05);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px -12px rgba(0, 0, 0, .55);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body {
+  margin: 0;
+  background: radial-gradient(1200px 760px at 78% -18%, var(--glow), transparent) no-repeat, var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+svg { display: block; }
+p { margin: 0; }
+a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: .2em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+[id] { scroll-margin-top: 24px; }
+strong { font-weight: 650; }
+h1, h2 { font-family: var(--serif); }
+
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.skip {
+  position: absolute; left: 16px; top: -80px; z-index: 10;
+  background: var(--card); color: var(--text); padding: 10px 16px; border-radius: 12px;
+  border: 1px solid var(--line); box-shadow: var(--shadow); font-weight: 600; text-decoration: none;
+}
+.skip:focus { top: 12px; }
+.ic { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.ic-fill { fill: currentColor; stroke: none; }
+
+.wrap { width: 100%; max-width: 1160px; margin-inline: auto; padding-inline: 20px; }
+@media (min-width: 720px) { .wrap { padding-inline: 40px; } }
+
+/* Header */
+.top { padding-block: 16px; }
+.top-in { display: flex; align-items: center; gap: 16px; }
+.brand {
+  display: inline-flex; align-items: center; gap: 11px;
+  color: var(--text); text-decoration: none; font-weight: 650; font-size: 1.0625rem; letter-spacing: -.01em;
+}
+.mark { width: 36px; height: 40px; border-radius: 18px 18px 9px 9px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; padding-top: 4px; }
+.mark svg { width: 24px; height: 24px; }
+.mk-ring { fill: none; stroke: currentColor; stroke-width: 2.4; }
+.mk-dot { fill: currentColor; }
+.mk-glint { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; opacity: .55; }
+.top .btn { margin-left: auto; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); font-size: .9375rem; font-weight: 600; line-height: 1.2; text-decoration: none; white-space: nowrap;
+}
+.btn:hover { border-color: var(--muted); }
+.btn .ic { width: 18px; height: 18px; }
+
+/* Document */
+.doc { padding-block: 32px 96px; }
+.col { max-width: 44rem; margin-inline: auto; }
+.back { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; font-weight: 500; font-size: .9375rem; padding: 6px 12px 6px 8px; margin-left: -8px; border-radius: 999px; }
+.back:hover { color: var(--text); background: var(--hover); }
+.back .ic { width: 18px; height: 18px; }
+h1 { margin: 28px 0 0; font-size: clamp(2.375rem, 1.7rem + 2.7vw, 3.5rem); line-height: 1.08; letter-spacing: -.014em; font-weight: 600; }
+.version {
+  margin-top: 26px; display: flex; gap: 16px; align-items: flex-start;
+  padding: 18px 20px; border-radius: 18px; background: var(--accent-soft);
+}
+.version .ic { display: none; color: var(--accent-text); margin-top: 1px; }
+@media (min-width: 640px) { .version { padding: 20px 22px; } .version .ic { display: block; } }
+.version p { color: var(--text); }
+.intro { margin-top: 28px; font-size: clamp(1.125rem, 1.05rem + .3vw, 1.25rem); line-height: 1.65; color: var(--muted); text-wrap: pretty; }
+
+/* Sections are edged like a fresco panel: a stone line, a gap, a second line */
+.doc section { margin-top: 56px; padding-top: 40px; border-top: 1px solid var(--line); background: linear-gradient(var(--line), var(--line)) left 0 top 3px / 100% 1px no-repeat; }
+h2 { margin: 0 0 20px; font-size: clamp(1.625rem, 1.3rem + 1.1vw, 2rem); line-height: 1.2; letter-spacing: -.01em; font-weight: 600; text-wrap: balance; }
+.doc section > p { text-wrap: pretty; }
+.doc section > p + p, .doc section > ul + p { margin-top: 1em; }
+
+.who { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.who li { padding: 18px 20px 20px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+.who-head { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+.who strong { font-size: 1.0625rem; }
+.who .t { color: var(--muted); text-wrap: pretty; }
+@media (min-width: 640px) {
+  .who li { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 18px; row-gap: 2px; padding: 20px 22px; }
+  .who-head { display: contents; }
+  .who .badge { grid-row: 1 / span 2; }
+  .who .t { grid-column: 2; }
+}
+.badge { width: 42px; height: 46px; border-radius: 21px 21px 9px 9px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; padding-top: 4px; }
+.badge .ic { width: 22px; height: 22px; }
+
+.risks { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 18px; }
+.risks li { position: relative; padding: 16px 22px 16px 56px; border-top: 1px solid var(--line); }
+.risks li:first-child { border-top: 0; }
+.risks .ic { position: absolute; left: 22px; top: 18px; width: 20px; height: 20px; color: var(--muted); }
+
+/* Footer */
+.foot { border-top: 1px solid var(--line); background: linear-gradient(var(--line), var(--line)) left 0 top 3px / 100% 1px no-repeat; padding-block: 40px 48px; }
+.foot-in { display: grid; gap: 24px; }
+.foot p { color: var(--muted); font-size: .9375rem; }
+.foot .brand { margin-bottom: 12px; }
+.foot-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.foot-links a { color: var(--text); text-decoration: none; font-size: .9375rem; font-weight: 500; }
+.foot-links a:hover { text-decoration: underline; }
+.foot-small { font-size: .875rem; }
+@media (min-width: 820px) {
+  .foot-in { grid-template-columns: 1fr auto; align-items: start; }
+  .foot-small { grid-column: 1 / -1; }
+}
+</style>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-github" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.8" cy="12" r="3.8"/><path d="M11.6 12h8.9M17.2 12v3.2M20.5 12v2.4"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="10.5" rx="1.8"/><path d="M2.5 19h19"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.6-7.5 10-7.5 10Z"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+  <symbol id="i-mark" viewBox="0 0 32 32"><circle class="mk-ring" cx="16" cy="16" r="9.5"/><circle class="mk-dot" cx="16" cy="16" r="3.8"/><path class="mk-glint" d="M10.2 12.6a6.8 6.8 0 0 1 3.4-3.6"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="index.html"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>SafeSight Mac</a>
+    <a class="btn" href="https://github.com/lumen-open/safesight-mac"><svg class="ic ic-fill" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
+  </div>
+</header>
+
+<main id="main" class="doc">
+  <div class="wrap">
+    <article class="col">
+      <a class="back" href="index.html"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg>SafeSight Mac</a>
+      <h1>Terms and risks</h1>
+      <div class="version">
+        <svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>
+        <p><strong>Version 0.1, draft, <time datetime="2026-11-19">19 November 2026</time>.</strong> This version covers the early preview, which has the screen cover but not the lock yet. It hasn’t been read by a lawyer.</p>
+      </div>
+      <p class="intro">SafeSight Mac is free, open-source software. Please read this short page before you install it.</p>
+
+      <section aria-labelledby="who">
+        <h2 id="who">Who it’s for</h2>
+        <ul class="who" role="list">
+          <li><div class="who-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-heart"/></svg></span><strong>For yourself, or for your child.</strong></div> <p class="t">Set it up for yourself, or, if you’re a parent or legal guardian, for your child on a Mac you own. Never set it up for another adult, and never make it a condition of a job, a home, a membership or anyone’s support.</p></li>
+          <li><div class="who-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-laptop"/></svg></span><strong>A Mac you own.</strong></div> <p class="t">Install it only on a Mac you own and control, not a work or school Mac. On a shared family Mac, it protects the accounts it’s set up on.</p></li>
+          <li><div class="who-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg></span><strong>Who holds the password matters.</strong></div> <p class="t">If someone else controls your password, they control your Mac, and no software can change that.</p></li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="what">
+        <h2 id="what">What it is, and what it isn’t</h2>
+        <p>SafeSight Mac covers explicit images on your screen. It’s a tool, not a treatment for anything, and it doesn’t replace the people in your life or professional help.</p>
+      </section>
+
+      <section aria-labelledby="wrong">
+        <h2 id="wrong">What can go wrong</h2>
+        <ul class="risks" role="list">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It can miss an explicit image, and it sometimes covers a harmless one. How many it misses hasn’t been measured yet.</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>An image can show for a moment before its cover appears.</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Protected video, like films in streaming apps, can’t be checked.</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It only protects this Mac, not your phone, a TV or another computer.</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>This preview has no lock, so you can pause or quit it at any time.</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It’s an early release built with the help of AI, and nobody independent has reviewed it yet. It may have bugs, so keep a backup of your Mac.</li>
+        </ul>
+        <p>The full list of known limits is in <a href="https://github.com/lumen-open/safesight-mac/blob/main/docs/STEP-1-STATUS.md">docs/STEP-1-STATUS.md</a>.</p>
+      </section>
+
+      <section aria-labelledby="warranty">
+        <h2 id="warranty">No warranty</h2>
+        <p>SafeSight Mac is provided as is, with no warranty of any kind, by an open-source project, not a company. The <a href="https://github.com/lumen-open/safesight-mac/blob/main/LICENSE">licence</a> (Apache 2.0) has the full wording, including its limits on liability.</p>
+        <p>There’s no support line. Bugs go in the <a href="https://github.com/lumen-open/safesight-mac/issues">public issue tracker</a>, and anything that could help someone get around SafeSight Mac goes privately through <a href="https://github.com/lumen-open/safesight-mac/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+      </section>
+
+      <section aria-labelledby="changes">
+        <h2 id="changes">When this page changes</h2>
+        <p>It only changes with a new release, and the version and date at the top change with it.</p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <a class="brand" href="index.html"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>SafeSight Mac</a>
+      <p>Free, open-source software under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>.</p>
+    </div>
+    <nav aria-label="Footer">
+      <ul class="foot-links" role="list">
+        <li><a href="https://github.com/lumen-open/safesight-mac">GitHub</a></li>
+        <li><a href="terms.html">Terms and risks</a></li>
+        <li><a href="https://github.com/lumen-open/safesight-mac/blob/main/SECURITY.md">Security</a></li>
+        <li><a href="https://github.com/lumen-open/safesight-mac/blob/main/LICENSE">Licence</a></li>
+      </ul>
+    </nav>
+    <p class="foot-small">Copyright 2026 The SafeSight Mac authors. This site sets no cookies and loads nothing from anywhere else.</p>
+  </div>
+</footer>
+</body>
+</html>
