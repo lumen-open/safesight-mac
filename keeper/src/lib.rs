@@ -7,6 +7,11 @@
 //! every other edge of the real system behind a trait in `boundary`. Nothing here touches
 //! the Mac beyond that folder: no launch item, no account, no password, no Secure Enclave,
 //! no network.
+//!
+//! The opener's core (`opener`, and the opening half of `capsule` and `age`) is compiled
+//! only with the `opener` feature, which the keeper never turns on: the keeper seals and
+//! never opens (chapter 03 section 9). The command-line opener is the binary
+//! `safesightmac-opener`; the page is built from the same core in `opener/wasm`.
 //! `docs/STEP-2-STATUS.md` says what exists, what is open and what comes next.
 
 #![forbid(unsafe_code)]
@@ -19,7 +24,12 @@ pub mod clock;
 pub mod constants;
 pub mod counters;
 pub mod frame;
+#[cfg(any(test, feature = "opener"))]
+pub mod opener;
 pub mod records;
+// The store uses Unix file calls; the opener also builds for WebAssembly and Windows,
+// where no store exists.
+#[cfg(unix)]
 pub mod store;
 pub mod timelock;
 pub mod waits;

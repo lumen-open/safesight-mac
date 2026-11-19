@@ -48,3 +48,8 @@ jobs:
         run: |
           cargo build --release
           cargo test
+      - name: Command-line opener build and test
+        working-directory: keeper
+        run: |
+          cargo build --release --locked --features opener --bin safesightmac-opener
+          cargo test --locked --features opener --test opener_cli

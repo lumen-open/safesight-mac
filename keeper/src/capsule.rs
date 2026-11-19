@@ -86,6 +86,14 @@ impl AdminSecret {
     fn as_bytes(&self) -> &[u8; ADMIN_SECRET_LEN] {
         &self.bytes
     }
+
+    /// The secret's characters, for the opener to show its holder once (chapter 03
+    /// section 11, step 7). Compiled only for tests and the `opener` feature, so the keeper
+    /// itself has no way to read a secret out.
+    #[cfg(any(test, feature = "opener"))]
+    pub fn reveal(&self) -> &[u8] {
+        &self.bytes[..]
+    }
 }
 
 impl Drop for AdminSecret {
@@ -228,6 +236,11 @@ impl RecoveryIdentity {
     pub fn public(&self) -> RecoveryKeyPublic {
         RecoveryKeyPublic(x25519(self.scalar, X25519_BASEPOINT_BYTES))
     }
+
+    /// The secret scalar, for the opener's own encoder of the key's text form.
+    pub(crate) fn scalar(&self) -> &[u8; 32] {
+        &self.scalar
+    }
 }
 
 #[cfg(any(test, feature = "opener"))]
@@ -270,11 +283,39 @@ pub enum OpenError {
     Damaged,
 }
 
-/// Opens a capsule with the signature of its target round and the Recovery Key, in the
-/// opener's order: the capsule record; the round, its chain and its signature; not before
-/// the target; the time layer; the `age` layer.
+/// A capsule whose time layer is open: what is left is the `age` layer to the Recovery
+/// Key. The opener asks for the key only once it holds this (chapter 03 section 11, steps
+/// 5 and 6). The inner bytes are wiped when it is dropped; its `Debug` shows none of them.
 #[cfg(any(test, feature = "opener"))]
-pub fn open(capsule_bytes: &[u8], round_record: &[u8], identity: &RecoveryIdentity) -> Result<AdminSecret, OpenError> {
+pub struct TimeLayerOpened {
+    generation: u64,
+    target_round: u64,
+    inner: Zeroizing<Vec<u8>>,
+}
+
+#[cfg(any(test, feature = "opener"))]
+impl TimeLayerOpened {
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn target_round(&self) -> u64 {
+        self.target_round
+    }
+}
+
+#[cfg(any(test, feature = "opener"))]
+impl core::fmt::Debug for TimeLayerOpened {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "TimeLayerOpened(generation {}, round {})", self.generation, self.target_round)
+    }
+}
+
+/// Reads the capsule record and checks its outer layer: exactly one `tlock` stanza, naming
+/// the record's own target round and chain, with a body of the scheme's size (chapter 03
+/// section 11, step 1). Returns the record and that body. Nothing here needs a round.
+#[cfg(any(test, feature = "opener"))]
+pub(crate) fn read_capsule(capsule_bytes: &[u8]) -> Result<(Capsule, [u8; timelock::BODY_LEN]), OpenError> {
     let capsule = match Capsule::decode(capsule_bytes) {
         Ok(c) => c,
         Err(e) => return Err(OpenError::Capsule(e)),
@@ -282,6 +323,63 @@ pub fn open(capsule_bytes: &[u8], round_record: &[u8], identity: &RecoveryIdenti
     if !capsule.is_on_pinned_chain() {
         return Err(OpenError::OtherChain);
     }
+    let body = {
+        let outer = match age::read_file(&capsule.ciphertext) {
+            Some(f) => f,
+            None => return Err(OpenError::Layout),
+        };
+        if outer.stanzas.len() != 1 {
+            return Err(OpenError::Layout);
+        }
+        let stanza = &outer.stanzas[0];
+        let round_text = format!("{}", capsule.target_round);
+        let mut hash_text = String::with_capacity(64);
+        for byte in capsule.chain_hash.iter() {
+            hash_text.push_str(&format!("{:02x}", byte));
+        }
+        if stanza.kind != b"tlock"
+            || stanza.args.len() != 2
+            || stanza.args[0] != round_text.as_bytes()
+            || stanza.args[1] != hash_text.as_bytes()
+            || stanza.body.len() != timelock::BODY_LEN
+        {
+            return Err(OpenError::Layout);
+        }
+        let mut body = [0u8; timelock::BODY_LEN];
+        body.copy_from_slice(&stanza.body);
+        body
+    };
+    Ok((capsule, body))
+}
+
+/// The inner layer must be one or two X25519 stanzas and nothing else.
+#[cfg(any(test, feature = "opener"))]
+fn check_inner_layout(inner: &age::ReadFile<'_>) -> Result<(), OpenError> {
+    if inner.stanzas.is_empty() || inner.stanzas.len() > 2 {
+        return Err(OpenError::Layout);
+    }
+    for s in inner.stanzas.iter() {
+        if s.kind != b"X25519" {
+            return Err(OpenError::Layout);
+        }
+    }
+    Ok(())
+}
+
+/// Opens a capsule with the signature of its target round and the Recovery Key, in the
+/// opener's order: the capsule record; the round, its chain and its signature; not before
+/// the target; the time layer; the `age` layer.
+#[cfg(any(test, feature = "opener"))]
+pub fn open(capsule_bytes: &[u8], round_record: &[u8], identity: &RecoveryIdentity) -> Result<AdminSecret, OpenError> {
+    let opened = open_time_layer(capsule_bytes, round_record)?;
+    open_recovery_layer(&opened, identity)
+}
+
+/// Steps 1 to 5 of the opener: the capsule record; the round, its chain and its signature;
+/// not before the target; the time layer. The Recovery Key is not needed yet.
+#[cfg(any(test, feature = "opener"))]
+pub fn open_time_layer(capsule_bytes: &[u8], round_record: &[u8]) -> Result<TimeLayerOpened, OpenError> {
+    let (capsule, body) = read_capsule(capsule_bytes)?;
     let round = match RoundRecord::decode(round_record) {
         Ok(r) => r,
         Err(e) => return Err(OpenError::Round(e)),
@@ -303,52 +401,38 @@ pub fn open(capsule_bytes: &[u8], round_record: &[u8], identity: &RecoveryIdenti
         return Err(OpenError::WrongRound);
     }
 
-    // The time layer: exactly one tlock stanza, naming this round and this chain.
+    // The time layer: the one tlock stanza `read_capsule` checked, opened with the round.
     let outer = match age::read_file(&capsule.ciphertext) {
         Some(f) => f,
         None => return Err(OpenError::Layout),
     };
-    if outer.stanzas.len() != 1 {
-        return Err(OpenError::Layout);
-    }
-    let stanza = &outer.stanzas[0];
-    let round_text = format!("{}", capsule.target_round);
-    let mut hash_text = String::with_capacity(64);
-    for byte in capsule.chain_hash.iter() {
-        hash_text.push_str(&format!("{:02x}", byte));
-    }
-    if stanza.kind != b"tlock"
-        || stanza.args.len() != 2
-        || stanza.args[0] != round_text.as_bytes()
-        || stanza.args[1] != hash_text.as_bytes()
-        || stanza.body.len() != timelock::BODY_LEN
-    {
-        return Err(OpenError::Layout);
-    }
-    let mut body = [0u8; timelock::BODY_LEN];
-    body.copy_from_slice(&stanza.body);
     let outer_key = match timelock::unlock(&round.signature, &body) {
         Some(k) => Zeroizing::new(k),
         None => return Err(OpenError::TimeLayer),
     };
     let inner_bytes = match age::open_payload(&outer, &outer_key) {
-        Some(b) => b,
+        Some(b) => Zeroizing::new(b),
         None => return Err(OpenError::Damaged),
     };
+    // The age layer's shape is checked now, so that the key is never asked for a capsule
+    // that could not open.
+    match age::read_file(&inner_bytes) {
+        Some(inner) => check_inner_layout(&inner)?,
+        None => return Err(OpenError::Layout),
+    }
+    Ok(TimeLayerOpened { generation: capsule.generation, target_round: capsule.target_round, inner: inner_bytes })
+}
 
+/// Steps 6 and 7 of the opener: the `age` layer with the Recovery Key, and the admin
+/// secret inside it.
+#[cfg(any(test, feature = "opener"))]
+pub fn open_recovery_layer(opened: &TimeLayerOpened, identity: &RecoveryIdentity) -> Result<AdminSecret, OpenError> {
     // The age layer: one or two X25519 stanzas and nothing else.
-    let inner = match age::read_file(&inner_bytes) {
+    let inner = match age::read_file(&opened.inner) {
         Some(f) => f,
         None => return Err(OpenError::Layout),
     };
-    if inner.stanzas.is_empty() || inner.stanzas.len() > 2 {
-        return Err(OpenError::Layout);
-    }
-    for s in inner.stanzas.iter() {
-        if s.kind != b"X25519" {
-            return Err(OpenError::Layout);
-        }
-    }
+    check_inner_layout(&inner)?;
     let mut file_key: Option<Zeroizing<[u8; age::FILE_KEY_LEN]>> = None;
     for s in inner.stanzas.iter() {
         if let Some(k) = age::unwrap_x25519(s, &identity.scalar) {
@@ -674,7 +758,7 @@ mod tests {
     fn only_the_sealing_function_writes_a_capsule() {
         let literal = ["Capsule", " {"].concat();
         let type_name = ["TYPE_", "CAPSULE"].concat();
-        let others: [(&str, &str); 13] = [
+        let others: [(&str, &str); 15] = [
             ("age.rs", include_str!("age.rs")),
             ("beacon.rs", include_str!("beacon.rs")),
             ("boundary.rs", include_str!("boundary.rs")),
@@ -685,6 +769,8 @@ mod tests {
             ("frame.rs", include_str!("frame.rs")),
             ("lib.rs", include_str!("lib.rs")),
             ("main.rs", include_str!("main.rs")),
+            ("opener.rs", include_str!("opener.rs")),
+            ("bin/safesightmac-opener.rs", include_str!("bin/safesightmac-opener.rs")),
             ("store.rs", include_str!("store.rs")),
             ("timelock.rs", include_str!("timelock.rs")),
             ("waits.rs", include_str!("waits.rs")),
