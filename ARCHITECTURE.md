@@ -46,7 +46,7 @@ flowchart LR
   class app,shield,ext,keeper,opener planned
 ```
 
-Dashed boxes are not finished yet. The keeper's core logic is built and tested, but it does not run on a Mac yet; the opener is on an open pull request; the app with network access, the plain shield and the browser extension are designs. Today's preview is the watcher alone, inside one menu-bar app with no networking code at all.
+Dashed boxes are not finished yet. The keeper's core logic is built and tested on CI, but only on the `keeper-core` branch (see "The keeper"), and it does not run on a Mac yet; the opener is on an open pull request; the app with network access, the plain shield and the browser extension are designs. What `main` builds today is the watcher alone, inside one menu-bar app with no networking code at all, in two editions: the cover-only preview and the Testing edition for helpers.
 
 ## The parts
 
@@ -67,9 +67,13 @@ The app (`Sources/SafeSightMacApp` today) is what the owner sees. In the full de
 
 Today it is a small menu-bar app that hosts the watcher in the same process: status, the detector mode (Balanced or Either), pause, "How it works" and Quit. It has no lock, can be paused or quit at any time, and contains no networking code. In the full design the watcher moves into its own sandboxed process with no network entitlement, and the app loses all screen access.
 
+### The Testing edition
+
+The Testing edition ([docs/TESTING-EDITION.md](docs/TESTING-EDITION.md)) is the same menu-bar app built as its own app for people who help test the cover, and for now it is the only thing helpers are offered. It is built with `SAFESIGHTMAC_TESTING=1` and assembled with `tools/make-app.sh --testing`. Its screen path is the same source files as the cover-only app's; it adds only the `SafeSightMacTestingEdition` module: a quit shortcut that works over any cover (⌃⌥⌘Q), a check that it runs inside the App Sandbox, one copy at a time, a main-thread watchdog, a Testing report to copy by hand, and one-click removal of its own data. It has no lock and nothing that could add one. `tools/check-testing-edition.sh` checks that on what is built, on every push: the modules it is made of, its sources, the frameworks and functions its binary uses, and its bundle, which must be a plain app, sandboxed, with exactly one entitlement.
+
 ### The keeper: the lock
 
-The keeper (`keeper/`, Rust) is the one part that runs as root. Locking works like this: during setup the owner stops being an administrator, and the keeper holds the password of a hidden administrator account. That password is made on the Mac, never shown, and never leaves the Mac in the clear.
+The keeper (Rust) is the one part that runs as root. **On `main`, `keeper/` is only a stub**: a version record and a test. The real keeper lives on the `keeper-core` branch, in three stacked pull requests that aren't merged yet: #1 (`step2-keeper`: constants, records and the wait state machine), #3 (`keeper-core`: the time signal, the time lock and the store) and #22 (`keeper-fixes`: raises, the date, the journal, the store and the approval check, from review). As lock code, each needs a second human reader before it merges. Everything below describes the keeper on those branches. Locking works like this: during setup the owner stops being an administrator, and the keeper holds the password of a hidden administrator account. That password is made on the Mac, never shown, and never leaves the Mac in the clear.
 
 - **Leave** starts a request. The keeper counts the owner's chosen wait (7 days to a year) in rounds of the **drand quicknet** chain, a public time signal run by the League of Entropy. Each round is signed; the keeper checks the signature against a public key compiled into it, so a changed clock or a fake round gains nothing. When the Mac is offline, the wait keeps counting on the Mac's own boot and awake counters, which are built to count no more time than has really passed, so a wait can run long rather than short.
 - **Stay** cancels the request at once. The next request starts from zero.
@@ -77,7 +81,7 @@ The keeper (`keeper/`, Rust) is the one part that runs as root. Locking works li
 - **The keyholder shortcut.** An owner may name a friend. The friend's approval shortens one request to 24 hours. The friend can never block, cancel or delay anything.
 - **Updates** are installed by the keeper only after it has verified them (see "The release pipeline").
 
-Built so far, on open pull requests: the constants and record formats, the wait state machine, checking real drand rounds, the time lock, the capsule format, the store on disk, and the counters across restarts. Not built yet: the layer that touches macOS (real clocks, accounts, the messages from the app), key rotation, journal replay and installs.
+Built so far, on the `keeper-core` branch: the constants and record formats, the wait state machine, checking real drand rounds, the time lock, the capsule format, the store on disk, and the counters across restarts. Not built yet: the layer that touches macOS (real clocks, accounts, the messages from the app), key rotation, journal replay and installs.
 
 ### The plain shield
 
@@ -85,7 +89,7 @@ The plain shield is a full-display opaque cover the keeper can raise without the
 
 ### The keyholder page
 
-The keyholder page (`keyholder/`) is one static HTML file the friend opens on their phone. It makes a passkey on the phone, shows an enrolment code for the owner's Mac, and later signs a request code to produce an approval code. Codes move between the two people by QR picture or paste; the page itself sends nothing. Its content security policy forbids every network call, it keeps no storage, and its exact bytes are hashed so the hosted copy can be checked against the release.
+The keyholder page (`keyholder/`, on `main`) is one static HTML file the friend opens on their phone. It makes a passkey on the phone, shows an enrolment code for the owner's Mac, and later signs a request code to produce an approval code. Codes move between the two people by QR picture or paste; the page itself sends nothing. Its content security policy forbids every network call, it keeps no storage, and its exact bytes are hashed so the hosted copy can be checked against the release.
 
 ### The opener
 
@@ -100,12 +104,13 @@ Two optional comforts, both designs today:
 
 ### The website and terms
 
-A static two-page website (`site/`) and a plain terms-and-risks page. Neither has scripts, cookies or trackers, and the site's check fails if its wording drifts from the README.
+A static two-page website (`site/`), live at <https://lumen-open.github.io/safesight-mac/>, and a plain terms-and-risks page ([TERMS-AND-RISKS.md](TERMS-AND-RISKS.md), also on the site). Neither has scripts, cookies or trackers. The site's check (`node site/check.mjs`) fails if its wording drifts from the README, and the `pages` workflow runs it before it publishes the site from `main`.
 
 ### The release pipeline
 
-- **CI** (`.github/workflows/check.yml`) runs on every push and pull request with read-only access and no secrets: sign-off on every commit, a licence line in every file, no secrets in workflows, no networking code, dependency licences, the Swift and keeper builds and tests, and a scan that release builds contain no lab test code.
-- **Release builds** (`.github/workflows/build-release.yml`) run on a version tag: unsigned binaries, their hashes, and a signed build-provenance statement for each.
+- **CI** (`.github/workflows/check.yml`) runs on every push and pull request with read-only access and no secrets, on a named Xcode: sign-off on every commit, a licence line in every file, no secrets in workflows, no networking code in the sources or in the built products, dependency licences from the committed lock file, the keyholder page's tests, the website check, the Swift and keeper builds and tests, a scan that release builds contain no lab test code, the Testing edition's checks, and a check that covers vanish with their process. `tools/check-the-checks.sh` runs each check on made-up bad input first, so a check that stopped failing would be noticed.
+- **Release builds** (`.github/workflows/build-release.yml`) run on a version tag, only for a commit already on `main`, and only after the same checks pass: unsigned binaries, their hashes, and a signed build-provenance statement for each. How a person will check a download is in [docs/VERIFYING-A-DOWNLOAD.md](docs/VERIFYING-A-DOWNLOAD.md).
+- **Dependency updates** (`.github/dependabot.yml`): weekly grouped pull requests for the pinned actions and the keeper's crates, read like any other change.
 - **Designed, not built:** a maintainer signs only what CI built, from a hardware token CI never sees, and Apple notarizes it. Each release has a signed manifest recorded in a public transparency log. A Mac installs a release only after it has been public for 14 days, and a change to the lock itself waits each owner's own wait plus 2 days. Updates only move forward, and a signed withdrawal can stop a bad release before it installs.
 
 ## How the parts talk
@@ -136,7 +141,7 @@ The core rule is **read or send, never both**: no part both reads the screen and
 | Opener | No | At most one public round from a mirror, or none if the round is pasted |
 | Extension | Pages, inside the browser | The browser's own. The extension makes no request and declares no host it may contact. This is the one stated exception |
 
-Today's preview contains no networking code at all, and `tools/check-no-network.sh` fails the build if any Swift source names a networking API. The full privacy picture is in [docs/PRIVACY.md](docs/PRIVACY.md).
+Today's preview contains no networking code at all. `tools/check-no-network.sh` fails the build if any Swift source names a networking API, if a module on the screen path reads a URL, starts a program or loads code by name outside a short reviewed list of local file reads, or if a built product links a networking framework or imports a networking function. The full privacy picture is in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## The trust model
 
@@ -161,12 +166,15 @@ Today's preview contains no networking code at all, and `tools/check-no-network.
 | Capture, cover layer, covers | Built and tested with fakes and a lab harness. **Not yet run live on a real screen** | `main` |
 | Menu-bar preview app (no lock) | Built; unsigned; not yet run on a Mac | `main` |
 | Release CI | Checks and unsigned release builds built; signing, notarization, manifests and the public wait not built | `main` |
-| Keeper, first pass: constants, records, wait state machine | Built, tested on CI | `step2-keeper`, pull request #1 |
-| Keeper, second pass: time-signal checks, time lock, capsules, store, counters | Built, tested on CI (176 tests) | `keeper-core`, pull request #3 |
-| Keyholder page | Built, tested in Node; not yet tried on real phones | `keyholder-page`, pull request #4 |
-| Terms and risks page | Draft | `terms-page`, pull request #2 |
+| Testing edition (no lock, sandboxed, for helpers) | Built; its guarantees checked on CI on every push; not yet run on a Mac | `main` |
+| Keeper on `main` | A stub: the version record only | `main` |
+| Keeper, first pass: constants, records, wait state machine | Built, tested on CI; awaiting a second reader | `step2-keeper`, pull request #1 |
+| Keeper, second pass: time-signal checks, time lock, capsules, store, counters | Built, tested on CI; awaiting a second reader | `keeper-core`, pull request #3 |
+| Keeper, review fixes | Built, tested on CI; awaiting a second reader | `keeper-fixes`, pull request #22 |
+| Keyholder page | Built, tested in Node; not yet tried on real phones | `main` |
+| Terms and risks page | Draft | `main` |
 | Opener page and tool | In progress: the tool's tests pass on CI, the page's build check doesn't yet | `opener`, pull request #6 |
-| Website | Built, not published | `website`, pull request #5 |
+| Website | Built and live at lumen-open.github.io/safesight-mac | `main` |
 | App with network, setup, Leave and Stay | Designed | — |
 | Plain shield | Designed | — |
 | Browser extension and profile | Designed | — |
@@ -187,8 +195,14 @@ SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --out OUT
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness wayout --out OUT --appearance dark
 
-# The project's checks (CI runs all of them)
-tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
+# The Testing edition, and its checks
+SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing
+tools/check-testing-edition.sh && tools/check-covers-vanish.sh
+tools/make-app.sh --testing com.example.yourapp.testing MODELS_DIR
+
+# The project's checks (CI runs all of them), and the checks of the checks
+tools/check-the-checks.sh
+tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-secrets.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 tools/check-licences.sh
 
 # The models: fetch the pinned upstream files (every byte checked against its pin)
@@ -197,21 +211,21 @@ python3 -I tools/models/fetch_upstream.py
 # An unsigned .app with the models inside, written under .build/
 tools/make-app.sh com.example.yourapp MODELS_DIR
 
-# The keeper (Rust)
-cd keeper && cargo build --release && cargo test
+# The keeper (Rust). On main this builds the stub; check out keeper-core for the real keeper
+cd keeper && cargo build --release --locked && cargo test --locked
 
-# The keyholder page (on the keyholder-page branch)
+# The keyholder page
 node keyholder/build.mjs && node --test keyholder/tests/*.test.mjs
 
 # The opener (on the opener branch): the tool is part of the keeper crate, the page has its own tests
-(cd keeper && cargo test --features opener --test opener_cli)
+(cd keeper && cargo test --locked --features opener --test opener_cli)
 node --test opener/tests/*.test.mjs
 
-# The website (on the website branch)
-node site/check.mjs
+# The website
+node site/check.mjs --self-test && node site/check.mjs
 ```
 
-Two things are not yet reproducible from this repository alone: converting the models to Core ML (with its parity checks), and the harmless-screen sets used for the false-cover and speed measurements. Both live in the project's separate detector lab and are listed in [docs/HANDOVER.md](docs/HANDOVER.md).
+Two things are not yet reproducible from this repository alone: converting the models to Core ML (with its parity checks), and the harmless-screen sets used for the false-cover and speed measurements. Both live in the project's separate detector lab, which isn't public yet, and are listed in [docs/HANDOVER.md](docs/HANDOVER.md).
 
 ## Taking a part on its own
 
@@ -221,7 +235,10 @@ The parts are separate on purpose. The detector is its own library with no knowl
 
 - [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md): what the screen cover does, every test, the measurements, the known limits, and each working value chosen where the design was silent.
 - `docs/STEP-2-STATUS.md` on the `keeper-core` branch: the keeper's parts, crates, and each open point with the more protective reading the code takes.
-- `keyholder/README.md` on the `keyholder-page` branch: the code formats and the page's open points.
+- [keyholder/README.md](keyholder/README.md): the code formats and the page's open points.
+- [docs/TESTING-EDITION.md](docs/TESTING-EDITION.md): the Testing edition's guarantees and how each is checked.
+- [docs/KNOWN-GAPS.md](docs/KNOWN-GAPS.md): what isn't built or proven yet.
+- [docs/VERIFYING-A-DOWNLOAD.md](docs/VERIFYING-A-DOWNLOAD.md): how a release will be checked, once there are releases.
 - [docs/claims-ledger.md](docs/claims-ledger.md): every public sentence and the evidence it needs before it may be said.
 - [docs/PRIVACY.md](docs/PRIVACY.md): what stays on the Mac and what leaves it.
 - [CONTRIBUTING.md](CONTRIBUTING.md), [CORE.md](CORE.md) and [SECURITY.md](SECURITY.md): the rules for every change, the free-forever core, and private weakness reports.

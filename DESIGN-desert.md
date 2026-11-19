@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Desert: a design study
 
-**Status: a study, not merged.** It is applied to the website (`site/index.html`, `site/terms.html`, branch `website`) and the keyholder page (`keyholder/src/page.css` and `page.html`, branch `keyholder-page`) so the owner can see it. Lumen stays the reference until the owner chooses.
+**Status: adopted.** It is the look of the app's covers and windows (`CoverTheme` in `Sources/SafeSightMacCover/Theme.swift`), the website (`site/index.html`, `site/terms.html`) and the keyholder page (`keyholder/src/page.css` and `page.html`), all on `main`. Lumen, the earlier look, is in the history.
 
-The owner's direction: make the UI *subtly* inspired by the art around the Christian desert fathers. The aim is the feeling of a quiet, lime-washed cell at dawn: calm, plain, well made. The page should still read as a modern Mac product page, not a museum piece.
+The direction: make the UI *subtly* inspired by the art around the Christian desert fathers. The aim is the feeling of a quiet, lime-washed cell at dawn: calm, plain, well made. The page should still read as a modern Mac product page, not a museum piece.
 
 ## What the art gives us, and what we leave
 
@@ -124,7 +124,7 @@ Gold is a highlight, not a colour of the theme.
 
 ### 6. Drawings (home page)
 
-The owner asked for more pictures and a simpler walkthrough, so the home page now has a small set of line drawings. They are inline SVG, coloured only from the tokens, so both themes work and nothing is downloaded.
+A simpler walkthrough with more pictures was wanted, so the home page now has a small set of line drawings. They are inline SVG, coloured only from the tokens, so both themes work and nothing is downloaded.
 
 - **Style:** warm, plain line drawings. Every outline is 1.5px (`vector-effect: non-scaling-stroke`, so the weight holds at any size) in `--ill`, with flat fills from the page's own colours: `--card` for paper, `--tile` and `--glyph` for content, `--stone` for covers, `--accent-soft` and malachite for the one thing that matters in each drawing. No shading, no gradients except the dawn, no texture, and no motion.
 - **Where:** the five walkthrough steps (a calendar and dial; a window with a covered picture and a covered video; a quiet desk at night with a locked screen; a countdown ring with a Stay button and a small friend badge; dawn through an arched doorway), the three parts in "How it works" (the screen cover, the lock, the menu-bar app), three overlapping windows beside "Hard to get around, by design", "only this Mac" beside "What it can't do", and an arch being built beside "What we're building now": the finished stones in paper, the stone being set in malachite, and the stones still to come as dashed outlines, over a plain timber form. It never gets scaffolding bars, a crane or a figure.
@@ -141,7 +141,7 @@ The owner asked for more pictures and a simpler walkthrough, so the home page no
 - **Body text, buttons and fields** stay in the system sans with the same sizes, weights and hit areas.
 - **No new motion.** Reduced motion is respected as before.
 - **Nothing loads from another origin.** All shapes are CSS or inline SVG, so the keyholder page keeps its byte-for-byte hash rule and both CSPs stay as strict as before.
-- The words don't change. (The website's new "stays on" wording came from the owner, in a separate commit.) The five-step walkthrough and the "How it works" picture came from the owner's request for more illustrations and a simpler walkthrough; "Why it exists" and the promise still match the README word for word.
+- The words don't change. (The website's "stays on" wording came in a separate commit.) The five-step walkthrough and the "How it works" picture came from the request for more illustrations and a simpler walkthrough; "Why it exists" and the promise still match the README word for word.
 
 ## Sources for the research
 

@@ -1,10 +1,12 @@
 # kestrel preprocessing spec, version `kestrel-preprocess/1`
 
 Every model input in every place (screen watcher, browser, file scanner, cloud run) is made by
-exactly these steps. Python (`py/kestrel/preprocess.py`), Swift (`Sources/Preprocess/`) and
-JavaScript (`js/preprocess.mjs`) implement them and must produce **identical bytes** for every
-vector in `spec/vectors/vectors.json`. The Python version is also checked against Pillow's
-`Image.resize(..., BILINEAR)`, which these steps reproduce exactly.
+exactly these steps. In this repository the Swift version (`Sources/Preprocess/`) implements them,
+and `PreprocessTests` checks that it produces **identical bytes** for every vector in
+`spec/vectors/vectors.json`. Any other implementation (a browser extension or a file scanner, say)
+must pass the same vectors. The project's detector lab, which isn't public yet, also has Python
+and JavaScript versions, and checks the Python one against Pillow's `Image.resize(..., BILINEAR)`,
+which these steps reproduce exactly.
 
 Why one spec: v2 measured that scores move when preprocessing changes (Vision `scaleFill`,
 nearest-neighbour, bilinear without antialiasing each gave different scores). An antialiased
