@@ -58,6 +58,9 @@ public struct CoverPiece: Equatable, Sendable {
 /// The covers' own plain colours (the light and dark themes' `cover`). Covers are left out of capture, so the watcher
 /// should never see them; if it does (capture that failed to leave the app's windows out), a cover would look like a
 /// clean picture of itself. A place whose captured pixels are all one of these colours never counts as judged clean.
+///
+/// A backstop only: a blur cover, and a cover carrying the way-out line or the Testing line, do not match it. The real
+/// guard is that no stream starts unless the app's own windows are left out of it (`CaptureExclusion`).
 public enum OwnCoverColours {
     public static let rgb: [UInt32] = [0xE5E7E1, 0x121828]
 

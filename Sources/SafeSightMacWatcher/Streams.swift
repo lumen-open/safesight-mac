@@ -13,7 +13,8 @@ import Foundation
 
 /// What a display stream leaves out of capture: the app's own windows (its covers). With none listed, a stream would
 /// capture the covers themselves, and a cover would look like a clean picture of what it hides: no stream is started,
-/// and the display stays covered whole.
+/// and the display stays covered whole. This, not the cover-colour check (`OwnCoverColours`), is what keeps the covers
+/// out of what is judged.
 public enum CaptureExclusion {
     /// The apps to leave out (those of `ownPID`), or nil when there are none and no stream may start.
     public static func own<App>(_ apps: [App], pid: (App) -> Int32, ownPID: Int32) -> [App]? {
