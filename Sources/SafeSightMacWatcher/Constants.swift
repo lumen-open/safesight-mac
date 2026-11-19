@@ -29,4 +29,8 @@ public enum Register {
     /// How long judging may stall on one frame before the display is covered whole (step 3 of
     /// "slowness covers more"). Not in the register; a working value for step 1, tied to ST-038.
     public static let JUDGING_STALL: TimeInterval = 5
+    /// A cover whose window has gone from the window list stays where it last stood until that place is judged clean
+    /// `VIDEO_VOTE` times, or until the window has been gone this long and the place has been judged clean once. Not in
+    /// the register; a working value.
+    public static let WINDOW_GONE: TimeInterval = 1
 }

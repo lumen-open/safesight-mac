@@ -78,4 +78,128 @@ final class VerdictScript: Judging {
         let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [changed], t: 0.1), snapshot: snap, now: 0.1)
         #expect(plan.covers(CGRect(x: 100, y: 100, width: 200, height: 160)), "\(plan.items.map(\.rect))")
     }
+
+    // MARK: The window list
+
+    func flaggedAt(_ r: PixelRect) -> RGBAImage {
+        var img = Fixtures.blank(600, 400)
+        Fixtures.paintFlagged(&img, r)
+        return img
+    }
+
+    func touched(_ img: RGBAImage, _ v: UInt8) -> RGBAImage {
+        var i = img; i.pixels[(395 * 600 + 595) * 4] = v; return i
+    }
+    let corner = [PixelRect(x: 584, y: 384, w: 16, h: 16)]
+
+    @Test func anUnreadableWindowListCoversTheDisplayAndKeepsEveryCover() {
+        let p = pipeline()
+        let w = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 300, y: 150, width: 280, height: 240))
+        let img = flaggedAt(PixelRect(x: 400, y: 250, w: 100, h: 100))
+        let g = CGRect(x: 400, y: 250, width: 100, height: 100)
+        let list = WindowSnapshot(windows: [w], time: 0)
+        #expect(p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: list, now: 0).covers(g))
+        let lost = p.process(Fixtures.frame(touched(img, 7), display: d, scale: 1, dirty: corner, t: 0.1), snapshot: .unreadable(time: 0.1), now: 0.1)
+        #expect(lost.wholeDisplay == .windowListUnreadable)
+        #expect(!p.held.isEmpty, "the covers are kept")
+        let back = p.process(Fixtures.frame(touched(img, 8), display: d, scale: 1, dirty: corner, t: 0.2), snapshot: list, now: 0.2)
+        #expect(back.wholeDisplay == nil && back.covers(g))
+    }
+
+    @Test func aCoverStaysWhereItStoodWhenItsWindowIsMissingFromTheList() {
+        // The window is far from the display's origin: the cover must stay over the picture, not move to the corner.
+        let p = pipeline()
+        let w = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 300, y: 150, width: 280, height: 240))
+        let img = flaggedAt(PixelRect(x: 400, y: 250, w: 100, h: 100))
+        let g = CGRect(x: 400, y: 250, width: 100, height: 100)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: [w], time: 0), now: 0)
+        // The list leaves the window out, the picture is still on screen, frame after frame.
+        for k in 1...8 {
+            let t = 0.3 * Double(k)
+            var next = img; next.pixels[(5 * 600 + 5) * 4] = UInt8(k)
+            let plan = p.process(Fixtures.frame(next, display: d, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 16, h: 16)], t: t), snapshot: .empty, now: t)
+            #expect(plan.covers(g), "frame \(k): \(plan.items.map(\.rect))")
+            #expect(p.held.contains { $0.target == .window(number: 1, ownerPID: 500) }, "the window's own cover is kept")
+        }
+    }
+
+    @Test func aCoverOfAClosedWindowLiftsOnceItsPlaceIsJudgedClean() {
+        let p = pipeline()
+        let w = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 300, y: 150, width: 280, height: 240))
+        let g = CGRect(x: 400, y: 250, width: 100, height: 100)
+        _ = p.process(Fixtures.frame(flaggedAt(PixelRect(x: 400, y: 250, w: 100, h: 100)), display: d, scale: 1, t: 0),
+                      snapshot: WindowSnapshot(windows: [w], time: 0), now: 0)
+        // The window closes: its place now shows the plain desktop.
+        let empty = Fixtures.blank(600, 400)
+        let shut = p.process(Fixtures.frame(empty, display: d, scale: 1, dirty: [PixelRect(x: 300, y: 150, w: 280, h: 240)], t: 0.1),
+                             snapshot: .empty, now: 0.1)
+        #expect(shut.covers(g), "not lifted on one list read")
+        var t = 0.1, plan = shut
+        while t < 3 && !plan.items.isEmpty {
+            t += 0.3
+            plan = p.process(Fixtures.frame(touched(empty, UInt8(t * 10)), display: d, scale: 1, dirty: corner, t: t), snapshot: .empty, now: t)
+        }
+        #expect(plan.items.isEmpty, "lifted once the place was judged clean")
+    }
+
+    // MARK: Windows in front
+
+    @Test func aWindowInFrontNeverDropsAWholeWindowCover() {
+        let p = pipeline()
+        let back = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 40, y: 40, width: 400, height: 300))
+        let img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: [back], time: 0), now: 0)
+        p.held = [DisplayPipeline.Held(target: .window(number: 1, ownerPID: 500), rel: .null, whole: true, kind: .plain, clean: 0)]
+        let body = CGRect(x: 40, y: 140, width: 400, height: 200)
+        // A see-through window the size of the display comes in front; then one over the lower half only.
+        let all = WindowInfo(number: 9, ownerPID: 900, layer: 0, bounds: d.bounds)
+        let a = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: corner, t: 0.1),
+                          snapshot: WindowSnapshot(windows: [all, back], time: 0.1), now: 0.1)
+        #expect(a.covers(body), "whole window, under a window in front")
+        let half = WindowInfo(number: 9, ownerPID: 900, layer: 0, bounds: CGRect(x: 0, y: 240, width: 600, height: 160))
+        let b = p.process(Fixtures.frame(touched(img, 2), display: d, scale: 1, dirty: corner, t: 0.2),
+                          snapshot: WindowSnapshot(windows: [half, back], time: 0.2), now: 0.2)
+        #expect(b.covers(CGRect(x: 40, y: 250, width: 400, height: 80)), "the part under the window in front")
+        let idle = p.process(idle(0.3), snapshot: WindowSnapshot(windows: [all, back], time: 0.3), now: 0.3)
+        #expect(idle.covers(body))
+    }
+
+    @Test func aRegionCoverIsDrawnInFullOverAWindowInFront() {
+        let p = pipeline()
+        let back = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let img = flaggedAt(PixelRect(x: 60, y: 60, w: 120, h: 120))
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: [back], time: 0), now: 0)
+        let front = WindowInfo(number: 2, ownerPID: 600, layer: 0, bounds: CGRect(x: 150, y: 0, width: 450, height: 400))
+        let plan = p.process(Fixtures.frame(touched(img, 3), display: d, scale: 1, dirty: corner, t: 0.1),
+                             snapshot: WindowSnapshot(windows: [front, back], time: 0.1), now: 0.1)
+        #expect(plan.covers(CGRect(x: 60, y: 60, width: 120, height: 120)))
+        #expect(p.held.contains { $0.target == .window(number: 1, ownerPID: 500) })
+    }
+
+    @Test func aCoverUnderAWindowInFrontLiftsOnlyWhenAllOfItIsClean() {
+        // The picture's right part lies under a see-through window in front, and stays flagged there.
+        let p = pipeline()
+        let back = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let front = WindowInfo(number: 2, ownerPID: 600, layer: 0, bounds: CGRect(x: 150, y: 0, width: 450, height: 400))
+        let list = WindowSnapshot(windows: [front, back], time: 0)
+        var img = flaggedAt(PixelRect(x: 60, y: 60, w: 120, h: 120))
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: list, now: 0)
+        #expect(p.held.contains { $0.target == .window(number: 1, ownerPID: 500) })
+        // The visible part turns clean; the part under the front window does not.
+        for y in 60..<180 { for x in 60..<150 { let q = (y * 600 + x) * 4; img.pixels[q] = 240; img.pixels[q + 1] = 240; img.pixels[q + 2] = 240 } }
+        for k in 1...8 {
+            let t = 0.1 * Double(k)
+            _ = p.process(Fixtures.frame(touched(img, UInt8(k)), display: d, scale: 1, dirty: [PixelRect(x: 56, y: 56, w: 96, h: 128)] + corner, t: t),
+                          snapshot: list, now: t)
+        }
+        #expect(p.held.contains { $0.target == .window(number: 1, ownerPID: 500) }, "not lifted while part of it is still flagged")
+    }
+
+    @Test func aFullyTransparentWindowHidesNothing() {
+        let clear = WindowInfo(number: 9, ownerPID: 900, layer: 0, bounds: d.bounds, alpha: 0)
+        let back = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 40, y: 40, width: 400, height: 300))
+        let vis = WindowSnapshot(windows: [clear, back], time: 0).visibleAreas(on: d.bounds, ignoring: [])
+        #expect(vis.first?.0 == .window(number: 1, ownerPID: 500))
+        #expect(!vis.contains { $0.0 == .window(number: 9, ownerPID: 900) })
+    }
 }

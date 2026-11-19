@@ -28,6 +28,10 @@ public final class DisplayPipeline {
         var whole: Bool
         var kind: CoverKind
         var clean: Int
+        /// Where the cover last stood on screen (global points), for when its window is missing from the window list.
+        var lastGlobal: CGRect? = nil
+        /// Since when its window has been missing from the window list (a closed window, or a list read that left it out).
+        var missingSince: TimeInterval? = nil
     }
     var held: [Held] = []
     var pending: [CGRect] = []
@@ -104,6 +108,9 @@ public final class DisplayPipeline {
         // A frame captured before the last display change is never judged: the display stays as it was (covered).
         guard f.generation >= requiredGeneration else { return lastPlan }
         display = f.display
+        // A window list that cannot be read is a fault, never an empty screen: no cover may be placed or lifted on it.
+        // Every held cover is kept for when it can be read again.
+        guard snapshot.readable else { return cover(because: .windowListUnreadable) }
         switch f.status {
         case .blank, .suspended, .stopped:
             return cover(because: .frameNotJudgeable)
@@ -143,6 +150,10 @@ public final class DisplayPipeline {
         var tStage = tRun
         let d = display.bounds
         let visible = visibleByTarget(snapshot)
+        // A cover whose window is missing from this list stays where it last stood (see `fullRect`).
+        for i in held.indices {
+            if present(held[i].target, snapshot) { held[i].missingSince = nil } else if held[i].missingSince == nil { held[i].missingSince = now }
+        }
         // Windows that moved or changed size since the last snapshot.
         var moved: [(JudgeTarget, CGRect, CGRect)] = []
         for (t, old) in lastBounds { if let nb = snapshot.bounds(of: t), nb != old { moved.append((t, old, nb)) } }
@@ -157,7 +168,7 @@ public final class DisplayPipeline {
         } else {
             areas = DirtyRegions.prepare(dirty!, width: img.width, height: img.height).map(map.toGlobal)
             areas += pending
-            for h in held { if let g = globalRect(h, snapshot, visible) { areas.append(g) } }
+            for h in held { if let g = fullRect(h, snapshot, visible) { areas.append(g) } }
             for (_, old, new) in moved { areas += [old.intersection(d), new.intersection(d)].filter(\.hasArea) }
         }
         pending = []
@@ -223,7 +234,7 @@ public final class DisplayPipeline {
                     // A cached cover is shown at once if it is not on screen already (a flagged picture seen
                     // before, back in view). Cover first: if judging the new pictures would overrun the goal,
                     // blur them until judged.
-                    let shown = (self.held + lead + fresh).filter { $0.target == p.target }.compactMap { self.globalRect($0, snapshot, visible) }
+                    let shown = (self.held + lead + fresh).filter { $0.target == p.target }.compactMap { self.fullRect($0, snapshot, visible) }
                     var added = coveredByCache.filter { r in
                         let gr = map.toGlobal(r).insetBy(dx: map.pointsPerPixel, dy: map.pointsPerPixel)
                         return !shown.contains { $0.contains(gr) }
@@ -274,15 +285,38 @@ public final class DisplayPipeline {
                 overloadSince[p.target] = nil
             }
         }
+        // 3b. A cover whose full rectangle is not all on show as its own window (a window in front of it, or its window
+        //     missing from the list) is judged on its own, over that whole rectangle where it stands on screen: only
+        //     clean judgements of every pixel it hides count towards lifting it.
+        for i in held.indices where !shownWhole(held[i], snapshot, visible) {
+            guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
+            bucket.refill(now: now)
+            let budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
+            let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
+            tStage = PipelineTimings.now()
+            let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: nil)
+            timing.judgeMs += PipelineTimings.ms(since: tStage)
+            timing.calls += 1; timing.judgements += v.judgements; timing.overloaded += v.overloaded
+            if judged { bucket.spend(v.judgements) }
+            if v.coverWindow || v.regions.contains(where: { $0.display != .clear && $0.reason != .overload }) {
+                held[i].clean = 0
+            } else if !v.regions.isEmpty && v.overloaded == 0 {
+                held[i].clean += 1
+            }
+        }
         judged = true
         tStage = PipelineTimings.now()
         defer { timing.planMs += PipelineTimings.ms(since: tStage) }
 
-        // 4. Lifted regions are gone; add the new covers, merging with any they overlap.
-        held.removeAll { $0.clean >= Register.VIDEO_VOTE }
+        // 4. Lifted regions are gone; add the new covers, merging with any they overlap. A cover whose window has gone
+        //    from the list stays where it stood until that place has been judged clean `VIDEO_VOTE` times, or the window
+        //    has been gone `WINDOW_GONE` and the place has been judged clean since.
+        held.removeAll { h in
+            h.clean >= Register.VIDEO_VOTE || (h.missingSince.map { now - $0 >= Register.WINDOW_GONE } ?? false && h.clean >= 1)
+        }
         for n in fresh { merge(n) }
-        // A window that closed takes its covers with it; nothing of it is on screen any more.
-        held.removeAll { visible[$0.target] == nil }
+        held.removeAll { fullRect($0, snapshot, visible) == nil }
+        for i in held.indices where held[i].missingSince == nil { held[i].lastGlobal = fullRect(held[i], snapshot, visible) }
         contentOffset = contentOffset.filter { visible[$0.key] != nil }
 
         // 5. Draw.
@@ -293,9 +327,9 @@ public final class DisplayPipeline {
         return lastPlan
     }
 
-    /// Every held region, clipped to where its target is visible; for a window that just moved, its old place
-    /// too, for this update (old and new frames are both covered); and the lead of covers that moved with
-    /// scrolled content.
+    /// Every held region, in full, wherever it stands: a window in front of it never trims it (that window may be see-through,
+    /// and drawing over it only covers more); for a window that just moved, its old place too, for this update (old and
+    /// new frames are both covered); and the lead of covers that moved with scrolled content.
     ///
     /// A whole-window cover leaves the window's control band (`WayOut.controlBand`) uncovered, so the owner
     /// can see how to leave. Every other cover is drawn in full, inside the band too.
@@ -304,16 +338,11 @@ public final class DisplayPipeline {
         let d = display.bounds
         var items: [CoverItem] = []
         for h in held + lead {
-            guard let vis = visible[h.target] else { continue }
-            let o = origin(of: h.target, snapshot)
-            var rects: [CGRect]
+            guard let full = fullRect(h, snapshot, visible) else { continue }
+            var rects = [full]
             let w = h.whole ? snapshot.info(of: h.target) : nil
-            if h.whole {
-                rects = vis
-                if let w, let band = WayOut.controlBand(of: w, display: d) { rects = rects.subtracting(band) }
-            } else {
-                rects = vis.clipped(to: h.rel.offsetBy(dx: o.x, dy: o.y))
-            }
+            if case .surface = h.target, h.whole { rects = visible[h.target] ?? [] }
+            if let w, let band = WayOut.controlBand(of: w, display: d) { rects = rects.subtracting(band) }
             var its = rects.map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: h.kind) }
             // The way-out line goes on the largest visible piece of a whole-window cover.
             if let w, WayOut.carriesLine(w), let i = its.indices.max(by: { its[$0].rect.width * its[$0].rect.height < its[$1].rect.width * its[$1].rect.height }) {
@@ -390,10 +419,37 @@ public final class DisplayPipeline {
         return out
     }
 
-    func globalRect(_ h: Held, _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) -> CGRect? {
-        if h.whole { return visible[h.target]?.boundingBox }
-        let o = origin(of: h.target, snapshot)
-        return h.rel.offsetBy(dx: o.x, dy: o.y)
+    /// True when the target is in the window list and on this display (the display surface always is).
+    func present(_ t: JudgeTarget, _ snapshot: WindowSnapshot) -> Bool {
+        guard case .window = t else { return true }
+        return snapshot.info(of: t).map { $0.shows && $0.bounds.intersects(display.bounds) } ?? false
+    }
+
+    /// The whole of what a held cover hides, in global points, cut to the display: a whole-window cover is the window's
+    /// bounds; a region is its rectangle on its window. Nothing in front of the window trims it. A cover whose window is
+    /// missing from the list stands where it last stood. A whole cover of the display surface is the surface's visible
+    /// part (every window is in front of the desktop by definition).
+    func fullRect(_ h: Held, _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) -> CGRect? {
+        let r: CGRect?
+        if !present(h.target, snapshot) {
+            r = h.lastGlobal
+        } else if case .surface = h.target {
+            r = h.whole ? visible[h.target]?.boundingBox : h.rel.offsetBy(dx: display.bounds.minX, dy: display.bounds.minY)
+        } else if let b = snapshot.bounds(of: h.target) {
+            r = h.whole ? b : h.rel.offsetBy(dx: b.minX, dy: b.minY)
+        } else {
+            r = nil
+        }
+        guard let c = r?.intersection(display.bounds), c.hasArea else { return nil }
+        return c
+    }
+
+    /// True when every point a held cover hides is on show as its own target's, so the target's own judge calls see all
+    /// of it (no window in front of it, and the window is in the list).
+    func shownWhole(_ h: Held, _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) -> Bool {
+        guard present(h.target, snapshot), let g = fullRect(h, snapshot, visible), let vis = visible[h.target] else { return false }
+        if case .surface = h.target, h.whole { return true }
+        return vis.reduce([g]) { $0.subtracting($1) }.allSatisfy { $0.width < 0.5 || $0.height < 0.5 }
     }
 
     /// The contract's duties (SD-133): a region-pass `cover` covers that picture whole; a slice-pass
@@ -449,10 +505,9 @@ public final class DisplayPipeline {
     func countCleanJudgements(_ t: JudgeTarget, judgedArea: CGRect, verdict v: FrameVerdict, map: CaptureMap,
                               _ snapshot: WindowSnapshot, _ visible: [JudgeTarget: [CGRect]]) {
         let slack = judgedArea.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel)
-        for i in held.indices where held[i].target == t {
-            guard var g = globalRect(held[i], snapshot, visible) else { continue }
-            if let vb = visible[t]?.boundingBox { g = g.intersection(vb) }
-            guard g.hasArea, slack.contains(g) else { continue }
+        // Covers not all on show as this target's are counted by their own judge call (step 3b).
+        for i in held.indices where held[i].target == t && shownWhole(held[i], snapshot, visible) {
+            guard let g = fullRect(held[i], snapshot, visible), slack.contains(g) else { continue }
             if v.coverWindow { held[i].clean = 0; continue }
             let over = v.regions.filter { map.toGlobal($0.rect).intersects(g) }
             if over.contains(where: { $0.display != .clear && $0.reason != .overload }) {

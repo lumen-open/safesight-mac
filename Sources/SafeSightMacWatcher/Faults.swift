@@ -26,6 +26,8 @@ public enum FaultCause: String, Sendable, CaseIterable, Codable {
     case tooManyDisplays
     /// A new display has not had its first judged frame yet.
     case notYetJudged
+    /// The window list could not be read, so covers cannot be placed on their windows.
+    case windowListUnreadable
 
     /// The plain words for the repair card (chapter 09 owns the final wording).
     public var plainWords: String {
@@ -40,6 +42,7 @@ public enum FaultCause: String, Sendable, CaseIterable, Codable {
         case .displayChanging: return "A display is changing. It is covered until it has been checked."
         case .tooManyDisplays: return "More displays are on than this version can check, so this one stays covered."
         case .notYetJudged: return "This display has not been checked yet."
+        case .windowListUnreadable: return "The list of windows could not be read, so this display is covered until it can be."
         }
     }
 }
