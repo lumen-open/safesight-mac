@@ -1,8 +1,8 @@
 # SafeSight Mac
 
-**Free, open-source blocking of explicit images on your Mac. Once it's on, it stays on.**
+**Free, open-source blocking of explicit images and video on your Mac. Once it's on, it stays on.**
 
-SafeSight Mac watches your screen and covers explicit images as soon as they appear: in any app, in any browser, on every display. Everything else is left alone. Your work, your calls, your music and your code carry on as normal.
+SafeSight Mac watches your screen and covers explicit images and video as soon as they appear: in any app, in any browser, on every display. Everything else is left alone. Your work, your calls, your music and your code carry on as normal.
 
 What makes it different is that it stays on. There's no off switch for a bad night, no password to beg for, and nobody who can unlock it early, not even us. When you set it up, you choose how long getting out should take, anywhere from a week to a year, and you can always make it longer. If you ever ask to leave, the countdown starts; change your mind, press **Stay**, and it's as if you never asked. The only shortcut is a friend you choose, who can bring the wait down to a day but can never stop you leaving.
 
@@ -46,7 +46,8 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 ## What it can't do
 
 - Wiping your Mac removes it.
-- It can miss an image, and it sometimes covers a harmless one.
+- It can miss something, and it sometimes covers something harmless.
+- It can't check protected video, like films in streaming apps, because macOS hides it from screen capture.
 - It only protects this Mac, not your phone, a TV or another computer.
 
 ## Where things stand
@@ -55,7 +56,7 @@ This is an early preview, and there's no download yet. The screen cover is built
 
 ## Our promise
 
-> SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
+> SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
 
 ## Found a weakness?
 

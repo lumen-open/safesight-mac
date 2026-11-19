@@ -6,7 +6,7 @@
 
 public enum AppText {
     /// The only promise the project may make (README, blueprint chapter 01).
-    public static let honestPromise = "SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup."
+    public static let honestPromise = "SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images and video on your screen, and once it's on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn't perfect: wiping your Mac removes it, it can miss something or cover something harmless, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup."
 
     // MARK: Practice state (SD-223)
 
@@ -52,7 +52,7 @@ public enum AppText {
 
     /// The "How it works" screen.
     public static let howItWorksBody: [String] = [
-        "SafeSight Mac checks what your displays show, on this Mac only. When it finds an explicit picture, it puts a plain cover over it. Everything else keeps working: your windows, calls, music and code.",
+        "SafeSight Mac checks what your displays show, on this Mac only. When it finds an explicit image or video, it puts a plain cover over it. Everything else keeps working: your windows, calls, music and code.",
         "It shows every window first and checks it just after. A picture can be seen for a moment before its cover. How long is not measured; the target is under half a second.",
         "Small pictures it is unsure about are blurred instead of covered. When it cannot check a display at all, it covers the whole display and tells you why.",
         "It misses some pictures and wrongly covers others. How many it misses has not been measured, so no accuracy figure is given.",
