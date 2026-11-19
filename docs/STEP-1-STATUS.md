@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Step 1 status: the cover-only app
 
-14 November 2026, updated 18 November (speed work, ST-040 re-run) and 19 November (the way out, the Testing edition). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness only. **The app has not been run live on any Mac.** Running it needs the Screen Recording permission, which only the owner can grant, on a test Mac.
+14 November 2026, updated 18 November (speed work, ST-040 re-run) and 19 November (the way out; every display, one rule; the Testing edition). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness only. **The app has not been run live on any Mac.** Running it needs the Screen Recording permission, which only the owner can grant, on a test Mac.
 
 Step 1 is the practice state of the watcher shipped alone (register SD-223 (f)). It has no lock: no keeper, no root part, no plain shield, no installer, no updater, no login item. It can be paused or quit at any time, and it protects nothing against its own owner.
 
@@ -16,28 +16,34 @@ These parts are built, and each is exercised by tests or the harness:
   - Changed from the lab build, as SD-125 and C06-3 require: a flagged picture under 32 detail pixels is covered, not blurred; a dispute the tie-breaker could not answer is covered, not blurred; a window turns hot only after a both-family hit. Under Balanced it therefore no longer behaves exactly as the lab build.
   - No weights are in git. `tools/models/fetch_upstream.py` and `tools/models/pins.json` hold the pinned upstream hashes. At run time the models load from a local folder, and every file is checked against the hash list sealed in the build (`models/watcher-models.sha256`).
 - **The capture layer** (`Sources/SafeSightMacCapture`).
-  - One ScreenCaptureKit display stream for every active display, at the source's full pixel size. It captures 8-bit BGRA in sRGB, with no cursor and no audio. The app's own windows are left out of capture.
+  - One ScreenCaptureKit display stream for every judged display, at the source's full pixel size. It captures 8-bit BGRA in sRGB, with no cursor and no audio. The app's own windows are left out of capture.
   - The map from capture pixels to screen points is rebuilt from each frame's own metadata, and the scale is read, never assumed.
   - Only changed areas are judged, grown to the 8-pixel grid. A full pass runs every 30 s.
   - When judging is busy, frames are coalesced without losing any changed area.
+  - Only the judged displays are streamed (the first `DISPLAYS_MAX` of the OS's list): a display past the limit stays covered whole and costs no capture memory.
+  - Streams start and stop on request (`StreamScheduler`, with ScreenCaptureKit as its backend). Every request carries a generation number taken on the main thread when it is asked for, and every frame carries its stream's number, so a display change after the request outranks it however late its streams start. A start stops every older stream; a request overtaken by a newer start or a stop stops what it started; two streams never run for one display (the newer is kept). Every stream that ends is reported with its number, whether stopped on purpose or by itself, so no display keeps a plan whose stream is gone. A display with no stream (ScreenCaptureKit did not list it yet, or its stream stopped) is retried after 1, 2 and 4 s, without touching the other streams. Pausing stops the old streams without waiting: anything they still send is outranked when covering starts again.
+  - A frame that cannot be read goes through the same mailbox as the others, so it is acted on in order.
 - **The cover layer** (`Sources/SafeSightMacWatcher`, `Sources/SafeSightMacCover`).
   - **Show-first.** Changed areas are split by window, and each window gets one judge call with its own context and its share of the judging budget.
   - **Classes.** `cover` draws a plain, wordless cover over the whole picture region (a whole-window or whole-display cover carries the way-out line; see "Way out"). `contain` draws a strong blur of at most 6 colour cells; if the blur cannot be made, a plain cover is drawn instead. `clear` draws nothing.
   - **Placement.** Covers are clipped to the window's visible part, move with their window, and cover the old place for one update after a move.
   - **Lifting.** A cover lifts only after 4 clean judgements in a row of that region (SD-230).
-  - **Every display.** Each display has its own canvas: one click-through panel per display, with every change applied in one transaction. Per-window overlays are the written fallback (`SAFESIGHTMAC_COVER_FORM=overlays`).
+  - **Every display, one rule** (`Displays.swift` in the watcher and in the cover layer). Every display the OS lists (AppKit's screens and CoreGraphics' active list) gets a canvas, covered whole from the moment it is listed, before any capture stream exists for it. ScreenCaptureKit's list can add a display; it never takes one away. A cover comes down only for a plan judged on a frame from a stream started after that display's last change, made for the display's current bounds. Mirrors get no canvas, no judged place and no stream of their own: a display that repeats another (`CGDisplayMirrorsDisplay`) shows its source's composited picture, covers included, whether CoreGraphics lists it as active (software mirroring, where the window system draws the same windows into each display of the set) or only as online (hardware mirroring). The relationship counts only when the display shares its source's place in global coordinates (the same origin, or inside its bounds): one CoreGraphics says is a mirror but placed elsewhere (a stale value around un-mirroring) keeps its own canvas. Any doubt means a canvas. The judged displays are the first `DISPLAYS_MAX` of the OS's list, main display first; the rest are covered whole whatever the capture layer reports.
+  - **Display changes** (SD-112). CoreGraphics' reconfiguration callback is registered at launch. On its begin call every display is covered whole on the main thread and pushed to the screen at once (before the callback returns, when macOS makes the call on the main thread, where it was registered); no plan lowers a cover until the change is done. After the change the OS's lists are read again, a canvas is made at once for each new display, and capture restarts once the change has been quiet for 0.2 s. Sleep, display sleep and a session switch hold every cover the same way, each until its own counterpart (wake, display wake, return), so a display change while the Mac goes to sleep does not end the sleep hold. The lists are also read again at every drawing and four times a second, so a change nobody announced is covered like one. A plan judged on a frame from before the change, even one that was being judged while the change happened, is refused, and its frame is never counted as judging the display. The first frame of a new stream is judged whole.
+  - **Canvases.** One click-through panel per display, with every change applied in one transaction. Per-window overlays are the written fallback (`SAFESIGHTMAC_COVER_FORM=overlays`).
   - **Faults lead to more covering.** A display is covered whole when:
-    - it has not been judged yet;
+    - it has not been judged yet, or not since its last change;
+    - the OS lists it but no stream runs for it (ScreenCaptureKit cannot see it): for as long as that lasts;
     - a frame is blank, suspended or stopped;
     - metadata is missing or inconsistent;
-    - a stream stops;
-    - the models fail their check;
-    - judging stalls for more than 5 s;
-    - it is past `DISPLAYS_MAX` (2);
-    - the display set changes, or the Mac sleeps or switches session.
+    - its stream stops (frames of that stream still waiting never lower the cover);
+    - the models fail their check, including on displays attached later;
+    - judging stalls for more than 5 s, or a frame has waited more than 5 s to be judged;
+    - it is past `DISPLAYS_MAX` (2), counted from the OS's list;
+    - macOS announces a display change; a display is attached, removed, moved, rotated, mirrored or changes mode; the main display changes; the Mac or its displays sleep; or the session switches.
 
     A repair card above the covers says why, in plain words, repeats the way-out shortcuts and offers Try again, Pause (in the practice state only) and Quit. Nothing ever locks the screen, logs anyone out or reports anywhere.
-  - **Slowness covers more.** Unjudged entries stay blurred or covered and are judged again. When judging a window's new pictures would take longer than `COVER_GOAL` (0.1 s), they are blurred first and shown when cleared. A window still unjudged after 0.5 s is covered whole.
+  - **Slowness covers more.** Frames are judged one at a time, every display in turn, so a display whose screen never stops changing (a video, an animation) cannot keep another display's frames waiting. Unjudged entries stay blurred or covered and are judged again. When judging a window's new pictures would take longer than `COVER_GOAL` (0.1 s), they are blurred first and shown when cleared. A window still unjudged after 0.5 s is covered whole.
   - **Covers follow scrolling.** When content moves by a translation, its covers move with it at once, before the moved area is judged again; a cover moves only onto exactly the pixels it covered.
   - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte, and only when they were clearly clean: every model scored the picture below half its cover cut-off (the margin rule, 19 November). A borderline-clean picture is judged again, with fresh jitter, each time it comes back.
 - **The practice state** (SD-223).
@@ -63,7 +69,7 @@ The owner's requirement: if pages get covered up, the user must be able to leave
 
 - **Whole-window covers leave the control band** (`WayOut.controlBand`). The top 92 points of an ordinary window stay in sight: title bar, tab strip and toolbar. That is a working value for ST-032; Safari, Chrome and Firefox keep their tabs and back button within about 80 points. Short windows keep at most a third of their height. Full-screen windows, the Dock, menus and the desktop picture keep no band.
   - Only the "cover the whole window" step leaves the band. Pictures in the band are still judged, and their covers and blurs are still drawn. A flagged slice that caused the whole-window cover is covered too, band included.
-- **Whole-display covers leave the menu bar**, only while the window list shows one on that display (`WayOut.menuBarHeight`). A hidden menu bar (full-screen apps) stays covered, since that strip would show unjudged content. The Dock stays covered.
+- **Whole-display covers leave the menu bar** of the main display's mirror set only (the main display, and any display it repeats or that repeats it while sharing its place), and only while the window list shows one there (`WayOut.leavesMenuBar`, `WayOut.menuBarHeight`). A hidden menu bar (full-screen apps) stays covered, since that strip would show unjudged content. Every other display's menu bar is covered with the rest of it: the macOS 26 menu bar is see-through, so on a display covered for a long time (past `DISPLAYS_MAX`, or one that cannot be captured) the strip would show unjudged content for as long as the display is attached. The Dock stays covered.
 - **One plain line** sits on whole-window and whole-display covers: "Press ⌘W to close this tab, or ⌘[ to go back." (`AppText.wayOutLine`, checked by the words test).
   - It uses the system font on a small pill-shaped card, with the shortcuts drawn as rounded key caps.
   - It sits in the middle of a window's cover, or below the repair card on a display's cover.
@@ -99,13 +105,14 @@ Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 204 test functions: 43 XCTest + 161 Swift Testing, all pass
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 206: adds the 2 stand-in tests, all pass
-SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing  # 194: the Testing edition, without the 10 keeper-check tests, all pass
+swift test                                                 # COUNT-STD
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # COUNT-LAB
+SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing  # COUNT-TESTING
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 tools/check-testing-edition.sh && tools/check-covers-vanish.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness wayout --out OUT --appearance light   # and dark
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness displays --out OUT --appearance light # and dark
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench --models ../v3-detector/models/converted --pages ../v3-detector/data/finder-bench-heldout/screens --json FILE
 swift run -c release safesightmac-harness falsecovers --models ../v3-detector/models/converted --list LIST --root ../v3-detector --rule balanced --json FILE
 swift run -c release safesightmac-harness demo --models ../v3-detector/models/converted
@@ -125,6 +132,7 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 | Wording | `AppTextTests` (SafeSightMacCoreTests) | The promise matches the README word for word; no forbidden claim; the mode sentence carries no figure; strict cover mode says "not in this version"; the way-out line is word for word and its key caps rejoin to it |
 | The way out | `ControlBandTests`, `MenuBarTests` (SafeSightMacWatcherTests); `WayOutLineTests`, `RepairCardTests`, `ClickThroughTests` (SafeSightMacCoverTests) | A whole-window cover never covers the control band; a flagged picture, a flagged slice and an unjudged picture in the band are still covered; full-screen windows and system surfaces keep no band; only the largest piece carries the line. A whole-display cover leaves the menu bar only while it is on screen, never more than a menu bar, and always covers the Dock. The line's words on whole-window and whole-display covers, inside the cover, in both appearances; none on picture covers or without room; the compact size; contrast; covers opaque and neutral. Cover panels are click-through, never key or main, out of window cycling, with no view to click; the repair card repeats the line and never takes the keyboard |
 | Status line | `StatusTests` | "Needs Screen Recording", "Covering: on", a whole-display cover, pause and detector failure |
+| Every display, one rule | `DisplayListTests`, `DisplayCoverageTests`, `PipelineGenerationTests`, `FrameQueueTests`, `DisplayChangeTests` (SafeSightMacWatcherTests); `CoverCoordinatorTests`, `StreamSchedulerTests`, `CaptureLinkTests` (SafeSightMacCoverTests) | Faked OS display lists, synthetic frames, the real pipeline and detector (fake marker models), and a presenter that only records what it is asked to draw. Every display the OS lists gets a canvas, main display first; a screen missing from CoreGraphics' list, a display missing from AppKit's and one only ScreenCaptureKit lists are all covered, and the capture list never removes one; mirrors get no canvas and do not count toward the limit, whether CoreGraphics lists them as active or only online, unless their source is not listed; a mirror loop is covered, never left out; a display CoreGraphics says repeats another but placed elsewhere, or with bounds that cannot be read, keeps its canvas, its judged place and its menu bar's cover, while one inside its source's bounds (a hardware matte) is still a mirror; when the main display is a mirror, the display it repeats comes first; the limit is counted from the OS's lists, so a third display stays covered even when a plan for it arrives. At start every display is covered before any stream starts. The begin callback, called through its real C entry point, draws every display covered before it returns and pushes it to the screen; a display attached by the change gets its canvas at once, before capture restarts. A display attached while another display's frame is being judged: that judgement is refused, the frame still waiting from the old stream is not judged, and each display comes down only with its own first judged frame. A display the capture layer cannot see stays covered; a stream that delivers nothing keeps its display covered; frames of a stopped stream never lower its cover again, while a late report about an older stream, or from a start that lost the race, does not cover a display a newer stream is judging; a display removed and added back with the same identifier stays covered until judged again; a plan for old bounds is refused (rearranged, rotated, clamshell); a change nobody announced is found at the next drawing or tick; an announced change that never finishes ends after 3 s; sleep holds every cover until wake, and a display change while going to sleep does not end that hold; a display with no stream is retried three times; unreadable lists keep every display covered; a failed detector covers displays attached later; Try again keeps every cover up; a new stream's first frame is judged whole; frames of two streams never merge; a display that never stops changing cannot keep another waiting; a late frame from an older stream never replaces a newer stream's frame. A display only ScreenCaptureKit lists is a change when it alters the judged displays (it needs a stream), and not one past the limit. Sleep, display-sleep and session holds end without their notification once the OS says they are over (after 10, 2 and 2 s). Streams on request, with a fake capture backend whose gates hold a request part-way: a start streams only the displays asked for, with the request's generation, and stops and reports every older stream; requests older than the newest start are ignored; a top-up only adds missing streams; every display not listed, or not listable, is reported with the request's generation; a start overtaken while it opens a stream stops and reports it; two requests for one display keep the newer stream; a stream that stops by itself, even before it is kept, is reported once and never kept; nothing starts after a stop. Through the app's own link between the coordinator and the scheduler: a restart asked for before a display change but starting its streams after it never shows their frames, and a display the next restart cannot start is covered, never left showing an old plan; pausing and covering again never shows a plan from the old streams or an old request. Only the main display's mirror set leaves its menu bar under a whole-display cover (`MenuBarTests`) |
 | Stand-in (lab builds) | `StandInTests` | The stand-in through the real detector with null models is covered and placed on a 2x display at a negative origin; null models alone cover nothing |
 | Exact-match caches | 10 `CacheTests`, 8 `CleanCacheMarginTests` (DetectorCoreTests), `VerdictCacheInThePipelineTests` | The key is the full SHA-256 of every byte (all four channels), size, pass and bundle version; one changed byte in any channel is a new key; a picture one level different is judged again; a flagged picture drawn where a clean one was is judged afresh, with nothing from the cache, and is covered (cut-offs far below its score); a clean outcome is cached only when every model scored it strictly below half its cover cut-off for the band, and a score that is not a number never counts as below; a borderline-clean outcome and a dispute the tie-breaker declined are judged again, and can then be covered; covered outcomes are cached, under both rules; the cache refuses an outcome not marked cacheable; a moved picture comes from the cache; the cache never holds more than its bound and keeps what is used; cached finder proposals equal the finder's, at the same place and moved; a change inside the finder's reach is a new key; a reloaded page is not judged again and stays covered |
 | Slice grid moved with the content | 3 `SliceGridTests` | No anchor gives the lab build's grid exactly; 300 random areas and anchors: every slice inside the area, the grid reaches both edges, steps of at most 384 (overlap at least 128), at most one slice more per axis; a scrolled view judges fewer tiles |
@@ -143,6 +151,15 @@ swift run -c release safesightmac-harness demo --models ../v3-detector/models/co
 6. The next frame: covers lowered.
 
 With the real models (release build, read in place from `v3-detector`), the same synthetic page drew no cover. That is one page, not a measurement.
+
+**Display scenes** (`safesightmac-harness displays`, lab build, null models and the stand-in, synthetic desktops drawn offscreen, through the real cover coordinator and pipelines; looked at in light and dark):
+
+1. One display, judged: its stand-in is covered.
+2. macOS announces a change: it is covered whole at once, its menu bar left in sight.
+3. A second display is attached: it gets its canvas, covered whole with its menu bar, before any stream exists; a plan judged before the change arrives and is refused.
+4. Capture restarts after 0.2 s of quiet; the first display's first judged frame lowers its cover; the second waits for its own.
+5. The second display's first judged frame lowers its cover; its stand-in is covered.
+6. A third display stays covered whole (past `DISPLAYS_MAX`), even when a plan for it arrives; the repair card on the main display says why.
 
 ## Speed: the measured chain (lab, 18 November 2026)
 
@@ -275,7 +292,13 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - whether `.best` gives full backing pixels on every display type;
   - whether excluding the app keeps the content under a cover visible to capture.
 - **Window levels and surfaces** (ST-032): full-screen apps, Spaces, Mission Control, menus, the Dock, notifications, click-through, VoiceOver. The canvas level is a working value (screen-saver level).
-- **Displays** (ST-033, ST-034): external, mirrored, Sidecar, AirPlay, DisplayLink; plug, unplug, sleep, wake, resolution changes.
+- **Displays** (ST-033, ST-034): external, mirrored, Sidecar, AirPlay, DisplayLink; plug, unplug, sleep, wake, lid, rotation and resolution changes. The display rule is tested with faked display lists and frames only. Not yet seen on hardware:
+  - whether macOS makes the reconfiguration callback's begin call before it applies each kind of change, and on the main thread;
+  - how many frames a new display shows before its canvas exists (SL-023);
+  - whether ScreenCaptureKit lists and streams DisplayLink, Sidecar, AirPlay and app-made virtual displays (one it cannot see stays covered whole, which makes that display unusable);
+  - **must check on a real mirrored set-up** (built-in display mirrored to an external display, and AirPlay mirroring to a TV): which of CoreGraphics' active and online lists, AppKit's screens and ScreenCaptureKit's list hold the mirror; that it gets no canvas of its own; that it shows its source's covers; and that a whole-display cover still leaves the main display's menu bar in sight while mirrored;
+  - a stream that stops delivering frames without an error, and ScreenCaptureKit handing one display's picture to another display's stream (Apple feedback FB17797423). Neither is detected: the per-display canary of red-team fix FIX-13 is the planned check;
+  - a display captured by an app (`CGDisplayCapture`): that app draws at the shielding window level, far above the canvas level (screen-saver level), so its pictures would show over the covers (ST-032).
 - **Time to cover on a real display** (ST-031). The flash length is unknown.
 - **Speed, memory and energy** (ST-038, ST-039). Each complete frame is copied into an RGBA buffer for the detector, which costs memory and energy, unmeasured. `JUDGEMENT_BUDGET` (40 per second) and `FULL_REJUDGE` (30 s) are proposals.
 - **False covers on real screens in daily use.** ST-040 re-ran through this pipeline on 932 held-out harmless screens (above); nothing has been measured on a live screen.
@@ -316,7 +339,9 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **The catch rate is unmeasured.** Nobody knows how many explicit pictures this detector misses. The cut-offs are strict to keep false covers low, so Balanced may miss more, by an amount nobody has measured. No accuracy figure may be published (claims ledger).
 - **False covers and blurs.** The detector covers some harmless things. The picture finder grows regions to a picture's edge, so a cover can spill over neighbouring text. Small pictures it is unsure about are blurred.
 - **No lock and no shield.** This build can be paused or quit, and if it crashes or is quit, the screen is uncovered. At start, and when a display appears or wakes, the display is covered whole until its first judged frame (a few seconds when the models load).
+- **Display changes cover every display.** Plugging or unplugging a display, mirroring, a new resolution, and sleep and wake (of the Mac, or of its displays alone) cover every display whole until each has a judged frame from a restarted stream: 0.2 s of quiet, then one full judgement per display. Not measured on hardware. A new display can show what macOS puts on it for a moment before its canvas exists (SL-023): a canvas can only be made for a display that exists. A monitor usually takes a moment to show a picture after it is plugged in; whether the canvas is always there first is what ST-034 measures.
 - **Not judged:** the cursor, the brighter-than-white range of HDR displays, protected video (captured as black), sound and text, anything before login. Accessibility Zoom is not detected.
+- **Other screens.** Media sent from the Mac straight to a TV, and a window capture sent to another device, never pass through the cover. See "Other displays and other screens" below.
 - **Load.** A busy screen judged from scratch exceeds the budget. Its new pictures are blurred first; unjudged 512-pixel slices are covered; after 0.5 s of unjudged entries the window is covered whole. A busy Retina page stays blurred or covered for 13 to 21 s at `JUDGEMENT_BUDGET` (6 to 8 s with no budget limit). A third display and beyond are covered whole.
 - **Choices made where the register is silent or open.** Each is a working value tied to its test:
   - canvas window level: screen-saver level (ST-032);
@@ -324,7 +349,8 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - the control band a whole-window cover leaves: 92 points (`WayOut.controlBand`, ST-032);
   - the room a cover needs around the way-out line: 24 points;
   - blur: at most 6 colour cells;
-  - judging stall before a whole-display cover: 5 s (ST-038);
+  - judging stall before a whole-display cover: 5 s, also for a frame left waiting (ST-038);
+  - display changes: capture restarts after 0.2 s of quiet; an announced change with no "after" call ends after 3 s; a display with no stream is retried after 1, 2 and 4 s; the OS's display lists are read again at every drawing and four times a second; a sleep, display-sleep or session hold whose wake or return notification never came ends once the displays are awake and the session is on the console, after 10 s (sleep) or 2 s of awake time (ST-034);
   - `JUDGEMENT_BURST`: 400 (ST-038);
   - the repair card: shown after 2 s of a whole-display cover.
 
@@ -340,3 +366,27 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - the crash-loop breaker;
   - the heartbeat and the plain shield, which are not part of the practice state.
 - **Models are compiled by Core ML at load,** into a temporary folder. Correction C06-14 forbids a compile fallback once models ship compiled; that is build work for the release bundle.
+
+## Other displays and other screens (written down, not built)
+
+The display rule covers every display the Mac draws on: built-in, wired, DisplayLink, AirPlay or Sidecar used as a display, mirrors, and displays apps create. Whatever reaches those displays was composited by the Mac, so it passes through capture, judging and the canvas. Some routes put pictures on another screen without the Mac drawing them, or copy the Mac's screen without its covers. Each is listed here with its planned fix. None of these fixes is built.
+
+| Route | Where the pictures go | Covered by the cover? | What closes it |
+|---|---|---|---|
+| AirPlay or Cast of a media stream from a browser (Safari, Chrome, Edge) | A TV or streaming box, which plays the stream itself | **No.** The Mac never draws those frames | The browser layer |
+| AirPlay from QuickTime Player or the Apple TV app | The same | **No** | No switch known; a setting or a published limit |
+| An app capturing one window, or the screen without SafeSight Mac's windows (OBS, QuickTime recording, window sharing in Zoom, Discord, Teams or Meet, screen-sharing tools) | The far side of a call or stream, or a recording | **No**, for the copy: window capture leaves overlays out | The Screen Recording permission |
+| AirPlay to this Mac, iPhone Mirroring, a virtual machine or remote desktop in a window | This Mac | **Yes**, like any window | Already covered |
+| A phone, a tablet's own apps (Universal Control included), a TV's own apps, another computer, a phone casting to a TV | Another screen | **No** | Outside SafeSight Mac's reach (SL-025) |
+
+**Media streams sent to a TV.** Not to be confused with AirPlay used as a display, extended or mirrored, which the display rule covers: there the Mac draws every pixel, covers included.
+- Chrome and Edge (the optional browser profile): `EnableMediaRouter` set to false turns off Cast, its toolbar button, and Cast started by a page through the Remote Playback API. Neither browser has its own AirPlay; Firefox has neither.
+- Every browser the extension runs in: the extension sets `disableRemotePlayback` on every video and audio element, including ones added later, and sets it again if a page clears it. In Safari it also adds `x-webkit-airplay="deny"` and refuses the playback-target picker. Safari takes no policy (the owner switches the extension on, and Safari is never forced), so with the extension off, Safari's AirPlay button still works: a published limit.
+- QuickTime Player and the Apple TV app: no per-app switch is known. Candidates: an AirPlay allow-list in a device-management profile where the Mac is enrolled (the Hardcore lock), or a published limit.
+- Protected streams are already black to capture on the Mac (SL-024), and the protected-streaming research is about the Mac's own screen. Sent to a TV, they play there, outside every check.
+
+**Apps that capture a window.** ScreenCaptureKit can capture one window, or a display minus chosen windows, so the copy can leave the covers out and send unjudged frames to another device. On this Mac, any preview the capturing app draws is judged and covered like any other window; the far side is another screen. The covers keep the default sharing type, so an app capturing a whole display without excluding them receives the covers (ST-037 records this per app).
+- The gate is the Screen Recording permission: no app captures without it. In this build (the practice state) nothing limits who holds it.
+- Planned: at Lock, record which apps hold Screen Recording; a new grant is a loosening that waits, unless the admin-tasks design finds a safe fast path for it. That design is not written yet. It has to keep window sharing in a meeting easy, since that is ordinary work, without letting a capture app become a way around the cover.
+
+**Plainly:** the cover reaches every display the Mac draws and every window on them, AirPlay and iPhone Mirroring into this Mac included. A browser sending media to a TV needs the browser layer. QuickTime Player and the TV app sending media to a TV, and window capture sent to another device, need settings and the lock's permission rules, none built. A phone, a TV's own apps and other computers are other screens, outside SafeSight Mac's reach.

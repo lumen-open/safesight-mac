@@ -253,11 +253,20 @@ public final class OverlayCovers: CoverPresenter {
     }
 }
 
-/// The menu bar a whole-display cover leaves in sight: the screen's menu bar height, while the window list
-/// shows the menu bar on that display (`WayOut.menuBarHeight`). Window titles are never read.
+/// The menu bar a whole-display cover leaves in sight: on the main display's mirror set only (`WayOut.leavesMenuBar`),
+/// the screen's menu bar height, while the window list shows the menu bar on that display (`WayOut.menuBarHeight`).
+/// Window titles are never read.
 @MainActor
 enum MenuBarProbe {
     static func height(_ display: DisplayDescriptor, screen: NSScreen?) -> CGFloat {
+        // A mirror relationship counts only where the display shares its source's place (`MirrorSets.source`).
+        let raw: (UInt32) -> UInt32? = { id in
+            let m = CGDisplayMirrorsDisplay(id)
+            return m == kCGNullDirectDisplay ? nil : m
+        }
+        guard WayOut.leavesMenuBar(display: display.id, main: CGMainDisplayID(), mirrorOf: { id in
+            MirrorSets.source(of: id, mirrorOf: raw, bounds: { CGDisplayBounds($0) })
+        }) else { return 0 }
         guard let screen else { return 0 }
         let inset = screen.frame.maxY - screen.visibleFrame.maxY
         guard inset > 0, let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return 0 }

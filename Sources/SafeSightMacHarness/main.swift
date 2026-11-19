@@ -12,6 +12,8 @@
 //   safesightmac-harness wayout --out DIR [--appearance light|dark]
 //            (lab build only) synthetic desktops whose covers leave the way out in sight, and the "How it works"
 //            window drawn from its own views; see WayOutScenes.swift
+//   safesightmac-harness displays --out DIR [--appearance light|dark]
+//            (lab build only) a display being attached, step by step, through the display rule; see DisplayScenes.swift
 //   safesightmac-harness vanish
 //            a real cover window, invisible and off every display, goes the moment its process is killed or quits;
 //            see Vanish.swift
@@ -213,6 +215,16 @@ if o.command == "wayout" {
     exit(0)
     #else
     fail("wayout needs a lab build (the lab stand-in forces its covers): SAFESIGHTMAC_LAB=1 swift run --scratch-path .build-lab safesightmac-harness wayout --out DIR")
+    #endif
+}
+
+if o.command == "displays" {
+    #if SAFESIGHTMAC_LAB
+    guard let out = o.out else { fail("displays needs --out DIR") }
+    DisplayScenes.run(detector: detector, theme: o.theme, out: URL(fileURLWithPath: out))
+    exit(0)
+    #else
+    fail("displays needs a lab build (the lab stand-in forces its covers): SAFESIGHTMAC_LAB=1 swift run --scratch-path .build-lab safesightmac-harness displays --out DIR")
     #endif
 }
 
