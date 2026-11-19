@@ -3,7 +3,7 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-e6ModwgdnbqWSMZnHyPbNbqFPXJbWUoG6i3euEzz1a4='; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-pQIs7Ey7pODmOcR/BNSW4/wiOD8AbnCaj05keLpk2XQ='; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
@@ -78,7 +78,7 @@ img, svg { display: block; }
 p { margin: 0; }
 a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: .2em; }
 a:hover { text-decoration-thickness: 2px; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 [id] { scroll-margin-top: 24px; }
 strong { font-weight: 650; }
 
@@ -212,20 +212,20 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 .step-head .badge { grid-area: badge; }
 .step-head h3 { grid-area: title; }
 .step-num { display: none; grid-area: num; color: var(--muted); font-size: .875rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
-.friend { margin-top: 14px; display: flex; gap: 16px; align-items: center; padding: 20px; border-radius: var(--radius); background: var(--accent-soft); }
+.friend { margin-top: 14px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding: 22px 20px 24px; border-radius: var(--radius); background: var(--accent-soft); }
 .friend .badge { background: var(--card); }
 .friend p { font-size: 1.0625rem; text-wrap: pretty; }
 .sec-foot { margin-top: 22px; color: var(--muted); font-size: .9375rem; }
-@media (min-width: 820px) {
+@media (min-width: 960px) {
   .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
   .step-head { grid-template-columns: 48px 1fr auto; grid-template-areas: "badge . num" "title title title"; row-gap: 22px; margin-bottom: 8px; }
   .step-num { display: block; }
-  .friend { margin-top: 20px; padding: 24px 28px; gap: 18px; }
+  .friend { flex-direction: row; align-items: center; margin-top: 20px; padding: 24px 28px; gap: 18px; }
 }
 
 /* Cards with an icon: icon beside the title on phones, above it on wider screens */
 .card-head { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
-@media (min-width: 820px) { .card-head { flex-direction: column; align-items: flex-start; gap: 22px; margin-bottom: 8px; } }
+@media (min-width: 960px) { .card-head { flex-direction: column; align-items: flex-start; gap: 22px; margin-bottom: 8px; } }
 
 /* Phone note */
 .sec-mid { padding-block: clamp(48px, 6vw, 72px); }
@@ -283,7 +283,8 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
   td.us .lbl { color: var(--accent-text); }
 }
 .note { margin-top: 20px; display: flex; gap: 16px; align-items: flex-start; padding: 22px 24px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
-.note .ic { color: var(--accent-text); margin-top: 2px; }
+.note .ic { display: none; color: var(--accent-text); margin-top: 2px; }
+@media (min-width: 720px) { .note .ic { display: block; } }
 .note p { color: var(--muted); max-width: 62rem; }
 .note strong { color: var(--text); }
 
@@ -292,7 +293,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 .cards3 .card { display: flex; flex-direction: column; align-items: flex-start; }
 .more { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font-weight: 600; font-size: .9375rem; }
 .more .ic { width: 18px; height: 18px; }
-@media (min-width: 820px) { .cards3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; } }
+@media (min-width: 960px) { .cards3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; } }
 
 /* Limits and status */
 .two { display: grid; gap: 14px; }
@@ -334,7 +335,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 .promise blockquote p { font-size: clamp(1.25rem, 1.05rem + .9vw, 1.65rem); line-height: 1.55; letter-spacing: -.012em; font-weight: 500; text-wrap: pretty; }
 
 /* Get involved */
-@media (min-width: 820px) { .cards3 .card { padding: 28px 26px 30px; } }
+@media (min-width: 960px) { .cards3 .card { padding: 28px 26px 30px; } }
 .code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .9em; padding: 1px 6px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
 
 /* Footer */
@@ -380,7 +381,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
   <div class="wrap top-in">
     <a class="brand" href="index.html"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>SafeSight Mac</a>
     <nav aria-label="Main">
-      <ul class="nav">
+      <ul class="nav" role="list">
         <li><a href="#off-switch">The off switch</a></li>
         <li><a href="#why">Why it exists</a></li>
         <li><a href="#how">How it works</a></li>
@@ -459,7 +460,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
       <p class="eyebrow">How leaving works</p>
       <h2 id="off-title">What makes it different is the off switch.</h2>
     </div>
-    <ol class="steps">
+    <ol class="steps" role="list">
       <li class="card step">
         <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg></span><h3>You choose the wait</h3><span class="step-num" aria-hidden="true">01</span></div>
         <p>When you set it up, you choose how long turning it off should take, anywhere from a week to a year.</p>
@@ -598,7 +599,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
   <div class="wrap two">
     <div class="card" id="limits">
       <h2>What it can’t do</h2>
-      <ul class="limits">
+      <ul class="limits" role="list">
         <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Wiping your Mac removes it.</li>
         <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It can miss an image, and it sometimes covers a harmless one.</li>
         <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It only protects this Mac, not your phone, a TV or another computer.</li>
@@ -608,7 +609,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
     <div class="card" id="status">
       <h2>Where things stand</h2>
       <p>This is an early preview, and there’s no download yet.</p>
-      <ul class="status">
+      <ul class="status" role="list">
         <li><span class="st st-done" aria-hidden="true"></span><span><strong>The screen cover is built.</strong><span class="st-text">So far it has only run in the lab.</span></span></li>
         <li><span class="st st-now" aria-hidden="true"></span><span><strong>The lock is being built now.</strong><span class="st-text">The wait you choose, Stay, and the friend who can shorten it.</span></span></li>
         <li><span class="st st-later" aria-hidden="true"></span><span><strong>A download comes later.</strong><span class="st-text">Follow on GitHub to hear when it’s ready.</span></span></li>
@@ -667,7 +668,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
       <p>Free, open-source software under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>.</p>
     </div>
     <nav aria-label="Footer">
-      <ul class="foot-links">
+      <ul class="foot-links" role="list">
         <li><a href="https://github.com/lumen-open/safesight-mac">GitHub</a></li>
         <li><a href="terms.html">Terms and risks</a></li>
         <li><a href="https://github.com/lumen-open/safesight-mac/blob/main/SECURITY.md">Security</a></li>

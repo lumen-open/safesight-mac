@@ -3,7 +3,7 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-8oqQcNSJMV9NxJmXi0roshdMNEeAwlDO4wjQOW7/Vs8='; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-zx812h1eRI6HQbLwaA5GGHawi40HyE4L7GMdCSuMAn0='; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
@@ -68,7 +68,7 @@ svg { display: block; }
 p { margin: 0; }
 a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: .2em; }
 a:hover { text-decoration-thickness: 2px; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 [id] { scroll-margin-top: 24px; }
 strong { font-weight: 650; }
 
@@ -195,7 +195,7 @@ h2 { margin: 0 0 20px; font-size: clamp(1.5rem, 1.25rem + 1vw, 1.875rem); line-h
 
       <section aria-labelledby="who">
         <h2 id="who">Who it’s for</h2>
-        <ul class="who">
+        <ul class="who" role="list">
           <li><div class="who-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-person"/></svg></span><strong>Adults.</strong></div> <p class="t">It’s for people aged 18 or over. The app can’t check your age, so we’re trusting you.</p></li>
           <li><div class="who-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-laptop"/></svg></span><strong>Your own Mac.</strong></div> <p class="t">Install it only on a Mac you own and control. Not a work or school Mac, and not one you share with someone else.</p></li>
           <li><div class="who-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-heart"/></svg></span><strong>Your own choice.</strong></div> <p class="t">Set it up for yourself, never for someone else, and never make it a condition of a job, a home, a membership or anyone’s support. If someone else controls your password, they control your Mac, and no software can change that.</p></li>
@@ -209,7 +209,7 @@ h2 { margin: 0 0 20px; font-size: clamp(1.5rem, 1.25rem + 1vw, 1.875rem); line-h
 
       <section aria-labelledby="wrong">
         <h2 id="wrong">What can go wrong</h2>
-        <ul class="risks">
+        <ul class="risks" role="list">
           <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It can miss an explicit image, and it sometimes covers a harmless one. How many it misses hasn’t been measured yet.</li>
           <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>An image can show for a moment before its cover appears.</li>
           <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Protected video, like films in streaming apps, can’t be checked.</li>
@@ -241,7 +241,7 @@ h2 { margin: 0 0 20px; font-size: clamp(1.5rem, 1.25rem + 1vw, 1.875rem); line-h
       <p>Free, open-source software under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>.</p>
     </div>
     <nav aria-label="Footer">
-      <ul class="foot-links">
+      <ul class="foot-links" role="list">
         <li><a href="https://github.com/lumen-open/safesight-mac">GitHub</a></li>
         <li><a href="terms.html">Terms and risks</a></li>
         <li><a href="https://github.com/lumen-open/safesight-mac/blob/main/SECURITY.md">Security</a></li>
