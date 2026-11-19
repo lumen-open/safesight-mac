@@ -67,6 +67,8 @@ public struct TestingStats: Sendable {
 
     /// One frame captured, with the status the capture gave it.
     public mutating func recordCaptured(_ status: String) { captured[status, default: 0] += 1 }
+    /// Frames captured so far, by status, as the watcher counted them.
+    public mutating func setCaptured(_ counts: [String: Int]) { captured = counts }
 
     /// One display as drawn: covered whole (why), or how many covers and blurs.
     public struct Shown: Sendable {

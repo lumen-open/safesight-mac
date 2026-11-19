@@ -63,7 +63,6 @@ final class TestingEditionApp {
                                pass: .init(idle: idle, blurAtOnce: t.blurAtOnceFirings > 0, coveredFirst: t.coveredFirst,
                                            leftForLater: t.leftForLater, unjudged: t.overloaded, rechecks: t.rechecks))
         }
-        watcher.onCaptured = { [weak self] status in self?.stats.recordCaptured(status.rawValue) }
         // What was actually drawn, early plans included: the report counts what was on screen.
         watcher.onDrawn = { [weak self] plans in
             self?.stats.recordDrawn(plans.map { .init(display: $0.display.id, whole: $0.wholeDisplay?.rawValue, covers: $0.plainCount, blurs: $0.blurCount) })
@@ -115,6 +114,7 @@ final class TestingEditionApp {
         let facts = TestingReportWindow.facts(shortcut: shortcutWorks)
         let w = report ?? TestingReportWindow { [weak self] note in
             guard let self else { return "" }
+            if let w = self.watcher { self.stats.setCaptured(w.capturedCounts()) }
             return TestingReport.text(facts: facts, stats: self.stats, running: ProcessInfo.processInfo.systemUptime - self.startedAt,
                                       cpu: TestingFacts.cpuSeconds() - self.cpuAtStart, note: note,
                                       power: TestingFacts.power())

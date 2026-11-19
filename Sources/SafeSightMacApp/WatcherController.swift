@@ -55,8 +55,6 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// (ms), the plan, whether it was a "nothing changed" frame, and the pipeline's own counts for it (the Testing
     /// report's numbers).
     @MainActor var onJudged: ((UInt32, Double, Double, CoverPlan, Bool, PipelineTimings) -> Void)?
-    /// Told about every frame captured (its status), on the main thread.
-    @MainActor var onCaptured: ((FrameStatus) -> Void)?
     /// Told about every update drawn, on the main thread (every display in it).
     @MainActor var onDrawn: (([CoverPlan]) -> Void)? {
         get { presenter.onDrawn }
@@ -64,9 +62,14 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     }
     /// Told on every timer tick that covers changes left waiting too long to be judged.
     @MainActor var onWaitingCover: (() -> Void)?
-    /// Per display: the last frame's display and stream generation, when it came, and whether the pipeline still has
-    /// something to judge on a still screen (main thread only).
+    /// Per display: the last frame's display and stream generation, and when it came; and frames captured by status.
+    /// Written on the capture queues and read on the main thread, under `seenLock` (no hop to the main thread per frame).
+    private let seenLock = NSLock()
     private var lastFrame: [UInt32: (display: DisplayDescriptor, generation: Int, at: TimeInterval)] = [:]
+    private var captured: [String: Int] = [:]
+    /// Frames captured so far, by the status the capture gave them (the Testing report's numbers).
+    func capturedCounts() -> [String: Int] { seenLock.withLock { captured } }
+    /// Displays whose pipeline still has something to judge on a still screen (main thread only).
     private var wantsLook: Set<UInt32> = []
     /// How long a still screen waits before the watcher asks for a look at the last frame itself.
     static let idleLookAfter: TimeInterval = 0.25
@@ -157,7 +160,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     @MainActor func stop() {
         running = false
         frames.close()
-        lastFrame = [:]; wantsLook = []
+        seenLock.withLock { lastFrame = [:] }
+        wantsLook = []
         // Not waited for: anything the old streams still send carries a generation outranked when covering starts again.
         link.detach()
         judgeQueue.async { [weak self] in
@@ -233,12 +237,10 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     // MARK: CaptureSink (capture queues)
 
     func capture(_ frame: CapturedFrame) {
-        let seen = (frame.display, frame.generation, ProcessInfo.processInfo.systemUptime, frame.status)
-        DispatchQueue.main.async {
-            MainActor.assumeIsolated {
-                self.lastFrame[seen.0.id] = (seen.0, seen.1, seen.2)
-                self.onCaptured?(seen.3)
-            }
+        let at = ProcessInfo.processInfo.systemUptime
+        seenLock.withLock {
+            lastFrame[frame.display.id] = (frame.display, frame.generation, at)
+            captured[frame.status.rawValue, default: 0] += 1
         }
         #if SAFESIGHTMAC_LAB
         let area = frame.dirty?.reduce(0) { $0 + $1.w * $1.h }
@@ -359,8 +361,12 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     @MainActor private func askForLooks(now: TimeInterval) {
         let waiting = frames.waiting(now: now)
         for id in wantsLook {
-            guard let last = lastFrame[id], now - last.at >= Self.idleLookAfter, busySince[id] == nil, waiting[id] == nil else { continue }
-            lastFrame[id]?.at = now
+            let last: (display: DisplayDescriptor, generation: Int, at: TimeInterval)? = seenLock.withLock {
+                guard let l = lastFrame[id], now - l.at >= Self.idleLookAfter else { return nil }
+                lastFrame[id]?.at = now
+                return l
+            }
+            guard let last, busySince[id] == nil, waiting[id] == nil else { continue }
             let f = CapturedFrame(display: last.display, status: .idle, image: nil, map: nil, dirty: [], time: now, generation: last.generation)
             if frames.offer(f, now: now) { judgeQueue.async { [weak self] in self?.judgeNext() } }
         }

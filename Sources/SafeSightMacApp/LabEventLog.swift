@@ -11,6 +11,9 @@ final class LabEventLog: @unchecked Sendable {
     private let queue = DispatchQueue(label: "safesightmac.lab.log", qos: .utility)
     private var handle: FileHandle?
     private var buffer: [String] = []
+    /// The log stops growing at this size (a last line says so).
+    static let maxBytes = 64 << 20
+    private var written = 0
     private let start = ProcessInfo.processInfo.systemUptime
 
     private init() {
@@ -35,8 +38,13 @@ final class LabEventLog: @unchecked Sendable {
 
     private func flush() {
         guard !buffer.isEmpty, let h = handle else { return }
-        let data = Data((buffer.joined(separator: "\n") + "\n").utf8)
+        var data = Data((buffer.joined(separator: "\n") + "\n").utf8)
         buffer = []
+        if written + data.count > Self.maxBytes {
+            data = Data("log full: nothing more is written\n".utf8)
+            handle = nil
+        }
+        written += data.count
         h.write(data)
     }
 
