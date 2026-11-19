@@ -45,6 +45,9 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         set { presenter.onCoversShown = newValue }
     }
     var repairActions: RepairCard.Actions?
+    /// Told about every judged frame, on the main thread: the display, judging time and time from capture to the plan
+    /// (ms), and the plan (the Testing report's numbers).
+    @MainActor var onJudged: ((UInt32, Double, Double, CoverPlan) -> Void)?
     /// What every display shows now: one plan per display the OS lists.
     @MainActor var plans: [CoverPlan] { coordinator.shown }
 
@@ -236,9 +239,12 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         let plan = p.process(f, snapshot: WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
             DispatchQueue.main.async { self?.coordinator.deliver(early, generation: generation) }
         }
+        let ended = ProcessInfo.processInfo.systemUptime
+        let judgeMs = (ended - start) * 1000, latencyMs = (ended - f.time) * 1000
         DispatchQueue.main.async {
             self.busySince[id] = nil
             self.coordinator.deliver(plan, generation: generation)
+            self.onJudged?(id, judgeMs, latencyMs, plan)
         }
     }
 

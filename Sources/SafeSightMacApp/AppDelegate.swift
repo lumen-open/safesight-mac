@@ -247,6 +247,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(item(AppText.howItWorks) { [weak self] in self?.showHowItWorks() })
         #if SAFESIGHTMAC_TESTING
+        menu.addItem(item(AppText.testingReportMenu) { [weak self] in self?.testing.showReport() })
         menu.addItem(item(AppText.testingRemove) { [weak self] in self?.removeEverything() })
         let quit = item(AppText.testingQuit) { NSApp.terminate(nil) }
         testing.showShortcut(on: quit)

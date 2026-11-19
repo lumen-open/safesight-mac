@@ -24,6 +24,11 @@ final class TestingEditionApp {
     private weak var watcher: WatcherController?
     private var layoutObserver: NSObjectProtocol?
     private var layoutTimer: Timer?
+    /// The Testing report's numbers, from the moment covering starts; in memory only.
+    private var stats = TestingStats()
+    private let startedAt = ProcessInfo.processInfo.systemUptime
+    private let cpuAtStart = TestingFacts.cpuSeconds()
+    private var report: TestingReportWindow?
 
     var shortcutWorks: Bool { emergency?.state.works ?? false }
 
@@ -53,6 +58,10 @@ final class TestingEditionApp {
         stallWatchdog = dog
         watcher.onCoversShown = { [weak dog] shown in dog?.setCoverShown(shown) }
         watcher.notice = .testing(shortcut: shortcutWorks)
+        watcher.onJudged = { [weak self] id, judgeMs, latencyMs, plan in
+            self?.stats.record(display: id, judgeMs: judgeMs, latencyMs: latencyMs, covers: plan.items.count,
+                               whole: plan.wholeDisplay?.rawValue)
+        }
         return true
     }
 
@@ -88,6 +97,18 @@ final class TestingEditionApp {
             if !shortcutWorks { items.append(d.note(AppText.testingShortcutTaken)) }
         }
         return items
+    }
+
+    /// The Testing report window: numbers to copy by hand, and the helper's note.
+    func showReport() {
+        let facts = TestingReportWindow.facts(shortcut: shortcutWorks)
+        let w = report ?? TestingReportWindow { [weak self] note in
+            guard let self else { return "" }
+            return TestingReport.text(facts: facts, stats: self.stats, running: ProcessInfo.processInfo.systemUptime - self.startedAt,
+                                      cpu: TestingFacts.cpuSeconds() - self.cpuAtStart, note: note)
+        }
+        report = w
+        w.show()
     }
 
     /// Shows ⌃⌥⌘Q beside Quit, when the shortcut is this copy's.

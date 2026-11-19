@@ -122,6 +122,11 @@ public enum AppText {
     public static let testingRemovedOpenSettings = "Open Screen Recording settings"
     public static let testingRemovedShowApp = "Show the app in Finder"
     public static let testingRemovedDone = "Quit"
+    /// The Testing report: a window of numbers to copy by hand into a GitHub issue.
+    public static let testingReportMenu = "Testing report…"
+    public static let testingReportTitle = "\(testingName) report"
+    public static let testingReportIntro = "Nothing here leaves your Mac and nothing is saved. To send it, select the text, copy it and paste it into the testing report form on GitHub. It holds numbers about your Mac, its displays and how the app ran, and your note: no pictures, window titles, app names, addresses or anything about what was covered."
+    public static let testingReportNoteLabel = "Your note (what happened, in words; it appears in the report below):"
     /// The "How it works" window's title and opening paragraphs in the Testing edition.
     public static let testingHowItWorksTitle = "How \(testingName) works"
     public static let testingHowItWorksBody: [String] = [
@@ -157,7 +162,7 @@ public enum AppText {
         [testingName, testingLine, testingLineNoShortcut, testingBadge, testingTitle, testingDetail, testingShortcutTaken,
          testingNotSandboxed, testingNotSandboxedDetail, testingAlreadyRunning, testingQuit, testingRemove,
          testingRemovedTitle, testingRemovedDetail, testingRemovedOpenSettings, testingRemovedShowApp, testingRemovedDone,
-         testingHowItWorksTitle] + testingHowItWorksBody
+         testingHowItWorksTitle, testingReportMenu, testingReportTitle, testingReportIntro, testingReportNoteLabel] + testingHowItWorksBody
     }
 
     // MARK: The repair card

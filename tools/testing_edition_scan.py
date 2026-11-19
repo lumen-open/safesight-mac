@@ -64,6 +64,8 @@ RULES = [
               r"rename\s*\(|symlink\s*\(|link\s*\(|f?truncate\s*\("),
     ("make-move", r"moveItem\b|copyItem\b|replaceItem\w*|linkItem\b|createSymbolicLink\b|createDirectory\b"),
     ("delete", r"removeItem\b|trashItem\b|unlink\s*\(|rmdir\s*\(|removefile\b"),
+    # Names of windows and apps: the Testing report, and everything else, carries none.
+    ("names", r"kCGWindowName\b|kCGWindowOwnerName\b|localizedName\b|frontmostApplication\b|menuBarOwningApplication\b"),
 ]
 # Member calls, matched with their dot: writing through Data, String or NSData, and recycling through NSWorkspace.
 MEMBER_RULES = [
@@ -301,6 +303,9 @@ PROBES = [
     ("Kiosk mode and other apps' settings", "Probe.swift",
      "NSApp.presentationOptions = [.disableForceQuit]\nUserDefaults(suiteName: \"com.apple.dock\")?.set(1, forKey: \"k\")\n",
      {("takeover", "presentationOptions"), ("other-apps", "UserDefaults(suiteName")}),
+    ("Window titles and app names", "Probe.swift",
+     "let t = info[kCGWindowName as String]\nlet o = info[kCGWindowOwnerName as String]\nlet n = NSWorkspace.shared.frontmostApplication?.localizedName\n",
+     {("names", "kCGWindowName"), ("names", "kCGWindowOwnerName"), ("names", "frontmostApplication"), ("names", "localizedName")}),
     ("Paths and launchd words in strings", "Probe.swift",
      'let a = "/usr/local/bin/x"\nlet b = "\\(home)/Library/LaunchAgents/x.plist"\n',
      {("system path", "/usr/local/bin/x"), ("word", "LaunchAgents")}),
