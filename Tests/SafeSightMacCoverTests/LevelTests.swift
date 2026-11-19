@@ -12,6 +12,9 @@ import Testing
     @Test func theCanvasIsAboveTheScreenSaverAndTheAppAboveTheCanvas() {
         let saver = Int(CGWindowLevelForKey(.screenSaverWindow))
         #expect(CoverLevels.canvas.rawValue > saver)
+        #expect(CoverLevels.canvas.rawValue > Int(CGWindowLevelForKey(.assistiveTechHighWindow)) + 1000, "well above the assistive levels")
+        #expect(CoverLevels.appAbove.rawValue < Int(CGShieldingWindowLevel()), "the lock screen stays above every cover")
+        #expect(FaultCause.windowAboveCovers.plainWords.contains("in front of the covers"), "the repair card says why")
         #expect(CoverLevels.appAbove.rawValue > CoverLevels.canvas.rawValue)
         #expect(CoverLevels.canvas.rawValue == CoverLevel.canvas, "the cover layer checks the level the covers use")
         #expect(CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 10, height: 10)).level == CoverLevels.canvas)

@@ -12,9 +12,10 @@ import SafeSightMacWatcher
 import QuartzCore
 
 public enum CoverLevels {
-    /// The canvas sits above full-screen apps, the menu bar, menus, the Dock, notifications and screen-saver-level
-    /// windows. Not specified in the register; ST-032 finds the lowest level that works per surface. Working value. A
-    /// window of another app at or above it, over a cover, covers the display whole (`DisplayPipeline.canvasLevel`).
+    /// The canvas sits above full-screen apps, the menu bar, menus, the Dock, notifications, screen-saver-level and
+    /// assistive-technology windows, just under the lock screen (`CoverLevel.canvas`). Not specified in the register;
+    /// ST-032 checks it per surface on a test Mac. A window of another app at or above it, over a cover, covers the
+    /// display whole (`DisplayPipeline.canvasLevel`).
     public static let canvas = NSWindow.Level(rawValue: CoverLevel.canvas)
     /// The app's own windows, its menu and the repair card sit one level above the canvas (SD-229).
     public static let appAbove = NSWindow.Level(rawValue: CoverLevel.appAbove)

@@ -78,8 +78,11 @@ public enum OwnCoverColours {
 
 /// The window levels the covers use (kCGWindowLayer in the window list is the same number).
 public enum CoverLevel {
-    /// The cover canvas: one level above the screen saver's, so screen-saver-level windows of other apps stay under it.
-    public static let canvas = Int(CGWindowLevelForKey(.screenSaverWindow)) + 1
+    /// The cover canvas: as high as a window can go while the lock screen and the login window (the shielding level)
+    /// stay above it, so a cover can never hide them. That is far above the screen saver's and the assistive-technology
+    /// levels, so another app cannot simply choose a level above the covers; one that does anyway, over a cover, covers
+    /// the display whole (`DisplayPipeline.canvasLevel`). The app's own windows and menus sit one level higher.
+    public static let canvas = Int(CGShieldingWindowLevel()) - 3
     /// The app's own windows, its menu and the repair card: one level above the canvas.
     public static let appAbove = canvas + 1
 }
