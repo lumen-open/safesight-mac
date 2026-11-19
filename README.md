@@ -1,30 +1,45 @@
 # SafeSight Mac
 
-**Why this exists:** so that men and women can experience freedom, and to fight back against a dark power that takes it from them.
+**Free, open-source protection from explicit images on your Mac, with an off switch that takes as long as you decide.**
 
-SafeSight Mac covers explicit pictures anywhere on your Mac's screen: every app, every browser, every display. Everything else keeps working.
+SafeSight Mac watches your screen and covers explicit images as soon as they appear: in any app, in any browser, on every display. Everything else is left alone. Your work, your calls, your music and your code carry on as normal.
 
-When you set it up, you choose how long switching it off will take, from a week to a year. Asking to leave starts a countdown; press **Stay** and the request is gone. An optional friend can shorten the wait to a day, but can never stop you leaving.
+What makes it different is the off switch. When you set it up, you choose how long turning it off should take, anywhere from a week to a year. If you ask to leave, a countdown starts. Change your mind, press **Stay**, and it's as if you never asked. You can add a friend who's allowed to shorten the wait to a day, but nobody can ever stop you from leaving.
 
-It's free forever, open source, and runs entirely on your Mac. There's no company and no server, so nobody can shorten your wait, not even us.
+It's a promise you make to yourself on a good day that still holds on a bad one.
 
-**Status: early preview.** Step 1, the screen cover, is built and lab-tested. The lock comes next. Details: [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md).
+## Why it exists
+
+So that men and women can experience real freedom, and to fight back against a dark power that quietly takes it from them. Nobody watches you, nobody gets told, and there's no shame in using it.
+
+## How it works
+
+- **Everything stays on your Mac.** There's no account and no server, and your screen is checked on the device itself. Nothing you see is ever uploaded.
+- **Nobody can shorten your wait.** Not a friend, not support, not the people who made it. The countdown is checked against a public time signal, so changing your Mac's clock doesn't help either.
+- **It's free forever.** No trial, no card, no account. The core will never be put behind a paywall ([CORE.md](CORE.md)).
+- **The code is public,** and the lock is designed to hold even though anyone can read every line.
+
+## What it can't do
+
+- Wiping your Mac removes it.
+- It can miss an image, and it sometimes covers a harmless one.
+- It only protects this Mac, not your phone, a TV or another computer.
+
+## Where things stand
+
+This is an early preview, and there's no download yet. The screen cover is built and tested in the lab; the lock is being built now. For the details, see [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md).
 
 ## Our promise
 
-> SafeSight Mac is free, open-source software that runs entirely on your own Mac. It covers explicit pictures on your screen, and switching it off takes a wait you choose in advance. Nobody can shorten that wait for you, including the people who made it. It isn't perfect: erasing your Mac ends it, it can miss a picture or cover a harmless one, and it protects only this Mac. It's an early version built with AI, so keep a backup.
-
-## Free forever
-
-The core is free forever and will never be put behind a paywall or reduced: see [CORE.md](CORE.md).
+> SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and turning it off takes a waiting period you choose ahead of time. Nobody can cut that wait short, including us. It isn't perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It's an early release built with the help of AI, so keep a backup.
 
 ## Found a weakness?
 
-Please report it privately. See [SECURITY.md](SECURITY.md). Do not post ways around the lock in public issues.
+Please tell us privately rather than in a public issue. [SECURITY.md](SECURITY.md) explains how.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Every commit needs a `Signed-off-by` line (the [DCO](DCO)).
+Help is welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). Every commit needs a `Signed-off-by` line ([DCO](DCO)).
 
 ## Licence
 
