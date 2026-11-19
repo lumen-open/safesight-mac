@@ -4,6 +4,7 @@
 // - ⌃⌥⌘Q quits at once from anywhere, covers or not (EmergencyQuit). If another app holds the shortcut, every
 //   line says to quit from the menu bar icon instead.
 // - It checks and covers only inside the App Sandbox (Sandbox).
+// - If its main thread stops answering while a cover is up, it quits (StallWatchdog).
 // - Its line is on the menu bar item, the menu, the repair card, whole-window and whole-display covers, any cover
 //   that hides half a display, and the "How it works" window.
 // - "Remove SafeSight Mac Testing" clears its own settings and data (Removal) and says what macOS keeps.
@@ -18,6 +19,7 @@ import SafeSightMacTestingEdition
 final class TestingEditionApp {
     let sandboxed = Sandbox.isSandboxed()
     private var emergency: EmergencyQuit?
+    private var stallWatchdog: StallWatchdog?
     private weak var watcher: WatcherController?
     private var layoutObserver: NSObjectProtocol?
 
@@ -35,6 +37,10 @@ final class TestingEditionApp {
             forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.followLayout() }
         }
+        let dog = StallWatchdog { _exit(0) }
+        dog.start()
+        stallWatchdog = dog
+        watcher.onCoversShown = { [weak dog] shown in dog?.setCoverShown(shown) }
         watcher.notice = .testing(shortcut: shortcutWorks)
         return true
     }
@@ -87,6 +93,7 @@ final class TestingEditionApp {
         watcher.stop()
         _ = watcher.waitForJudging(timeout: 3)
         watcher.removeCompiledModels()
+        stallWatchdog?.stop()
         if let id = Bundle.main.bundleIdentifier, !id.isEmpty {
             Removal.run(bundleID: id)
         }

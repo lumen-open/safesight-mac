@@ -34,6 +34,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     private var capture: ScreenCapture?
     private var watchdog: Timer?
     var onChange: (() -> Void)?
+    /// Told whether any cover is on screen, each time the covers change (the Testing edition's stall watchdog).
+    var onCoversShown: ((Bool) -> Void)?
     var repairActions: RepairCard.Actions?
     /// Where the models' compiled copies go while the app runs; removed when it quits (CompiledModels.swift).
     /// Main thread only.
@@ -117,6 +119,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         watchdog?.invalidate(); watchdog = nil
         presenter.removeAll()
         repairCard.hide()
+        onCoversShown?(false)
         onChange?()
     }
 
@@ -252,6 +255,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             if let d = shown[id]?.display { shown[id] = .covered(d, because: .judgingBehind) }
         }
         presenter.apply(Array(shown.values))
+        onCoversShown?(shown.values.contains { $0.wholeDisplay != nil || !$0.items.isEmpty })
         // The repair card: whenever a display has been covered whole for two seconds or more. It sits on a display
         // that is covered whole, never on one the owner is working on.
         let causes = shown.values.compactMap(\.wholeDisplay)
