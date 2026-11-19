@@ -175,6 +175,14 @@ extension CoverPlan {
         #expect(WayOut.menuBarHeight(display: display, topInset: 30, windows: [bar]) == 24, "never more than the menu bar window")
     }
 
+    @Test func onlyTheMainDisplayLeavesItsMenuBar() {
+        #expect(WayOut.leavesMenuBar(display: 1, main: 1))
+        #expect(!WayOut.leavesMenuBar(display: 2, main: 1),
+                "another display's menu bar is covered with the rest of it: on a display covered for a long time it would show unjudged content")
+        #expect(WayOut.leavesMenuBar(display: 5, main: 1, mainRepeats: 5), "in a mirror set, the display the main one repeats")
+        #expect(!WayOut.leavesMenuBar(display: 2, main: 1, mainRepeats: 5))
+    }
+
     @Test func aWholeDisplayCoverLeavesTheMenuBarAndCoversTheDock() throws {
         let d = DisplayDescriptor(id: 5, bounds: CGRect(x: 0, y: 0, width: 1440, height: 900))
         let plan = CoverPlan.covered(d, because: .displayChanging)

@@ -38,10 +38,14 @@ public struct CapturedFrame: Sendable {
     public var dirty: [PixelRect]?
     /// The frame's time in seconds (a monotonic clock).
     public var time: TimeInterval
+    /// The generation of the stream that captured it (`GenerationCounter`). A display change raises the generation a
+    /// display's frames need, so a frame from an older stream never lowers a cover drawn because of the change.
+    public var generation: Int
 
     public init(display: DisplayDescriptor, status: FrameStatus, image: RGBAImage?, map: CaptureMap?,
-                dirty: [PixelRect]?, time: TimeInterval) {
+                dirty: [PixelRect]?, time: TimeInterval, generation: Int = 0) {
         self.display = display; self.status = status; self.image = image; self.map = map; self.dirty = dirty; self.time = time
+        self.generation = generation
     }
 }
 
@@ -87,7 +91,9 @@ public struct FrameMailbox: Sendable {
     public var isEmpty: Bool { pending == nil }
 
     public mutating func offer(_ f: CapturedFrame) {
-        guard var old = pending else { pending = f; return }
+        // A frame from another stream (a restart after a display change) replaces the waiting one outright: changed
+        // areas and pixels from different streams never mix.
+        guard var old = pending, old.generation == f.generation else { pending = f; return }
         let dirty: [PixelRect]?
         if let a = old.dirty, let b = f.dirty, old.map?.pixelWidth == f.map?.pixelWidth, old.map?.pixelHeight == f.map?.pixelHeight {
             dirty = a + b
@@ -109,5 +115,63 @@ public struct FrameMailbox: Sendable {
     public mutating func take() -> CapturedFrame? {
         defer { pending = nil }
         return pending
+    }
+}
+
+/// Frames waiting to be judged: one mailbox per display, taken in turn. The judging queue takes one frame at a time
+/// and gives every display, and every other piece of work (a display change, a fault), its turn in between, so a
+/// display whose screen never stops changing (a video, an animation) can never keep another display's frames waiting.
+/// Thread-safe: capture queues offer, the judging queue takes, the main thread reads how long frames have waited.
+public final class FrameQueue: @unchecked Sendable {
+    private let lock = NSLock()
+    private var boxes: [UInt32: FrameMailbox] = [:]
+    /// Displays with a frame waiting, in the order they get their turn.
+    private var turn: [UInt32] = []
+    /// When each display's waiting frame (the oldest change not yet judged) arrived.
+    private var since: [UInt32: TimeInterval] = [:]
+    private var scheduled = false
+    private var isOpen = false
+
+    public init() {}
+
+    /// Starts taking frames.
+    public func open() { lock.withLock { isOpen = true } }
+
+    /// Stops taking frames and drops every frame waiting.
+    public func close() {
+        lock.withLock { isOpen = false; boxes = [:]; turn = []; since = [:] }
+    }
+
+    /// Adds a frame. Returns true when the caller must schedule a drain on the judging queue (none is scheduled).
+    public func offer(_ f: CapturedFrame, now: TimeInterval) -> Bool {
+        lock.withLock {
+            guard isOpen else { return false }
+            let id = f.display.id
+            if boxes[id]?.isEmpty ?? true {
+                turn.append(id)
+                since[id] = now
+            }
+            boxes[id, default: FrameMailbox()].offer(f)
+            if scheduled { return false }
+            scheduled = true
+            return true
+        }
+    }
+
+    /// The next frame, from the display whose turn it is. Returns nil, and marks the drain finished, when no frame waits.
+    public func next() -> CapturedFrame? {
+        lock.withLock {
+            while !turn.isEmpty {
+                let id = turn.removeFirst()
+                if let f = boxes[id]?.take() { since[id] = nil; return f }
+            }
+            scheduled = false
+            return nil
+        }
+    }
+
+    /// How long each display's oldest unjudged frame has waited.
+    public func waiting(now: TimeInterval) -> [UInt32: TimeInterval] {
+        lock.withLock { since.mapValues { now - $0 } }
     }
 }

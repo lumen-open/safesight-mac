@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var resumeTimer: Timer?
     private var permissionTimer: Timer?
     private var howItWorks: HowItWorksWindow?
+    /// CoreGraphics' display reconfiguration callback: every display is covered the moment macOS announces a change.
+    private var reconfiguration: DisplayReconfiguration?
 
     private var rule: DetectorRule {
         get { DetectorRule(rawValue: UserDefaults.standard.string(forKey: "detectorRule") ?? "") ?? .balanced }
@@ -36,22 +38,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshPractice()
         watcher.onChange = { [weak self] in self?.updateIcon() }
 
+        // Display changes (SD-112). The reconfiguration callback is the earliest word: its begin call comes before
+        // macOS applies a change, and every display is covered before it returns. The notifications are later
+        // backstops, and the watcher also reads the display lists again four times a second.
+        let r = DisplayReconfiguration { [weak self] change, _ in
+            MainActor.assumeIsolated {
+                switch change {
+                case .willChange: self?.watcher.displaysWillChange()
+                case .didChange: self?.watcher.displaysDidChange()
+                }
+            }
+        }
+        r.start()
+        reconfiguration = r
+        // Sleep, display sleep and a session switch hold every cover until their own counterpart.
         let ws = NSWorkspace.shared.notificationCenter
-        ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.watcher.coverAll(because: .displayChanging) } }
-        ws.addObserver(forName: NSWorkspace.sessionDidResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.watcher.coverAll(because: .displayChanging) } }
-        for n in [NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
-            ws.addObserver(forName: n, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.watcher.rebuild(because: .displayChanging) } }
+        let pairs: [(NSNotification.Name, NSNotification.Name, HoldReason)] = [
+            (NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification, .sleep),
+            (NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification, .displaysAsleep),
+            (NSWorkspace.sessionDidResignActiveNotification, NSWorkspace.sessionDidBecomeActiveNotification, .session),
+        ]
+        for (away, back, reason) in pairs {
+            ws.addObserver(forName: away, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.watcher.suspend(reason) } }
+            ws.addObserver(forName: back, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.watcher.resume(reason) } }
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.watcher.rebuild(because: .displayChanging) } }
+            MainActor.assumeIsolated { self?.watcher.displaysDidChange() } }
 
         startIfAllowed()
     }
 
-    func applicationWillTerminate(_ note: Notification) { watcher.stop() }
+    func applicationWillTerminate(_ note: Notification) {
+        reconfiguration?.stop()
+        watcher.stop()
+    }
 
     // MARK: Running
 
@@ -81,10 +103,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateIcon()
     }
 
+    /// Try again keeps every display covered while it restarts (no cover comes down in between), unless covering
+    /// cannot run at all (paused, or no Screen Recording).
     private func tryAgain() {
-        watcher.stop()
         refreshPractice()
-        startIfAllowed()
+        if permission, pausedUntil == nil, !pausedIndefinitely {
+            watcher.restart(rule: rule)
+            updateIcon()
+        } else {
+            watcher.stop()
+            startIfAllowed()
+        }
     }
 
     // MARK: Pause (practice state only: step 1 has no lock)
@@ -116,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var status: WatcherStatus {
         WatcherStatus.compute(permission: permission, paused: pausedUntil, pausedIndefinitely: pausedIndefinitely,
-                              detectorFailed: watcher.detectorFailed, plans: Array(watcher.plans.values), running: watcher.running)
+                              detectorFailed: watcher.detectorFailed, plans: watcher.plans, running: watcher.running)
     }
 
     private func updateIcon() {

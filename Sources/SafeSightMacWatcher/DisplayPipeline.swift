@@ -51,6 +51,12 @@ public final class DisplayPipeline {
     var runEstimateMs = 0.0
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
     public private(set) var judged = false
+    /// Frames from streams older than this generation are never judged here: the display has changed since they
+    /// were captured (raised by `cover(because:until:)`).
+    public private(set) var requiredGeneration = 0
+    /// The stream generation of the last frame judged. The first frame of another stream is judged whole: its changed
+    /// areas say nothing about what this display showed before.
+    var judgedGeneration: Int?
     public private(set) var lastPlan: CoverPlan
     /// Stage timings of the last `process` call (durations and counts only; nothing is written anywhere).
     public private(set) var lastTimings = PipelineTimings()
@@ -64,9 +70,11 @@ public final class DisplayPipeline {
 
     public func setBudgetShare(_ rate: Double) { bucket.rate = rate }
 
-    /// Covers the whole display: it cannot be judged. It stays covered until a frame is judged again.
+    /// Covers the whole display: it cannot be judged. It stays covered until a frame is judged again; with `until`,
+    /// until a frame from a stream of at least that generation is judged (a display change).
     @discardableResult
-    public func cover(because cause: FaultCause) -> CoverPlan {
+    public func cover(because cause: FaultCause, until generation: Int? = nil) -> CoverPlan {
+        if let g = generation { requiredGeneration = max(requiredGeneration, g) }
         judged = false
         lastPlan = .covered(display, because: cause)
         return lastPlan
@@ -76,6 +84,7 @@ public final class DisplayPipeline {
     public func reset() {
         held = []; pending = []; lastImage = nil; lastMap = nil; lastFullPass = nil
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
+        judgedGeneration = nil
         cover(because: .notYetJudged)
     }
 
@@ -92,6 +101,8 @@ public final class DisplayPipeline {
     /// `pointer` (global points), when known, puts the window under it, and the pictures nearest it, first.
     public func process(_ f: CapturedFrame, snapshot: WindowSnapshot, now: TimeInterval, date: Date = Date(),
                         pointer: CGPoint? = nil, provisional: ((CoverPlan) -> Void)? = nil) -> CoverPlan {
+        // A frame captured before the last display change is never judged: the display stays as it was (covered).
+        guard f.generation >= requiredGeneration else { return lastPlan }
         display = f.display
         switch f.status {
         case .blank, .suspended, .stopped:
@@ -99,18 +110,21 @@ public final class DisplayPipeline {
         case .started:
             return judged ? lastPlan : cover(because: .notYetJudged)
         case .idle:
-            // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels.
-            guard judged, let img = lastImage, let map = lastMap, !(held.isEmpty && pending.isEmpty) else { return lastPlan }
+            // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels (of this stream only).
+            guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap, !(held.isEmpty && pending.isEmpty) else { return lastPlan }
             return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
         case .complete:
             guard let img = f.image, let map = f.map, map.pixelWidth == img.width, map.pixelHeight == img.height, map.coversDisplay else {
                 return cover(because: .badFrameMetadata)
             }
-            let previous = lastMap.map { $0 == map } == true ? lastImage : nil
+            // The first frame of another stream is judged whole, with no motion carried over from the old stream.
+            let sameStream = judgedGeneration == f.generation
+            let previous = sameStream && lastMap.map { $0 == map } == true ? lastImage : nil
             let dt = lastFrameTime.map { f.time - $0 } ?? 0
             lastImage = img; lastMap = map; lastFrameTime = f.time
+            judgedGeneration = f.generation
             frameSerial += 1
-            return run(img, previous: previous, frameInterval: dt, map: map, dirty: f.dirty, snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
+            return run(img, previous: previous, frameInterval: dt, map: map, dirty: sameStream ? f.dirty : nil, snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
         }
     }
 

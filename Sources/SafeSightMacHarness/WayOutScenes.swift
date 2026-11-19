@@ -52,8 +52,8 @@ enum WayOutScenes {
 
     static func bar(_ ctx: CGContext, _ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ c: CGColor) { rr(ctx, CGRect(x: x, y: y, width: w, height: h), h / 2, c) }
 
-    /// Wallpaper, menu bar and Dock.
-    static func desktop(_ ctx: CGContext, _ p: Palette) {
+    /// Wallpaper, menu bar and (on the main display) the Dock.
+    static func desktop(_ ctx: CGContext, _ p: Palette, dock withDock: Bool = true) {
         let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: [p.wallTop, p.wallBottom] as CFArray, locations: [0, 1])!
         ctx.drawLinearGradient(g, start: .zero, end: CGPoint(x: size.width * 0.3, y: size.height), options: [.drawsAfterEndLocation])
         ctx.setFillColor(p.menuBar); ctx.fill(CGRect(x: 0, y: 0, width: size.width, height: menuBar))
@@ -63,6 +63,7 @@ enum WayOutScenes {
             bar(ctx, x, 9, CGFloat(w), 6, i == 0 ? p.menuInk : p.menuInk.copy(alpha: 0.75)!); x += CGFloat(w) + 18
         }
         for (i, w) in [14, 14, 16, 14, 64].enumerated() { bar(ctx, size.width - 230 + CGFloat(i) * 34 + (i == 4 ? 10 : 0), 9, CGFloat(w), 6, p.menuInk.copy(alpha: 0.8)!) }
+        guard withDock else { return }
         let icons: [UInt32] = [0x4A90D9, 0xF2A33A, 0x6E8FA8, 0xE8C547, 0x5B6CD6, 0xD9694A, 0x7FA9B8, 0x9AA3AD, 0x3D9DA8]
         let dw = CGFloat(icons.count) * 48 + CGFloat(icons.count - 1) * 8 + 20
         let dock = CGRect(x: (size.width - dw) / 2, y: size.height - 74, width: dw, height: 66)
