@@ -32,8 +32,10 @@ public final class DisplayPipeline {
         var lastGlobal: CGRect? = nil
         /// Since when its window has been missing from the window list (a closed window, or a list read that left it out).
         var missingSince: TimeInterval? = nil
-        /// Where its own judge call (step 3b) last found it flagged; judged there again only once something changed.
+        /// Where and when its own judge call (step 3b) last found it flagged; judged there again once something changed,
+        /// or after `RECHECK_FLAGGED_EVERY` in any case.
         var flaggedAt: CGRect? = nil
+        var flaggedWhen: TimeInterval? = nil
     }
     var held: [Held] = []
     var pending: [CGRect] = []
@@ -416,7 +418,8 @@ public final class DisplayPipeline {
             let spent = PipelineTimings.ms(since: tRun)
             guard spent < callWallMs || checked == 0 else { break }
             guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
-            if held[i].flaggedAt == g && !reported.contains(where: { $0.intersects(g) }) && !moved.contains(where: { $0.0 == held[i].target }) { continue }
+            if held[i].flaggedAt == g, !reported.contains(where: { $0.intersects(g) }), !moved.contains(where: { $0.0 == held[i].target }),
+               now - (held[i].flaggedWhen ?? now) < Register.RECHECK_FLAGGED_EVERY { continue }
             bucket.refill(now: now)
             var budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
             budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(Double(Self.recheckFloor), (callWallMs - spent) / msPerJudgement))))
@@ -432,6 +435,7 @@ public final class DisplayPipeline {
             if judged { bucket.spend(v.judgements) }
             if v.coverWindow || v.regions.contains(where: { $0.display != .clear && $0.reason != .overload }) {
                 held[i].clean = 0
+                if held[i].flaggedAt != g || now - (held[i].flaggedWhen ?? now) >= Register.RECHECK_FLAGGED_EVERY { held[i].flaggedWhen = now }
                 held[i].flaggedAt = g
             } else if !v.regions.isEmpty && v.overloaded == 0, !OwnCoverColours.shown(in: img, area) {
                 held[i].clean += 1

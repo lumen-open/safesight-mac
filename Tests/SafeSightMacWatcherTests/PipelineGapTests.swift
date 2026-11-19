@@ -452,6 +452,17 @@ final class VerdictScript: Judging {
         _ = p.process(Fixtures.frame(touched(Fixtures.blank(600, 400), 1), display: d, scale: 1, dirty: [PixelRect(x: 40, y: 40, w: 16, h: 16)], t: 0.6),
                       snapshot: list, now: 0.6)
         #expect(j.calls.filter { $0.area == own }.count == 2, "its place changed: judged again")
+        // Nothing changes from here on: judged again on a slow rhythm, never left for good.
+        var t = 0.6, rechecks = 0
+        func step() { t += 0.2; _ = p.process(idle(t), snapshot: list, now: t); rechecks += p.lastTimings.rechecks }
+        for _ in 0..<3 { step() }   // settles on its merged place
+        rechecks = 0
+        let since = p.held.compactMap(\.flaggedWhen).max()!
+        while t + 0.2 < since + Register.RECHECK_FLAGGED_EVERY { step() }
+        #expect(rechecks == 0, "not within RECHECK_FLAGGED_EVERY")
+        t = since + Register.RECHECK_FLAGGED_EVERY
+        step()
+        #expect(rechecks >= 1, "judged again after RECHECK_FLAGGED_EVERY")
     }
 
     @Test func theFirstFrameIsJudgedWithinOneCallsWorthInAll() {
@@ -463,7 +474,7 @@ final class VerdictScript: Judging {
         #expect(p.lastTimings.judgements <= Register.DETECTOR_CALL_CAP, "\(j.budgets)")
     }
 
-    @Test func whenJudgingKeepsOverrunningPicturesAreBlurredBeforeJudgingButTextIsNot() {
+    @Test func afterASlowFramePicturesAreBlurredBeforeJudgingButTextIsNot() {
         final class Watch: Judging {
             var early: [CoverPlan] = [], seen: [CoverPlan]?
             let picture = PixelRect(x: 120, y: 120, w: 60, h: 60)
@@ -482,13 +493,7 @@ final class VerdictScript: Judging {
         let changed = PixelRect(x: 100, y: 100, w: 200, h: 120)
         var t = 0.0
         _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: t), snapshot: snap, now: t)   // 150 ms: over the goal
-        // One slow frame is not enough for the rule: nothing is blurred before judging yet.
-        t += 0.2; j.seen = nil; j.early = []
-        _ = p.process(Fixtures.frame(touched(img, 1), display: d, scale: 1, dirty: [changed], t: t), snapshot: snap, now: t) { j.early.append($0) }
-        #expect((j.seen ?? []).isEmpty)
-        t += 0.2
-        _ = p.process(Fixtures.frame(touched(img, 2), display: d, scale: 1, dirty: [changed], t: t), snapshot: snap, now: t)
-        // Three slow frames in a row: the picture in the change is blurred before judging; the rest of the change is not.
+        // From the first slow frame: the picture in the change is blurred before judging; the rest of the change is not.
         t += 0.2; j.seen = nil; j.early = []
         _ = p.process(Fixtures.frame(touched(img, 3), display: d, scale: 1, dirty: [changed], t: t), snapshot: snap, now: t) { j.early.append($0) }
         let early = j.seen ?? []
