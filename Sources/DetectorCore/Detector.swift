@@ -46,6 +46,12 @@ public final class Detector {
     let hot = HotContexts()
     /// Referee judgements made so far (for budgets and benchmarks).
     public private(set) var refereeCalls = 0
+    /// Model failures since this detector was made, per model id: a model threw, or gave a score that is not
+    /// usable (`usable`). Counts only, never a score, so a self-check can read them. A failure is never clear:
+    /// the entry is left unjudged (covered or blurred, and judged again, as for any fault), and a failed
+    /// tie-breaker leaves the dispute unanswered, which covers.
+    public private(set) var modelFaults: [String: Int] = [:]
+    private var faultTotal = 0
     /// Stage timings since the last `resetTimings()` (durations and counts only).
     public private(set) var timings = JudgeTimings()
     public func resetTimings() { timings = JudgeTimings() }
@@ -123,6 +129,8 @@ public final class Detector {
         var key: ExactKey
         var outcome: TileOutcome?
         var judged = false
+        /// The outcome came from the verdict cache in this call.
+        var fromCache = false
     }
 
     /// Splits a rectangle into overlapping pieces whose aspect ratio is at most 2:1 (spec section 4).
@@ -177,6 +185,7 @@ public final class Detector {
     public func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect? = nil, budget callerBudget: Int? = nil,
                       progress: ((JudgeProgress) -> Void)? = nil) -> FrameVerdict {
         let tCall = nowNs()
+        let faultsBefore = faultTotal
         timings.calls += 1
         defer { timings.totalMs += msSince(tCall) }
         let A = area?.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
@@ -231,15 +240,26 @@ public final class Detector {
             tasks.append(Task(rect: s, pieces: [s], pass: .slice, gridMember: false, key: VerdictCache.key(frame, s, pass: "slice", version: v)))
         }
 
+        // Where a blur can apply to a picture region in this call: a small picture in a covered-start context
+        // or on an untrusted display, or a picture under `hotBelow` in a hot window.
+        let smallContain = ctx.startsCovered || ctx.display != .trusted
+        func blurCanApply(_ t: Task) -> Bool {
+            t.pass == .region && ((smallContain && t.rect.shortSide < config.containBelow) || (wasHot && t.rect.shortSide < config.hotBelow))
+        }
+
         // Cache, then choose what to judge within the budget: in task order, every uncached task whose cost
         // still fits (as the lab build did, judging as it went). A task with the same pixels as one chosen
-        // earlier in this call takes that task's outcome, as the cache would have given it.
+        // earlier in this call takes that task's outcome, as the cache would have given it. Where a blur can
+        // apply, a cached clean outcome is used only if it was settled for the blur too (the margin rule,
+        // `TileOutcome.settledForBlur`); otherwise the picture is judged again, with fresh jitter.
         var budget = min(config.maxJudgementsPerCall, max(0, callerBudget ?? config.maxJudgementsPerCall))
         var judgements = 0
         var chosen: [Int] = [], sameAs: [Int: Int] = [:], firstWithKey: [ExactKey: Int] = [:]
         var pendingCost = 0
         for i in tasks.indices {
-            if let o = cache.get(tasks[i].key) { tasks[i].outcome = o; tasks[i].judged = true; timings.cacheHits += 1; continue }
+            if let o = cache.get(tasks[i].key), o.settledForBlur || !blurCanApply(tasks[i]) {
+                tasks[i].outcome = o; tasks[i].judged = true; tasks[i].fromCache = true; timings.cacheHits += 1; continue
+            }
             timings.cacheMisses += 1
             if let j = firstWithKey[tasks[i].key] { sameAs[i] = j; continue }
             let cost = tasks[i].pieces.count * (models.models.count + (tasks[i].rect.shortSide < config.containBelow ? models.students.count : 0))
@@ -260,9 +280,11 @@ public final class Detector {
 
         // The fastest model first, over every chosen picture region; a flag is shown at once (provisional).
         var fast: [Int: [String: Float]] = [:]
+        // Tasks the fastest model failed on: left unjudged in this call (a fault), never judged clear.
+        var fastFailed: Set<Int> = []
         if progress != nil, let fm = fastestModel {
             for i in chosen where tasks[i].pass == .region {
-                guard let top = topScore(frame, tasks[i], fm) else { continue }
+                guard let top = topScore(frame, tasks[i], fm) else { fastFailed.insert(i); continue }
                 fast[i] = [fm.id: top]
                 var flagged = top >= table.cutoffs(model: fm.id, band: Band(shortSide: tasks[i].rect.shortSide)).cover
                 #if KESTREL_LAB
@@ -276,8 +298,9 @@ public final class Detector {
             }
         }
 
-        // Then every model the full rule needs (the fast model's score is not judged twice).
-        for i in chosen {
+        // Then every model the full rule needs (the fast model's score is not judged twice). A task a model
+        // failed on stays unjudged: it is covered or blurred as overload and judged again in a later call.
+        for i in chosen where !fastFailed.contains(i) {
             if let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) {
                 tasks[i].outcome = o; tasks[i].judged = true
                 // Kept only if it covers or was clearly clean (the margin rule); otherwise judged again next time.
@@ -299,7 +322,6 @@ public final class Detector {
 
         var out: [RegionVerdict] = []
         var coverWindow = false, strike = false, overloaded = 0
-        let smallContain = ctx.startsCovered || ctx.display != .trusted
         for t in tasks {
             guard t.judged, let o = t.outcome else {
                 overloaded += 1
@@ -335,7 +357,10 @@ public final class Detector {
             } else if o.strikeBoth && t.rect.shortSide >= config.strikeMinSide && !o.forced {
                 strike = true
             }
-            if display == .clear && t.pass == .region && !o.clean {
+            // A cached clean outcome not settled for a blur counts as not clean wherever a blur applies. It can
+            // reach here only when the window turned hot in this call; it is blurred until judged again.
+            let clean = o.clean && (o.settledForBlur || !t.fromCache)
+            if display == .clear && t.pass == .region && !clean {
                 if t.rect.shortSide < config.containBelow && smallContain { display = .contain; reason = .containedSmall }
                 else if (wasHot || becameHot) && t.rect.shortSide < config.hotBelow { display = .contain; reason = .hotContext }
             }
@@ -351,7 +376,8 @@ public final class Detector {
         }
         timings.judgements += judgements
         timings.overloaded += overloaded
-        return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded)
+        return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded,
+                            modelFaults: faultTotal - faultsBefore)
     }
 
     #if KESTREL_LAB
@@ -404,7 +430,30 @@ public final class Detector {
         }
     }
 
-    /// One model's highest score over a task's pieces, each with fresh jitter. The score stays here.
+    /// How far above 1 a flag score may be and still be usable: rounding, when two half-precision class
+    /// probabilities are summed (NSFWJS sums two classes).
+    static let scoreSlack: Float = 0.001
+
+    /// Whether a model's flag score can be used. It is a sum of class probabilities, so a working model gives a
+    /// number from 0 to 1. Not a number, infinite, negative or above 1 (beyond `scoreSlack`) means the model
+    /// failed for that entry. A failure is never read as "not flagged".
+    static func usable(_ s: Float) -> Bool { s.isFinite && s >= 0 && s <= 1 + scoreSlack }
+
+    /// One model's scores for `tensors`, or nil when the model failed: it threw, gave not one score per
+    /// tensor, or gave any unusable score (one is enough: the highest of the rest could look clean). Every
+    /// failure is counted in `modelFaults`.
+    func usableScores(_ m: ScoringModel, _ tensors: [[UInt8]]) -> [Float]? {
+        guard let s = try? m.flagScores(tensors), s.count == tensors.count, !s.isEmpty, s.allSatisfy(Self.usable) else {
+            modelFaults[m.id, default: 0] += 1
+            timings.modelFaults[m.id, default: 0] += 1
+            faultTotal += 1
+            return nil
+        }
+        return s
+    }
+
+    /// One model's highest score over a task's pieces, each with fresh jitter; nil when the model failed
+    /// (`usableScores`). The score stays here.
     func topScore(_ frame: RGBAImage, _ t: Task, _ m: ScoringModel) -> Float? {
         var tensors: [[UInt8]] = []
         var t0 = nowNs()
@@ -415,28 +464,20 @@ public final class Detector {
         let pre = msSince(t0)
         timings.preprocessMs[m.id, default: 0] += pre
         t0 = nowNs()
-        guard let scores = try? m.flagScores(tensors) else { return nil }
+        let scores = usableScores(m, tensors)
         let inf = msSince(t0)
         timings.inferenceMs[m.id, default: 0] += inf
         timings.tiles[m.id, default: 0] += tensors.count
         let c = modelCost[m.id] ?? (0, 0)
         modelCost[m.id] = (c.ms + pre + inf, c.tiles + tensors.count)
-        return Self.validTop(scores, count: tensors.count)
-    }
-
-    /// The highest score, only when a model gave one finite score for every tensor. Anything else (too few or too
-    /// many scores, a NaN or an infinity anywhere) gives nil: the task is left unjudged, which covers, and a model
-    /// that misbehaves never reads as clean.
-    static func validTop(_ scores: [Float], count: Int) -> Float? {
-        guard count > 0, scores.count == count, scores.allSatisfy(\.isFinite) else { return nil }
-        return scores.max()
+        return scores?.max()
     }
 
     /// Judges every piece of a task with every model (jitter before every judgement) and folds the
     /// scores into outcome flags. Scores do not outlive this function. `precomputed` holds scores already
     /// made for this task in this call (the fastest model's), so no model judges the same task twice.
     /// The outcome is marked cacheable here, where the scores are, and only a flag leaves (the margin rule,
-    /// `VerdictCache.CLEAN_CACHE_MARGIN`).
+    /// `VerdictCache.cleanLevel`).
     func judgeTask(_ frame: RGBAImage, _ t: Task, precomputed: [String: Float] = [:]) -> TileOutcome? {
         let band = Band(shortSide: t.rect.shortSide)
         var o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
@@ -444,14 +485,18 @@ public final class Detector {
         if let s = standIn, t.pieces.contains(where: { s.detects(frame, $0) }) { o.forced = true }
         #endif
         var strikeA = false, strikeB = false
-        // Clearly clean: every model's top score below the margin's share of its cover cut-off for this band.
-        var clearlyClean = true
+        // Clearly clean: every model's top score below half its cover cut-off for this band. Settled for a blur
+        // too: below half its lowest action cut-off. A picture region this small can be blurred (in a hot window
+        // or a covered-start context) when a score passes the containment cut-off, so that cut-off acts on it.
+        var clearlyClean = true, settledForBlur = true
+        let containable = t.pass == .region && t.rect.shortSide < max(config.containBelow, config.hotBelow)
         let small = t.rect.shortSide < config.containBelow
         let judges = models.models + (small ? models.students : [])
         for m in judges {
             let cut = table.cutoffs(model: m.id, band: band)
             guard let top = precomputed[m.id] ?? topScore(frame, t, m) else { return nil }
-            if !(top < VerdictCache.CLEAN_CACHE_MARGIN * cut.cover) { clearlyClean = false }
+            if !(top < VerdictCache.cleanLevel(cut, containable: false)) { clearlyClean = false }
+            if !(top < VerdictCache.cleanLevel(cut, containable: containable)) { settledForBlur = false }
             let flag = top >= cut.cover
             if top > cut.clean { o.clean = false }
             if top >= cut.gridMember { o.gridMember = true }
@@ -474,19 +519,22 @@ public final class Detector {
             }
             timings.preprocessMs[r.id, default: 0] += msSince(t0)
             t0 = nowNs()
-            let refScores = try? r.flagScores(tensors)
+            // A tie-breaker that failed (`usableScores`) has not answered: the dispute stays unanswered and covers.
+            let refScores = usableScores(r, tensors)
             timings.inferenceMs[r.id, default: 0] += msSince(t0)
             timings.tiles[r.id, default: 0] += tensors.count
-            // A tie-breaker that gives no usable score has not settled the dispute: it stays covered.
-            if let scores = refScores, let top = Self.validTop(scores, count: tensors.count) {
+            if let top = refScores?.max() {
                 o.refereeRan = true
                 o.refereeFlag = top >= cut.cover
                 refereeCalls += t.pieces.count
             }
         }
         // Cache a cover (reusing it only ever covers) or a clearly clean outcome. A borderline-clean one, a
-        // dispute the tie-breaker declined among them, is judged again with fresh jitter when it comes back.
-        o.cacheable = covers(o) || clearlyClean
+        // dispute the tie-breaker declined among them, is judged again with fresh jitter when it comes back; one
+        // not settled for a blur is judged again wherever a blur can apply.
+        let c = covers(o)
+        o.cacheable = c || clearlyClean
+        o.settledForBlur = c || (clearlyClean && settledForBlur)
         return o
     }
 }

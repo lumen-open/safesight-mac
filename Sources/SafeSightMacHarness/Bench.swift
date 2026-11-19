@@ -155,6 +155,7 @@ final class Bench {
         m("processTotalMs") { $0.totalMs }
         m("judgements") { Double($0.pipe.judgements) }
         m("overloaded") { Double($0.pipe.overloaded) }
+        m("modelFaults") { Double($0.pipe.modelFaults) }
         m("cacheHits") { Double($0.judge.cacheHits) }
         m("cacheMisses") { Double($0.judge.cacheMisses) }
         return out

@@ -66,6 +66,8 @@ public struct PipelineTimings: Sendable, Equatable {
     public var calls = 0
     public var judgements = 0
     public var overloaded = 0
+    /// Model failures reported by the judge calls (counts only; their entries are covered or blurred).
+    public var modelFaults = 0
     /// Plans handed out before the final one (moved covers, cover-first blurs, fast-model blurs), with the
     /// time each was ready, from the start of the call.
     public var provisionalMs: [Double] = []

@@ -29,6 +29,8 @@ public struct JudgeTimings: Sendable, Equatable {
     public var finderCacheHits = 0
     public var judgements = 0
     public var overloaded = 0
+    /// Per model id: judgements the model failed (it threw or gave an unusable score; `Detector.usable`).
+    public var modelFaults: [String: Int] = [:]
     public init() {}
 
     public mutating func add(_ o: JudgeTimings) {
@@ -37,6 +39,7 @@ public struct JudgeTimings: Sendable, Equatable {
         for (k, v) in o.preprocessMs { preprocessMs[k, default: 0] += v }
         for (k, v) in o.inferenceMs { inferenceMs[k, default: 0] += v }
         for (k, v) in o.tiles { tiles[k, default: 0] += v }
+        for (k, v) in o.modelFaults { modelFaults[k, default: 0] += v }
     }
 
     /// Everything spent on models (preprocessing and inference, every model).
