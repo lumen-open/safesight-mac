@@ -9,9 +9,9 @@ import AppKit
 public enum OwnMenus {
     /// Lifts every open menu window of this app above the cover canvas. Returns how many were lifted.
     @discardableResult
-    public static func lift(_ windows: [NSWindow] = NSApp.windows, isMenu: @MainActor (NSWindow) -> Bool = { OwnMenus.isMenuWindow($0) }) -> Int {
+    public static func lift(_ windows: [NSWindow]? = nil, isMenu: @MainActor (NSWindow) -> Bool = { OwnMenus.isMenuWindow($0) }) -> Int {
         var n = 0
-        for w in windows where isMenu(w) && w.level.rawValue < CoverLevels.appAbove.rawValue {
+        for w in windows ?? NSApp.windows where isMenu(w) && w.level.rawValue < CoverLevels.appAbove.rawValue {
             w.level = CoverLevels.appAbove
             n += 1
         }
