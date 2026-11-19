@@ -58,17 +58,28 @@ final class TestingEditionApp {
         stallWatchdog = dog
         watcher.onCoversShown = { [weak dog] shown in dog?.setCoverShown(shown) }
         watcher.notice = .testing(shortcut: shortcutWorks)
-        watcher.onJudged = { [weak self] id, judgeMs, latencyMs, plan in
-            self?.stats.record(display: id, judgeMs: judgeMs, latencyMs: latencyMs, covers: plan.items.count,
-                               whole: plan.wholeDisplay?.rawValue)
+        watcher.onJudged = { [weak self] id, judgeMs, latencyMs, _, idle, t in
+            self?.stats.record(display: id, judgeMs: judgeMs, latencyMs: latencyMs,
+                               pass: .init(idle: idle, blurAtOnce: t.blurAtOnceFirings > 0, coveredFirst: t.coveredFirst,
+                                           leftForLater: t.leftForLater, unjudged: t.overloaded, rechecks: t.rechecks))
         }
+        watcher.onCaptured = { [weak self] status in self?.stats.recordCaptured(status.rawValue) }
+        // What was actually drawn, early plans included: the report counts what was on screen.
+        watcher.onDrawn = { [weak self] plans in
+            self?.stats.recordDrawn(plans.map { .init(display: $0.display.id, whole: $0.wholeDisplay?.rawValue, covers: $0.plainCount, blurs: $0.blurCount) })
+        }
+        watcher.onWaitingCover = { [weak self] in self?.stats.recordWaitingCover() }
         return true
     }
+
+    /// Told when whether ⌃⌥⌘Q is this copy's changed (the menu bar item's words change with it).
+    var onShortcutChanged: (() -> Void)?
 
     /// Registers ⌃⌥⌘Q again if the keyboard layout changed, and keeps the covers' line truthful.
     func followLayout() {
         guard let e = emergency, e.followLayout() else { return }
         watcher?.notice = .testing(shortcut: shortcutWorks)
+        onShortcutChanged?()
     }
 
     /// ⌃⌥⌘Q: covers off, and the app ends at once. It does not wait for anything that could be stuck; macOS removes

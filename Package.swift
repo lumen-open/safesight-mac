@@ -49,7 +49,7 @@ var targets: [Target] = [
     // The cover-only menu-bar app.
     .executableTarget(name: "SafeSightMacApp",
                       dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCapture", "SafeSightMacCover", "DetectorCore"]
-                          + (testing ? ["SafeSightMacTestingEdition"] : []),
+                          + (testing ? ["SafeSightMacTestingEdition"] : []) + (lab ? ["LabStandIn"] : []),
                       swiftSettings: appSettings),
     // The lab harness: frames from files or synthetic scenes through the pipeline, never the screen.
     .executableTarget(name: "SafeSightMacHarness", dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCover", "DetectorCore", "Preprocess"] + (lab ? ["LabStandIn"] : []),
