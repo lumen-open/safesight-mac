@@ -7,7 +7,9 @@
 // The card never takes the keyboard on its own: it is a non-activating panel that becomes key only if a
 // view needs typing (none does), so ⌘W and ⌘[ keep going to the app underneath even after a click on it.
 //
-// In the Testing edition it also carries the edition's line, with ⌃⌥⌘Q.
+// It sits on a display that is covered whole, never on one the owner is working on: with a third display
+// covered for good (DISPLAYS_MAX is 2), a card in the middle of the main display would never go away (found in
+// the Testing edition's safety pass). In the Testing edition it also carries the edition's line, with ⌃⌥⌘Q.
 import AppKit
 import SafeSightMacCore
 import SafeSightMacWatcher
@@ -26,12 +28,20 @@ public final class RepairCard {
     private(set) var panel: RepairPanel?
     private var actions: Actions?
     private var shown: (cause: FaultCause, pause: Bool, dark: Bool, notice: CoverNotice?)?
+    private var placedOn: UInt32?
     /// The Testing edition's line, under the way out; nil in the release edition.
     public var notice: CoverNotice?
     public init() {}
 
-    /// Shows the card for the given causes, or hides it when there are none.
-    public func show(causes: [FaultCause], actions: Actions) {
+    /// Which display the card goes on: the main display when it is covered whole, else the first display that is
+    /// (in `covered` order), else nil (the main display). Never a display that is not covered whole.
+    public static func display(covered: [UInt32], main: UInt32) -> UInt32? {
+        covered.contains(main) ? main : covered.first
+    }
+
+    /// Shows the card for the given causes, or hides it when there are none. `display` is the display it sits on:
+    /// one covered whole (`display(covered:main:)`); the main display when nil.
+    public func show(causes: [FaultCause], actions: Actions, on display: UInt32? = nil) {
         self.actions = actions
         guard let first = causes.first else { hide(); return }
         let theme = CoverTheme.current
@@ -48,10 +58,11 @@ public final class RepairCard {
             p.setContentSize(v.frame.size)
             shown = (first, actions.pause != nil, theme.isDark, notice)
         }
-        // Centred on the main display when it appears; after that the owner may move it.
-        if !p.isVisible, let screen = NSScreen.main {
+        // Centred on its display when it appears or its display changes; after that the owner may move it.
+        if !p.isVisible || placedOn != display, let screen = display.flatMap(CoverCanvas.screen) ?? NSScreen.main {
             let f = screen.visibleFrame
             p.setFrameOrigin(CGPoint(x: f.midX - p.frame.width / 2, y: f.midY - p.frame.height / 2))
+            placedOn = display
         }
         p.orderFrontRegardless()
     }

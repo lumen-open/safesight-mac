@@ -252,11 +252,14 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             if let d = shown[id]?.display { shown[id] = .covered(d, because: .judgingBehind) }
         }
         presenter.apply(Array(shown.values))
-        // The repair card: whenever a display has been covered whole for two seconds or more.
+        // The repair card: whenever a display has been covered whole for two seconds or more. It sits on a display
+        // that is covered whole, never on one the owner is working on.
         let causes = shown.values.compactMap(\.wholeDisplay)
         if causes.isEmpty { wholeSince = nil } else if wholeSince == nil { wholeSince = now }
         if let s = wholeSince, now - s >= 2, let actions = repairActions {
-            repairCard.show(causes: causes.sorted { $0 == .notYetJudged ? false : $1 == .notYetJudged }, actions: actions)
+            let covered = shown.values.filter { $0.wholeDisplay != nil }.map(\.display.id).sorted()
+            repairCard.show(causes: causes.sorted { $0 == .notYetJudged ? false : $1 == .notYetJudged }, actions: actions,
+                            on: RepairCard.display(covered: covered, main: CGMainDisplayID()))
         } else {
             repairCard.hide()
         }

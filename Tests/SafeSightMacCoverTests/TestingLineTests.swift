@@ -120,6 +120,15 @@ import Testing
         let v = RepairCardView.make(cause: .detectorUnavailable, pause: true, theme: .light, target: nil, tryAgain: nil, pause: nil, quit: nil)
         #expect(!views(v).contains { ($0.accessibilityLabel() ?? "").hasPrefix("Testing edition") })
     }
+
+    @Test func theCardSitsOnACoveredDisplayNeverOnOneInUse() {
+        // A third display covered for good (more than DISPLAYS_MAX): the card goes there, not over the main display.
+        #expect(RepairCard.display(covered: [3], main: 1) == 3)
+        #expect(RepairCard.display(covered: [2, 3], main: 1) == 2)
+        // The main display covered whole: the card goes there.
+        #expect(RepairCard.display(covered: [1, 3], main: 1) == 1)
+        #expect(RepairCard.display(covered: [], main: 1) == nil)
+    }
 }
 
 @MainActor @Suite struct HowItWorksPageTests {
