@@ -13,9 +13,19 @@
 #  4. The release app contains no part of the Testing edition (no emergency quit), and no Testing build is a lab
 #     build.
 # Writes only under .build-testing/ and a temporary folder it removes. Installs nothing, runs nothing it builds.
+#
+# Usage: tools/check-testing-edition.sh            builds the Testing app (without models) and checks it
+#        tools/check-testing-edition.sh APP        also checks APP, an assembled "SafeSight Mac Testing.app" (with
+#                                                  its models, signed ad hoc or with Developer ID): run it on every
+#                                                  copy before it reaches anyone
 set -eu
+given="${1:-}"
+if [ -n "$given" ]; then
+  [ -d "$given" ] || { echo "FAIL: no app at $given"; exit 1; }
+  given="$(cd "$(dirname "$given")" && pwd)/$(basename "$given")"
+fi
 cd "$(dirname "$0")/.."
-unset SAFESIGHTMAC_LAB KESTREL_LAB
+unset SAFESIGHTMAC_LAB KESTREL_LAB SAFESIGHTMAC_TESTING
 scratch=.build-testing
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/safesightmac-testing-check.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
@@ -49,7 +59,9 @@ open(sys.argv[2], "w").write("\n".join(sorted(seen)) + "\n")
 print("Modules: the Testing app is built from %d known modules and no outside package" % len(seen))
 EOF
 
-# Their sources, as the Testing build compiles them (short string literals never reach the binary's strings).
+# Their sources, as the Testing build compiles them (short string literals never reach the binary's strings). The
+# scanner first checks itself on a made-up file.
+python3 tools/testing_edition_scan.py --self-test || fail=1
 # shellcheck disable=SC2046
 python3 tools/testing_edition_scan.py Sources $(cat "$tmp/modules.txt") || fail=1
 
@@ -57,7 +69,7 @@ python3 tools/testing_edition_scan.py Sources $(cat "$tmp/modules.txt") || fail=
 SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --product safesight-mac >/dev/null
 tools/make-app.sh --testing --no-models org.example.safesightmac.testing "$tmp" >"$tmp/make.txt" 2>&1 \
   || { cat "$tmp/make.txt"; echo "FAIL: the Testing app could not be assembled"; exit 1; }
-app="$tmp/SafeSight Mac Testing.app"
+app="${given:-$tmp/SafeSight Mac Testing.app}"
 bin="$app/Contents/MacOS/safesight-mac"
 [ -x "$bin" ] || { echo "FAIL: no Testing app was assembled"; exit 1; }
 
@@ -78,6 +90,8 @@ calls="$calls"'|^_socket$|^_connect$|^_bind$|^_listen$|^_accept$|^_sendto$|^_get
 calls="$calls"'|^_CGImageDestination|_OBJC_CLASS_\$_AVAssetWriter|_OBJC_CLASS_\$_SCRecordingOutput|_OBJC_CLASS_\$_NSPasteboard|^_CGWindowListCreateImage|^_CGDisplayCreateImage'
 calls="$calls"'|^_CGDisplayCapture|^_CGCaptureAllDisplays|^_CGShieldingWindow|^_SetSystemUIMode|^_CGAssociateMouseAndMouseCursorPosition|^_CGDisplayHideCursor|^_CGWarpMouseCursorPosition'
 calls="$calls"'|^_CGEventTapCreate|^_CGEventPost|^_CGBeginDisplayConfiguration|^_CGSetDisplayTransfer|^_CGDisplaySetDisplayMode|^_IOPM|^_IORegistryEntrySet|^_SACLockScreen'
+calls="$calls"'|^_dlopen$|^_dlsym$|^_NSClassFromString$|^_NSSelectorFromString$|^_objc_getClass$|^_objc_lookUpClass$|^_sel_registerName$|^_sel_getUid$'
+calls="$calls"'|^_LSOpen|^_LSRegisterURL|^_LSSetDefault|^_CFPreferencesSet|_OBJC_CLASS_\$_SCScreenshotManager|^_fopen$|^_fwrite$'
 if grep -E "$calls" "$tmp/imports.txt"; then bad "it imports a function or class that could install, authorise, spawn, connect, record or take over the screen"; fi
 
 # Words and paths it may never hold: launchd and helper places, system folders, commands, and the Objective-C
@@ -85,19 +99,30 @@ if grep -E "$calls" "$tmp/imports.txt"; then bad "it imports a function or class
 strings -a "$bin" > "$tmp/strings.txt"
 words='launchctl|LaunchDaemons|LaunchAgents|PrivilegedHelperTools|StartupItems|LoginItems|SMPrivilegedExecutables|SMAuthorizedClients|RunAtLoad|KeepAlive|ProgramArguments|BundleProgram'
 words="$words"'|sudo|osascript|dscl|sysadminctl|dseditgroup|pwpolicy|createhomedir|kickstart|tccutil|spctl|csrutil|systemsetup|mobileconfig|administrator privileges'
-words="$words"'|setPresentationOptions|setDesktopImageURL|setPersistentDomain|forceTerminate|representationUsingType|TIFFRepresentation|writeToFile'
-words="$words"'|standin|labforced|checkerstandin|labtilescores|LabTile'
-if grep -niwE "$words" "$tmp/strings.txt"; then bad "it holds a word that belongs to installing, running commands, other apps or the lab"; fi
+if grep -niwE "$words" "$tmp/strings.txt"; then bad "it holds a word that belongs to installing or running commands"; fi
+# Objective-C methods, matched anywhere in a name: kiosk mode, the desktop picture, other apps' settings, killing or
+# opening apps, watching keys, starting again at login, full-screen takeover, saving pictures and files.
+methods='setPresentationOptions|setDesktopImageURL|setPersistentDomain|forceTerminate|representationUsingType|TIFFRepresentation'
+methods="$methods"'|writeToFile|writeToURL|enableRelaunchOnLogin|addGlobalMonitorForEvents|enterFullScreenMode|launchApplication'
+methods="$methods"'|openApplicationAtURL|withApplicationAtURL|recycleURLs|duplicateURLs|setDefaultApplicationAtURL'
+if grep -nE "$methods" "$tmp/strings.txt"; then bad "it names a method that changes things outside the app or saves files"; fi
+if grep -ciE 'standin|labforced|checkerstandin|labtilescores|LabTile' "$tmp/strings.txt" >/dev/null; then bad "it holds the lab stand-in"; fi
 paths='(^|[^~A-Za-z0-9_])/(Library|System|usr|bin|sbin|etc|private|var|opt|Applications)/'
 if grep -nE "$paths" "$tmp/strings.txt"; then bad "it names a system path (it may write only inside its own sandbox container)"; fi
 grep -q 'Testing edition: no lock. Quit any time with' "$tmp/strings.txt" || bad "the Testing line is missing: is this the Testing build?"
 grep -q '_RegisterEventHotKey' "$tmp/imports.txt" || bad "the emergency quit (RegisterEventHotKey) is missing"
 
-# 3. The bundle: shape, Info.plist, signature and entitlements.
-(cd "$app" && find . -mindepth 1 | sort) > "$tmp/shape.txt"
+# 3. The bundle: shape, Info.plist, signature and entitlements. Its models, when it has them, may only be the three
+# model packages.
+(cd "$app" && find . -mindepth 1 | sort) > "$tmp/all.txt"
+grep -v '^\./Contents/Resources/models' "$tmp/all.txt" > "$tmp/shape.txt" || true
+grep '^\./Contents/Resources/models' "$tmp/all.txt" > "$tmp/models.txt" || true
 printf '%s\n' ./Contents ./Contents/Info.plist ./Contents/MacOS ./Contents/MacOS/safesight-mac ./Contents/Resources \
   ./Contents/_CodeSignature ./Contents/_CodeSignature/CodeResources | sort > "$tmp/shape-want.txt"
 diff -u "$tmp/shape-want.txt" "$tmp/shape.txt" || bad "the bundle holds something other than the app itself (no Library, PlugIns, XPCServices, Helpers or Frameworks)"
+if grep -vE '^\./Contents/Resources/models(/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector)(/.*)?)?$' "$tmp/models.txt"; then
+  bad "the models folder holds something other than the three model packages"
+fi
 plutil -convert json -o "$tmp/info.json" "$app/Contents/Info.plist"
 codesign -d --entitlements - --xml "$app" 2>/dev/null > "$tmp/ent.plist" || true
 plutil -convert json -o "$tmp/ent.json" "$tmp/ent.plist" 2>/dev/null || echo '{}' > "$tmp/ent.json"
@@ -118,8 +143,8 @@ if info.get("LSUIElement") is not True:
     print("FAIL: it would get a Dock icon"); ok = False
 if ent != {"com.apple.security.app-sandbox": True}:
     print("FAIL: its entitlements are %s, not exactly the App Sandbox" % ent); ok = False
-if "Signature=adhoc" not in sig or "runtime" not in sig:
-    print("FAIL: not signed ad hoc with the hardened runtime:\n" + sig); ok = False
+if not ("Signature=adhoc" in sig or "Authority=Developer ID Application" in sig) or "runtime" not in sig:
+    print("FAIL: not signed (ad hoc or Developer ID) with the hardened runtime:\n" + sig); ok = False
 if ok:
     print("Bundle: a plain app named SafeSight Mac Testing (%s); one entitlement: %s" % (info["CFBundleIdentifier"], ", ".join(ent)))
 sys.exit(0 if ok else 1)

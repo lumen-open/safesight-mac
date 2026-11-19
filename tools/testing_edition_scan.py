@@ -8,6 +8,7 @@ Testing build leaves out (`#if !SAFESIGHTMAC_TESTING`, `#if SAFESIGHTMAC_LAB`, .
 condition counts as compiled in, so nothing is skipped on a guess.
 
 Usage: testing_edition_scan.py SOURCES_DIR MODULE...
+       testing_edition_scan.py --self-test     (the scanner checks itself on a made-up file first)
 """
 import os
 import re
@@ -28,7 +29,24 @@ APIS = [
     r"CGWarpMouseCursorPosition", r"CGDisplayHideCursor", r"CGAssociateMouseAndMouseCursorPosition", r"IOPM\w+",
     r"IORegistryEntrySet\w*", r"setDesktopImageURL", r"setPersistentDomain", r"forceTerminate", r"kill", r"killpg",
     r"ptrace", r"task_for_pid", r"fork", r"vfork", r"execv\w*", r"execl\w*", r"popen", r"system\s*\(",
+    # Reaching code by name, which no scan could follow.
+    r"dlopen", r"dlsym", r"NSClassFromString", r"NSSelectorFromString", r"objc_getClass", r"objc_lookUpClass",
+    r"sel_registerName",
+    # Watching other apps' keys, starting again at login, other apps' settings, opening other apps, screenshots,
+    # taking over the screen.
+    r"addGlobalMonitorForEvents\w*", r"enableRelaunchOnLogin", r"CFPreferencesSet\w*", r"UserDefaults\s*\(\s*suiteName",
+    r"LSOpen\w*", r"LSRegisterURL", r"launchApplication\w*", r"openApplication\w*", r"\.recycle\(", r"SCScreenshotManager",
+    r"enterFullScreenMode",
+    # Writing data to files: the app writes no file of its own (its settings go through UserDefaults).
+    r"\.write\(\s*to", r"write\(\s*toFile", r"FileHandle\s*\(\s*for(Writing|Updating)\w*", r"createFile\s*\(",
+    r"fopen", r"fwrite", r"OutputStream", r"NSOutputStream",
+    # Opening anything with NSWorkspace, except the one line that opens the Screen Recording settings.
+    r"NSWorkspace\.shared\.open\(",
 ]
+# Lines allowed although they match: the Screen Recording settings, opened when the person asks.
+ALLOWED = {
+    'if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(u) }',
+}
 IMPORTS = ["ServiceManagement", "SystemExtensions", "Security", "SecurityFoundation", "SecurityInterface",
            "OpenDirectory", "Collaboration", "EndpointSecurity", "NetworkExtension", "Network", "WebKit", "IOKit",
            "AVFoundation", "ScriptingBridge", "OSAKit", "LocalAuthentication", "AuthenticationServices"]
@@ -39,25 +57,72 @@ WORDS = ["launchctl", "LaunchDaemons", "LaunchAgents", "PrivilegedHelperTools", 
 PATH = re.compile(r'"(/(Library|System|usr|bin|sbin|etc|private|var|opt|Applications)/[^"]*)"')
 
 
+def is_string_start(src, i):
+    """Whether a string literal starts at i: optional #s (a raw string), then a quote."""
+    while i < len(src) and src[i] == "#":
+        i += 1
+    return i < len(src) and src[i] == '"'
+
+
+def string_end(src, i):
+    """The index just after the string literal that starts at i: plain, multi-line (triple quotes) or raw (#"..."#),
+    with interpolations (backslash-paren, or backslash-#-paren in raw strings), which may hold strings of their own."""
+    n, h = len(src), 0
+    while i + h < n and src[i + h] == "#":
+        h += 1
+    j = i + h
+    multi = src.startswith('"""', j)
+    j += 3 if multi else 1
+    close, esc = ('"""' if multi else '"') + "#" * h, "\\" + "#" * h
+    while j < n:
+        if src.startswith(close, j):
+            return j + len(close)
+        if src.startswith(esc, j):
+            k = j + len(esc)
+            j = interpolation_end(src, k + 1) if k < n and src[k] == "(" else k + 1
+            continue
+        if not multi and src[j] == "\n":
+            return j
+        j += 1
+    return n
+
+
+def interpolation_end(src, i):
+    """The index just after the parenthesis that closes an interpolation whose code starts at i."""
+    depth, j, n = 1, i, len(src)
+    while j < n:
+        if is_string_start(src, j) and (src[j] == '"' or src[j] == "#"):
+            j = string_end(src, j)
+            continue
+        if src[j] == "(":
+            depth += 1
+        elif src[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return j + 1
+        j += 1
+    return n
+
+
 def strip_comments(src):
-    """Drops // and /* */ comments, keeping string literals (and their line breaks) as they are."""
+    """Drops // and /* */ comments (which nest in Swift), keeping string literals, and line breaks, as they are."""
     out, i, n = [], 0, len(src)
     while i < n:
-        if src.startswith('"""', i):
-            j = src.find('"""', i + 3)
-            j = n if j < 0 else j + 3
+        if is_string_start(src, i):
+            j = string_end(src, i)
             out.append(src[i:j]); i = j
-        elif src[i] == '"':
-            j = i + 1
-            while j < n and src[j] != '"' and src[j] != "\n":
-                j += 2 if src[j] == "\\" else 1
-            out.append(src[i:j + 1]); i = j + 1
         elif src.startswith("//", i):
             j = src.find("\n", i)
             i = n if j < 0 else j
         elif src.startswith("/*", i):
-            j = src.find("*/", i + 2)
-            j = n if j < 0 else j + 2
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if src.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif src.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
+                else:
+                    j += 1
             out.append("\n" * src.count("\n", i, j)); i = j
         else:
             out.append(src[i]); i += 1
@@ -113,11 +178,67 @@ def compiled_lines(code):
     return out
 
 
+API = re.compile(r"(?<![\w.])(?:" + "|".join(a if a.endswith(r"\(") else a + r"\b" for a in APIS) + r")"
+                 r"|(?<=\w)\.recycle\(|(?<=\.)write\(\s*to\b")
+IMP = re.compile(r"^\s*(@\w+\s+)*import\s+(" + "|".join(IMPORTS) + r")\b")
+WORD = re.compile(r"\b(" + "|".join(re.escape(w) for w in WORDS) + r")\b", re.IGNORECASE)
+
+
+def scan_text(path, text):
+    found = []
+    for k, line in enumerate(compiled_lines(strip_comments(text)), 1):
+        if line.strip() in ALLOWED:
+            continue
+        for rx, what in ((API, "API"), (IMP, "import"), (WORD, "word")):
+            for hit in rx.finditer(line):
+                found.append("%s:%d: %s %r" % (path, k, what, hit.group(0).strip()))
+        for hit in PATH.finditer(line):
+            found.append("%s:%d: system path %r" % (path, k, hit.group(1)))
+    return found
+
+
+PROBE = r'''import Foundation
+import ServiceManagement
+// A comment naming launchctl, SMAppService and Process() is not code.
+/* nested /* block */ naming osascript */
+#if !SAFESIGHTMAC_TESTING
+let skipped = "/Library/LaunchDaemons"
+#else
+let p = Process()
+#endif
+#if DEBUG
+let unknown = "/bin/launchctl"
+#endif
+#if SAFESIGHTMAC_LAB
+let lab = "sudo"
+#elseif SAFESIGHTMAC_TESTING
+func f() { try? SMAppService.mainApp.register(); _ = "kickstart" }
+#endif
+let tricky = "a \(f("//")) b"; let x = dlopen(nil, 0)
+let raw = #"a "quoted" // not a comment"#; let c = NSClassFromString("X")
+let url = "x // y"; try data.write(to: url)
+NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Other.app"))
+if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(u) }
+'''
+PROBE_EXPECTED = {(2, "import"), (8, "API"), (11, "word"), (11, "system path"), (16, "API"), (16, "word"), (18, "API"),
+                  (19, "API"), (20, "API"), (21, "API"), (21, "system path")}
+
+
+def self_test():
+    kinds = ("system path", "import", "API", "word")
+    got = {(int(f.split(":")[1]), next(k for k in kinds if f.split(": ", 1)[1].startswith(k + " ")))
+           for f in scan_text("probe", PROBE)}
+    if got != PROBE_EXPECTED:
+        print("FAIL: the source scanner's self-test: missing %s, unexpected %s" % (sorted(PROBE_EXPECTED - got), sorted(got - PROBE_EXPECTED)))
+        return 1
+    print("Source scanner self-test: a made-up file's comments, compiled-out code and allowed line are told apart")
+    return 0
+
+
 def main():
+    if sys.argv[1:] == ["--self-test"]:
+        return self_test()
     root, modules = sys.argv[1], sys.argv[2:]
-    api = re.compile(r"\b(" + "|".join(a if a.endswith(r"\(") else a + r"\b" for a in APIS) + r")")
-    imp = re.compile(r"^\s*(@\w+\s+)*import\s+(" + "|".join(IMPORTS) + r")\b")
-    word = re.compile(r"\b(" + "|".join(re.escape(w) for w in WORDS) + r")\b", re.IGNORECASE)
     found, files = [], 0
     for m in modules:
         for dirpath, _, names in os.walk(os.path.join(root, m)):
@@ -126,13 +247,7 @@ def main():
                     continue
                 files += 1
                 path = os.path.join(dirpath, name)
-                lines = compiled_lines(strip_comments(open(path, encoding="utf-8").read()))
-                for k, line in enumerate(lines, 1):
-                    for rx, what in ((api, "API"), (imp, "import"), (word, "word")):
-                        for hit in rx.finditer(line):
-                            found.append("%s:%d: %s %r" % (path, k, what, hit.group(0).strip()))
-                    for hit in PATH.finditer(line):
-                        found.append("%s:%d: system path %r" % (path, k, hit.group(1)))
+                found += scan_text(path, open(path, encoding="utf-8").read())
     for f in found:
         print("FAIL: " + f)
     if found:
