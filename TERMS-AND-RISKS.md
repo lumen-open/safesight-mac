@@ -7,9 +7,9 @@ SafeSight Mac is free, open-source software. Please read this short page before 
 
 ## Who it's for
 
-- **Adults.** It's for people aged 18 or over. The app can't check your age, so we're trusting you.
-- **Your own Mac.** Install it only on a Mac you own and control. Not a work or school Mac, and not one you share with someone else.
-- **Your own choice.** Set it up for yourself, never for someone else, and never make it a condition of a job, a home, a membership or anyone's support. If someone else controls your password, they control your Mac, and no software can change that.
+- **For yourself, or for your child.** Set it up for yourself, or, if you're a parent or legal guardian, for your child on a Mac you own. Never set it up for another adult, and never make it a condition of a job, a home, a membership or anyone's support.
+- **A Mac you own.** Install it only on a Mac you own and control, not a work or school Mac. On a shared family Mac, it protects the accounts it's set up on.
+- **Who holds the password matters.** If someone else controls your password, they control your Mac, and no software can change that.
 
 ## What it is, and what it isn't
 
