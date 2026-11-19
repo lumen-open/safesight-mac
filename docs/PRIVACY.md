@@ -29,12 +29,15 @@ Nothing. There's no account, no email address, no payment, no analytics, no cras
 |---|---|---|
 | **What's on your screen** | Judged in memory by the watcher, on your Mac. Never written to a file, a log or a crash report, and never sent anywhere | Today, for the preview app |
 | **What was covered** | Nowhere. No list is kept of what was covered, where or when | Today |
+| **New pictures and videos you download** | Checked in memory on your Mac as they arrive. A clearly explicit file stays where it is, with its permissions changed so nothing can open or send it until your wait is over. Its contents are never changed, nothing about it is written down, and nothing is sent anywhere | Designed |
 | **Checked-picture memory** | A short memory of pictures already judged, so they aren't judged twice. It holds a fingerprint and a verdict, never the picture, lives in memory only and is gone when the app quits | Today |
 | **Your settings** | The preview keeps one setting, the detector mode, in macOS's ordinary preferences. The full product keeps its settings in the lock's own root-only folder | Today / Designed |
 | **The lock's records** | Your wait, your requests, the lock's clock, your keyholder's public key. In a root-only folder on your Mac, removed when you leave | Designed (written and tested, not yet installed on any Mac) |
 | **The hidden admin password** | Made on your Mac and never shown. It leaves the Mac only inside a capsule that opens with your Recovery Key, after your wait | Designed |
 | **Capsules** | One set on your Mac, and any copy you choose to keep elsewhere, such as your own cloud folder | Designed |
 | **Your Recovery Key** | Your password manager. The app checks you saved it and doesn't keep it | Designed |
+
+**The note for AI coding tools** (designed). SafeSight Mac leaves a short note on your Mac asking AI coding tools not to help get around the lock. Tools that read it pass it to their makers along with the rest of what you ask them, so those makers learn that this Mac has a content filter, and nothing more. You can switch the note off at setup.
 
 macOS's own crash reports stay on your Mac under macOS's rules. Whether macOS can move the watcher's memory to disk is being checked for each macOS version we test.
 
