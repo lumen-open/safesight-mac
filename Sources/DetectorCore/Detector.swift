@@ -46,6 +46,12 @@ public final class Detector {
     let hot = HotContexts()
     /// Referee judgements made so far (for budgets and benchmarks).
     public private(set) var refereeCalls = 0
+    /// Model failures since this detector was made, per model id: a model threw, or gave a score that is not
+    /// usable (`usable`). Counts only, never a score, so a self-check can read them. A failure is never clear:
+    /// the entry is left unjudged (covered or blurred, and judged again, as for any fault), and a failed
+    /// tie-breaker leaves the dispute unanswered, which covers.
+    public private(set) var modelFaults: [String: Int] = [:]
+    private var faultTotal = 0
     /// Stage timings since the last `resetTimings()` (durations and counts only).
     public private(set) var timings = JudgeTimings()
     public func resetTimings() { timings = JudgeTimings() }
@@ -172,6 +178,7 @@ public final class Detector {
     public func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect? = nil, budget callerBudget: Int? = nil,
                       progress: ((JudgeProgress) -> Void)? = nil) -> FrameVerdict {
         let tCall = nowNs()
+        let faultsBefore = faultTotal
         timings.calls += 1
         defer { timings.totalMs += msSince(tCall) }
         let A = area?.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
@@ -247,9 +254,11 @@ public final class Detector {
 
         // The fastest model first, over every chosen picture region; a flag is shown at once (provisional).
         var fast: [Int: [String: Float]] = [:]
+        // Tasks the fastest model failed on: left unjudged in this call (a fault), never judged clear.
+        var fastFailed: Set<Int> = []
         if progress != nil, let fm = fastestModel {
             for i in chosen where tasks[i].pass == .region {
-                guard let top = topScore(frame, tasks[i], fm) else { continue }
+                guard let top = topScore(frame, tasks[i], fm) else { fastFailed.insert(i); continue }
                 fast[i] = [fm.id: top]
                 var flagged = top >= table.cutoffs(model: fm.id, band: Band(shortSide: tasks[i].rect.shortSide)).cover
                 #if KESTREL_LAB
@@ -263,8 +272,9 @@ public final class Detector {
             }
         }
 
-        // Then every model the full rule needs (the fast model's score is not judged twice).
-        for i in chosen {
+        // Then every model the full rule needs (the fast model's score is not judged twice). A task a model
+        // failed on stays unjudged: it is covered or blurred as overload and judged again in a later call.
+        for i in chosen where !fastFailed.contains(i) {
             if let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) {
                 tasks[i].outcome = o; tasks[i].judged = true
                 // Kept only if it covers or was clearly clean (the margin rule); otherwise judged again next time.
@@ -334,7 +344,8 @@ public final class Detector {
         }
         timings.judgements += judgements
         timings.overloaded += overloaded
-        return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded)
+        return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded,
+                            modelFaults: faultTotal - faultsBefore)
     }
 
     #if KESTREL_LAB
@@ -387,7 +398,30 @@ public final class Detector {
         }
     }
 
-    /// One model's highest score over a task's pieces, each with fresh jitter. The score stays here.
+    /// How far above 1 a flag score may be and still be usable: rounding, when two half-precision class
+    /// probabilities are summed (NSFWJS sums two classes).
+    static let scoreSlack: Float = 0.001
+
+    /// Whether a model's flag score can be used. It is a sum of class probabilities, so a working model gives a
+    /// number from 0 to 1. Not a number, infinite, negative or above 1 (beyond `scoreSlack`) means the model
+    /// failed for that entry. A failure is never read as "not flagged".
+    static func usable(_ s: Float) -> Bool { s.isFinite && s >= 0 && s <= 1 + scoreSlack }
+
+    /// One model's scores for `tensors`, or nil when the model failed: it threw, gave not one score per
+    /// tensor, or gave any unusable score (one is enough: the highest of the rest could look clean). Every
+    /// failure is counted in `modelFaults`.
+    func usableScores(_ m: ScoringModel, _ tensors: [[UInt8]]) -> [Float]? {
+        guard let s = try? m.flagScores(tensors), s.count == tensors.count, !s.isEmpty, s.allSatisfy(Self.usable) else {
+            modelFaults[m.id, default: 0] += 1
+            timings.modelFaults[m.id, default: 0] += 1
+            faultTotal += 1
+            return nil
+        }
+        return s
+    }
+
+    /// One model's highest score over a task's pieces, each with fresh jitter; nil when the model failed
+    /// (`usableScores`). The score stays here.
     func topScore(_ frame: RGBAImage, _ t: Task, _ m: ScoringModel) -> Float? {
         var tensors: [[UInt8]] = []
         var t0 = nowNs()
@@ -398,13 +432,13 @@ public final class Detector {
         let pre = msSince(t0)
         timings.preprocessMs[m.id, default: 0] += pre
         t0 = nowNs()
-        guard let scores = try? m.flagScores(tensors) else { return nil }
+        let scores = usableScores(m, tensors)
         let inf = msSince(t0)
         timings.inferenceMs[m.id, default: 0] += inf
         timings.tiles[m.id, default: 0] += tensors.count
         let c = modelCost[m.id] ?? (0, 0)
         modelCost[m.id] = (c.ms + pre + inf, c.tiles + tensors.count)
-        return scores.max() ?? 0
+        return scores?.max()
     }
 
     /// Judges every piece of a task with every model (jitter before every judgement) and folds the
@@ -449,12 +483,13 @@ public final class Detector {
             }
             timings.preprocessMs[r.id, default: 0] += msSince(t0)
             t0 = nowNs()
-            let refScores = try? r.flagScores(tensors)
+            // A tie-breaker that failed (`usableScores`) has not answered: the dispute stays unanswered and covers.
+            let refScores = usableScores(r, tensors)
             timings.inferenceMs[r.id, default: 0] += msSince(t0)
             timings.tiles[r.id, default: 0] += tensors.count
-            if let scores = refScores {
+            if let top = refScores?.max() {
                 o.refereeRan = true
-                o.refereeFlag = (scores.max() ?? 0) >= cut.cover
+                o.refereeFlag = top >= cut.cover
                 refereeCalls += t.pieces.count
             }
         }

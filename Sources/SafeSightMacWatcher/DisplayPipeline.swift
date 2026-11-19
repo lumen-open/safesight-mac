@@ -246,6 +246,7 @@ public final class DisplayPipeline {
             timing.calls += 1
             timing.judgements += v.judgements
             timing.overloaded += v.overloaded
+            timing.modelFaults += v.modelFaults
             tStage = PipelineTimings.now()
             defer { timing.planMs += PipelineTimings.ms(since: tStage) }
             if judged { bucket.spend(v.judgements) }

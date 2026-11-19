@@ -290,9 +290,10 @@ final class CleanCacheMarginTests: XCTestCase {
     }
 
     func testEveryModelMustBeBelowTheMarginStrictly() {
-        // (family A, family B, cached?) against a cut-off of 0.5, so the margin is 0.25.
+        // (family A, family B, cached?) against a cut-off of 0.5, so the margin is 0.25. A score that is not a
+        // number is no clean score at all: it is a model failure, never clear and never cached (ModelFaultTests).
         for (a, b, cached) in [(Float(0.1), Float(0.2499), true), (0.1, 0.25, false), (0.25, 0.1, false), (0, 0.49, false),
-                               (0.49, 0, false), (0, 0, true), (0.1, .nan, false)] {
+                               (0.49, 0, false), (0, 0, true)] {
             let (d, _, _, _) = scored(a, b)
             let first = d.judge(img, context: ctx)
             XCTAssertEqual(over(first)?.display, .clear, "\(a), \(b): clean either way")
