@@ -32,7 +32,7 @@ trap 'rm -rf "$tmp"' EXIT
 fail=0
 bad() { echo "FAIL: $*"; fail=1; }
 
-# 1. The modules the Testing app is made of.
+# 1. The modules the Testing app is made of, and the folders their sources come from.
 SAFESIGHTMAC_TESTING=1 swift package describe --type json > "$tmp/describe.json"
 python3 - "$tmp/describe.json" "$tmp/modules.txt" <<'EOF' || fail=1
 import json, sys
@@ -55,7 +55,24 @@ if seen != allowed:
     sys.exit(1)
 if d.get("dependencies"):
     print("FAIL: the package depends on outside packages: %s" % d["dependencies"]); sys.exit(1)
-open(sys.argv[2], "w").write("\n".join(sorted(seen)) + "\n")
+# What each target is made of: only its declared folder, no build-tool plugin (which could generate code) and no
+# resources (which could carry a launchd file). A key describe does not use today, such as one for plugins or
+# resources, fails the check until it is looked at.
+known = {"c99name", "module_type", "name", "path", "product_memberships", "sources", "target_dependencies", "type"}
+plugins = [t["name"] for t in d["targets"] if t.get("type") == "plugin"]
+if plugins:
+    print("FAIL: the package has build-tool plugins: %s" % plugins); sys.exit(1)
+paths = []
+for n in sorted(seen):
+    t = targets[n]
+    extra = sorted(k for k in t if k not in known and t[k])
+    if extra:
+        print("FAIL: %s declares %s; look at it before the Testing app may use it" % (n, extra)); sys.exit(1)
+    path = t.get("path", "")
+    if not path or path.startswith("/") or ".." in path.split("/"):
+        print("FAIL: %s has the path %r, outside the package" % (n, path)); sys.exit(1)
+    paths.append(path)
+open(sys.argv[2], "w").write("\n".join(paths) + "\n")
 print("Modules: the Testing app is built from %d known modules and no outside package" % len(seen))
 EOF
 
@@ -63,7 +80,7 @@ EOF
 # scanner first checks itself on a made-up file.
 python3 tools/testing_edition_scan.py --self-test || fail=1
 # shellcheck disable=SC2046
-python3 tools/testing_edition_scan.py Sources $(cat "$tmp/modules.txt") || fail=1
+python3 tools/testing_edition_scan.py $(cat "$tmp/modules.txt") || fail=1
 
 # 2. The binary.
 SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --product safesight-mac >/dev/null
@@ -92,6 +109,7 @@ calls="$calls"'|^_CGDisplayCapture|^_CGCaptureAllDisplays|^_CGShieldingWindow|^_
 calls="$calls"'|^_CGEventTapCreate|^_CGEventPost|^_CGBeginDisplayConfiguration|^_CGSetDisplayTransfer|^_CGDisplaySetDisplayMode|^_IOPM|^_IORegistryEntrySet|^_SACLockScreen'
 calls="$calls"'|^_dlopen$|^_dlsym$|^_NSClassFromString$|^_NSSelectorFromString$|^_objc_getClass$|^_objc_lookUpClass$|^_sel_registerName$|^_sel_getUid$'
 calls="$calls"'|^_LSOpen|^_LSRegisterURL|^_LSSetDefault|^_CFPreferencesSet|_OBJC_CLASS_\$_SCScreenshotManager|^_fopen$|^_fwrite$'
+calls="$calls"'|^_CFBundleGetFunctionPointer|^_CFBundleGetDataPointer|^_CFBundleLoadExecutable|^_launch_msg$|^_bootstrap_look_up|^_NSLookupSymbol|^_NSAddressOfSymbol'
 if grep -E "$calls" "$tmp/imports.txt"; then bad "it imports a function or class that could install, authorise, spawn, connect, record or take over the screen"; fi
 
 # Words and paths it may never hold: launchd and helper places, system folders, commands, and the Objective-C
@@ -105,6 +123,7 @@ if grep -niwE "$words" "$tmp/strings.txt"; then bad "it holds a word that belong
 methods='setPresentationOptions|setDesktopImageURL|setPersistentDomain|forceTerminate|representationUsingType|TIFFRepresentation'
 methods="$methods"'|writeToFile|writeToURL|enableRelaunchOnLogin|addGlobalMonitorForEvents|enterFullScreenMode|launchApplication'
 methods="$methods"'|openApplicationAtURL|withApplicationAtURL|recycleURLs|duplicateURLs|setDefaultApplicationAtURL'
+methods="$methods"'|classNamed:|loadAndReturnError:|principalClass'
 if grep -nE "$methods" "$tmp/strings.txt"; then bad "it names a method that changes things outside the app or saves files"; fi
 if grep -ciE 'standin|labforced|checkerstandin|labtilescores|LabTile' "$tmp/strings.txt" >/dev/null; then bad "it holds the lab stand-in"; fi
 paths='(^|[^~A-Za-z0-9_])/(Library|System|usr|bin|sbin|etc|private|var|opt|Applications)/'
@@ -113,15 +132,17 @@ grep -q 'Testing edition: no lock. Quit any time with' "$tmp/strings.txt" || bad
 grep -q '_RegisterEventHotKey' "$tmp/imports.txt" || bad "the emergency quit (RegisterEventHotKey) is missing"
 
 # 3. The bundle: shape, Info.plist, signature and entitlements. Its models, when it has them, may only be the three
-# model packages.
+# compiled models and their list.
 (cd "$app" && find . -mindepth 1 | sort) > "$tmp/all.txt"
 grep -v '^\./Contents/Resources/models' "$tmp/all.txt" > "$tmp/shape.txt" || true
 grep '^\./Contents/Resources/models' "$tmp/all.txt" > "$tmp/models.txt" || true
 printf '%s\n' ./Contents ./Contents/Info.plist ./Contents/MacOS ./Contents/MacOS/safesight-mac ./Contents/Resources \
   ./Contents/_CodeSignature ./Contents/_CodeSignature/CodeResources | sort > "$tmp/shape-want.txt"
 diff -u "$tmp/shape-want.txt" "$tmp/shape.txt" || bad "the bundle holds something other than the app itself (no Library, PlugIns, XPCServices, Helpers or Frameworks)"
-if grep -vE '^\./Contents/Resources/models(/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector)(/.*)?)?$' "$tmp/models.txt"; then
-  bad "the models folder holds something other than the three model packages"
+models_ok='^\./Contents/Resources/models(/compiled\.sha256|/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector)'
+models_ok="$models_ok"'(/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector\.fp32)\.mlmodelc(/.*)?)?)?$'
+if grep -vE "$models_ok" "$tmp/models.txt"; then
+  bad "the models folder holds something other than the three compiled models and their list"
 fi
 plutil -convert json -o "$tmp/info.json" "$app/Contents/Info.plist"
 codesign -d --entitlements - --xml "$app" 2>/dev/null > "$tmp/ent.plist" || true
