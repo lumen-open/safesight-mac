@@ -24,7 +24,10 @@ import Testing
 @MainActor final class FakeOS {
     var list: DisplayList?
     var now: TimeInterval = 100
+    var state = SystemState(displaysAsleep: false, sessionOnConsole: true)
     var flushes = 0, restarts = 0, topUps = 0
+    /// The generations of the last capture restart and top-up asked for: their streams' frames carry them.
+    var lastRestart = 0, lastTopUp = 0
     var judged: [UInt32] = []
     var required: [UInt32: Int] = [:]
 }
@@ -39,9 +42,9 @@ import Testing
         let presenter = RecordingPresenter(), os = FakeOS(), generations = GenerationCounter()
         os.list = l
         let c = CoverCoordinator(presenter: presenter, generations: generations, read: { _ in os.list },
-                                 flush: { os.flushes += 1 }, clock: { os.now })
-        c.restartCapture = { os.restarts += 1 }
-        c.topUpCapture = { os.topUps += 1 }
+                                 flush: { os.flushes += 1 }, clock: { os.now }, state: { _ in os.state })
+        c.restartCapture = { g in os.restarts += 1; os.lastRestart = g }
+        c.topUpCapture = { g in os.topUps += 1; os.lastTopUp = g }
         c.judging = { j, r in os.judged = j; os.required = r }
         self.presenter = presenter; self.os = os; self.generations = generations; self.coordinator = c
     }
@@ -61,7 +64,7 @@ import Testing
         let r = Rig(list(ds))
         r.coordinator.start()
         r.coordinator.restartNow()
-        let g = r.generations.next()
+        let g = r.os.lastRestart
         for d in ds { r.coordinator.deliver(.clear(d), generation: g) }
         return (r, g)
     }
@@ -160,12 +163,14 @@ import Testing
     @Test func sleepHoldsEveryCoverUntilWake() {
         let (r, _) = judgedRig([a, b])
         r.coordinator.willChange(.sleep)
+        r.os.state.displaysAsleep = true
         r.os.now += 3600
         r.coordinator.tick()
         #expect(r.coordinator.coverage.hold == .displayChanging)
         r.coordinator.deliver(.clear(a), generation: r.generations.next())
         #expect(r.presenter.whole(1) != nil)
         #expect(r.os.restarts == 1, "no restart while asleep")
+        r.os.state.displaysAsleep = false
         r.coordinator.didChange(.sleep)
         r.settle()
         #expect(r.os.restarts == 2)
@@ -177,7 +182,7 @@ import Testing
         r.coordinator.willChange(.change)
         r.os.list = list([a])
         r.coordinator.didChange(.change)
-        r.os.now += 60
+        r.os.now += 5
         r.coordinator.tick()
         #expect(r.coordinator.coverage.hold != nil, "still held for sleep")
         r.coordinator.deliver(.clear(a), generation: r.generations.next())
@@ -192,19 +197,79 @@ import Testing
         let r = Rig(list([a, b]))
         r.coordinator.start()
         r.coordinator.restartNow()
-        r.coordinator.deliver(.clear(a), generation: r.generations.next())
+        r.coordinator.deliver(.clear(a), generation: r.os.lastRestart)
         for (i, delay) in CoverCoordinator.topUpDelays.enumerated() {
-            r.coordinator.fault(2, .noStream, generation: nil)
+            r.coordinator.fault(2, .noStream, generation: max(r.os.lastRestart, r.os.lastTopUp))
             #expect(r.presenter.whole(2) == .noStream)
             r.os.now += delay
             r.coordinator.tick()
             #expect(r.os.topUps == i + 1)
         }
-        r.coordinator.fault(2, .noStream, generation: nil)
+        r.coordinator.fault(2, .noStream, generation: r.os.lastTopUp)
         r.os.now += 60
         r.coordinator.tick()
         #expect(r.os.topUps == CoverCoordinator.topUpDelays.count, "then not again until the next change")
         #expect(r.presenter.whole(2) == .noStream && r.presenter.whole(1) == nil)
+    }
+
+    @Test func aRequestTakesItsGenerationWhenItIsAskedFor() {
+        // A display change after the request outranks it, however late its streams start.
+        let (r, g) = judgedRig([a, b])
+        r.coordinator.didChange()
+        #expect(r.os.required.values.allSatisfy { $0 > g })
+        r.settle()
+        #expect(r.os.restarts == 2)
+        #expect(r.os.lastRestart >= r.os.required[1] ?? .max, "a request made after the change is what lowers covers")
+    }
+
+    @Test func aDisplaySleepHoldEndsWhenTheDisplaysAreAwakeEvenWithoutItsNotification() {
+        let (r, _) = judgedRig([a, b])
+        r.os.state.displaysAsleep = true
+        r.coordinator.willChange(.displaysAsleep)
+        r.os.now += 600
+        r.coordinator.tick()
+        #expect(r.coordinator.coverage.hold != nil, "still asleep")
+        r.os.state.displaysAsleep = false
+        r.coordinator.tick()
+        #expect(r.coordinator.coverage.hold == nil, "awake: the hold ends without the display-wake notification")
+        #expect(r.presenter.last.allSatisfy { $0.wholeDisplay != nil }, "every display stays covered until judged again")
+        r.settle()
+        #expect(r.os.restarts == 2)
+    }
+
+    @Test func aHoldIsNotEndedBeforeItsCheckDelay() {
+        let (r, _) = judgedRig([a, b])
+        r.coordinator.willChange(.displaysAsleep)
+        r.os.now += 1
+        r.coordinator.tick()
+        #expect(r.coordinator.coverage.hold != nil, "too soon: the displays may still be going to sleep")
+    }
+
+    @Test func aSessionHoldEndsWhenTheSessionIsOnTheConsoleAgain() {
+        let (r, _) = judgedRig([a, b])
+        r.os.state.sessionOnConsole = false
+        r.coordinator.willChange(.session)
+        r.os.now += 60
+        r.coordinator.tick()
+        #expect(r.coordinator.coverage.hold != nil)
+        r.os.state.sessionOnConsole = true
+        r.coordinator.tick()
+        #expect(r.coordinator.coverage.hold == nil)
+    }
+
+    @Test func aSleepHoldEndsOnlyAfterTenSecondsAwakeWithDisplaysOnAndTheSessionBack() {
+        let (r, _) = judgedRig([a, b])
+        r.coordinator.willChange(.sleep)
+        r.os.now += 9
+        r.coordinator.tick()
+        #expect(r.coordinator.coverage.hold != nil, "the Mac may still be going to sleep")
+        r.os.state.sessionOnConsole = false
+        r.os.now += 5
+        r.coordinator.tick()
+        #expect(r.coordinator.coverage.hold != nil, "the session is away")
+        r.os.state.sessionOnConsole = true
+        r.coordinator.tick()
+        #expect(r.coordinator.coverage.hold == nil)
     }
 
     @Test func whenTheListsCannotBeReadEveryDisplayStaysCovered() {

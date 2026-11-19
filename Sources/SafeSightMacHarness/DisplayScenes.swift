@@ -28,6 +28,8 @@ enum DisplayScenes {
         var list: DisplayList?
         var now: TimeInterval = 1000
         var restarts = 0
+        /// The generation of the last capture restart asked for: the generation its streams' frames carry.
+        var lastRestart = 0
     }
 
     /// The judging queue's pipelines, one per display.
@@ -95,8 +97,9 @@ enum DisplayScenes {
         // The real coordinator, with the OS's lists and the clock faked and the judging queue run inline.
         let recorder = Recorder(), os = OS(), generations = GenerationCounter(), pipelines = Pipelines()
         func list(_ s: [Screen]) -> DisplayList { DisplayList(displays: s.map(\.display), main: 1) }
-        let coordinator = CoverCoordinator(presenter: recorder, generations: generations, read: { _ in os.list }, flush: {}, clock: { os.now })
-        coordinator.restartCapture = { os.restarts += 1 }
+        let coordinator = CoverCoordinator(presenter: recorder, generations: generations, read: { _ in os.list }, flush: {}, clock: { os.now },
+                                           state: { _ in SystemState(displaysAsleep: false, sessionOnConsole: true) })
+        coordinator.restartCapture = { g in os.restarts += 1; os.lastRestart = g }
         coordinator.judging = { _, required in
             for (id, p) in pipelines.all { if let r = required[id], r > p.requiredGeneration { p.cover(because: .displayChanging, until: r) } }
         }
@@ -154,7 +157,7 @@ enum DisplayScenes {
         os.list = list([builtIn])
         coordinator.start()
         coordinator.restartNow()
-        let g1 = generations.next()
+        let g1 = os.lastRestart
         judge(builtIn, g1, attached: [builtIn])
         shot("before", "1. One display, checked", attached: [builtIn], slots: [builtIn, added], captions: [
             1: "Checked. The test picture is covered; everything else shows.",
@@ -178,7 +181,7 @@ enum DisplayScenes {
         // 4. Capture restarts once the change has settled; the built-in display's first judged frame lowers its cover.
         os.now += CoverCoordinator.settle
         coordinator.tick()
-        let g2 = generations.next()
+        let g2 = os.lastRestart
         judge(builtIn, g2, attached: [builtIn, added])
         shot("first-frame-main", "4. The first checked frame on the built-in display", attached: [builtIn, added], slots: [builtIn, added], captions: [
             1: "Checked again: the cover comes down, the test picture stays covered.",
@@ -197,7 +200,7 @@ enum DisplayScenes {
         coordinator.didChange()
         os.now += CoverCoordinator.settle
         coordinator.tick()
-        let g3 = generations.next()
+        let g3 = os.lastRestart
         for s in [builtIn, added, third] { judge(s, g3, attached: [builtIn, added, third]) }
         os.now += 2
         shot("third", "6. A third display", attached: [builtIn, added, third], slots: [builtIn, added, third], captions: [

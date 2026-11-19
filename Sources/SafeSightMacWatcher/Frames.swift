@@ -91,9 +91,11 @@ public struct FrameMailbox: Sendable {
     public var isEmpty: Bool { pending == nil }
 
     public mutating func offer(_ f: CapturedFrame) {
-        // A frame from another stream (a restart after a display change) replaces the waiting one outright: changed
-        // areas and pixels from different streams never mix.
-        guard var old = pending, old.generation == f.generation else { pending = f; return }
+        guard var old = pending else { pending = f; return }
+        // Changed areas and pixels from different streams never mix. A frame from a newer stream (a restart) replaces
+        // the waiting one outright; a late frame from an older, stopped stream never replaces a newer stream's frame.
+        if f.generation < old.generation { return }
+        if f.generation > old.generation { pending = f; return }
         let dirty: [PixelRect]?
         if let a = old.dirty, let b = f.dirty, old.map?.pixelWidth == f.map?.pixelWidth, old.map?.pixelHeight == f.map?.pixelHeight {
             dirty = a + b

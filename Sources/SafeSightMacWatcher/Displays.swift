@@ -38,6 +38,20 @@ public enum DisplayChange: Equatable, Sendable {
     }
 }
 
+/// Mirror sets: a display that repeats another (`CGDisplayMirrorsDisplay`) shows that display's composited picture.
+public enum MirrorSets {
+    /// The display at the root of `id`'s mirror set: follow "repeats" until a display that repeats no other. Nil when
+    /// the chain loops, which never happens in a real mirror set; the caller then treats `id` as its own display.
+    public static func root(of id: UInt32, mirrorOf: (UInt32) -> UInt32?) -> UInt32? {
+        var r = id, seen: Set<UInt32> = [id]
+        while let s = mirrorOf(r), s != r {
+            guard seen.insert(s).inserted else { return nil }
+            r = s
+        }
+        return r
+    }
+}
+
 /// The displays as the OS lists them now: AppKit's screens and CoreGraphics' active list, with CoreGraphics' online
 /// list for mirror sets and, as a cross-check only, ScreenCaptureKit's list.
 public struct DisplayList: Equatable, Sendable {
@@ -74,21 +88,23 @@ public struct DisplayList: Equatable, Sendable {
     public func descriptor(_ id: UInt32) -> DisplayDescriptor? { displays.first { $0.id == id } }
 
     /// Merges the OS's lists.
-    /// - A display is drawn on when CoreGraphics lists it as active or AppKit lists it as a screen.
-    /// - A display that is not drawn on itself but repeats one that is (`mirrorOf`) is a mirror: no canvas of its own.
-    /// - ScreenCaptureKit's list (`capture`) can add a display neither list has, unless it is such a mirror. It can
-    ///   never take a display away.
+    /// - A display may show something when CoreGraphics lists it as active, AppKit lists it as a screen, or
+    ///   ScreenCaptureKit lists it (which can add a display, never take one away).
+    /// - A display that repeats another (`mirrorOf`) whose mirror set's root is such a display is a mirror: no canvas,
+    ///   no judging and no stream of its own; the window system draws the root's windows, covers included, into it.
+    ///   This holds whether CoreGraphics lists it as active (software mirroring) or only as online (hardware mirroring).
+    /// - Every other such display gets a canvas.
     /// - Bounds are CoreGraphics' (`bounds`, global points); a display CoreGraphics gives no bounds for is placed by
     ///   its screen frame. A display with neither is `unplaced`.
     public static func make(screens: [Screen], active: [UInt32], online: [UInt32] = [], capture: [UInt32] = [],
                             main: UInt32, primaryHeight: CGFloat,
                             bounds: (UInt32) -> CGRect, mirrorOf: (UInt32) -> UInt32?) -> DisplayList {
-        var drawn = Set(active).union(screens.map(\.id))
+        let shown = Set(active).union(screens.map(\.id)).union(capture)
         var mirrors: [UInt32: UInt32] = [:]
-        for id in Set(online).union(capture) where !drawn.contains(id) {
-            if let source = mirrorOf(id), source != id, drawn.contains(source) { mirrors[id] = source }
+        for id in shown.union(online) {
+            if let r = MirrorSets.root(of: id, mirrorOf: mirrorOf), r != id, shown.contains(r) { mirrors[id] = r }
         }
-        for id in capture where !drawn.contains(id) && mirrors[id] == nil { drawn.insert(id) }
+        let drawn = shown.subtracting(mirrors.keys)
 
         var placed: [DisplayDescriptor] = [], unplaced: [UInt32] = []
         for id in drawn {
@@ -98,7 +114,9 @@ public struct DisplayList: Equatable, Sendable {
             }
             if usable(b) { placed.append(DisplayDescriptor(id: id, bounds: b)) } else { unplaced.append(id) }
         }
-        placed.sort { ($0.id == main ? 0 : 1, $0.id) < ($1.id == main ? 0 : 1, $1.id) }
+        // The main display first; when the main display is a mirror, the display at its set's root.
+        let first = mirrors[main] ?? main
+        placed.sort { ($0.id == first ? 0 : 1, $0.id) < ($1.id == first ? 0 : 1, $1.id) }
         return DisplayList(displays: placed, mirrors: mirrors, unplaced: unplaced.sorted(), main: main)
     }
 
@@ -190,15 +208,17 @@ public final class DisplayCoverage {
         return true
     }
 
-    /// A reading that may only add displays the capture layer listed. Pure additions are not a change: each added
-    /// display is covered whole until judged, and the others keep their plans. Anything else is handled by `update`.
+    /// A reading that may only add displays the capture layer listed. An addition that leaves the judged displays as
+    /// they were (the added displays are past `DISPLAYS_MAX`) is not a change: each added display is covered whole, and
+    /// the others keep their plans. Anything else, including an addition that changes which displays are judged (an
+    /// added display needs a stream, and one it pushes past the limit must lose its own), is handled by `update`.
     /// Returns true when it was a change.
     @discardableResult
     public func add(_ new: DisplayList) -> Bool {
         let added = new.ids.filter { list.descriptor($0) == nil }
         let kept = DisplayList(displays: new.displays.filter { list.descriptor($0.id) != nil }, mirrors: new.mirrors,
                                unplaced: new.unplaced, main: new.main)
-        guard !added.isEmpty, kept == list else { return update(new) }
+        guard !added.isEmpty, kept == list, new.judged == list.judged else { return update(new) }
         list = new
         raise(added, cause: .notYetJudged)
         return false
@@ -217,16 +237,29 @@ public final class DisplayCoverage {
         return true
     }
 
-    /// A display's stream stopped (`generation`: that stream's) or none could be started (nil). The display is
-    /// covered whole, and frames from a stopped stream, or older ones, never lower its cover again. A late report
-    /// about an older stream, or about a start that found no stream while another start's stream is already judging
-    /// the display, changes nothing else: covering then would leave a still screen covered until something moved.
-    public func fault(_ id: UInt32, _ cause: FaultCause, generation: Int?) {
-        if let g = generation { required[id] = max(required[id] ?? 0, g + 1) }
-        if let judgedBy = acceptedGeneration[id], generation.map({ judgedBy > $0 }) ?? true { return }
+    /// The display has no stream for request or stream `generation`: a start or top-up of that generation could not
+    /// give it one (`noStream`, `noPermissionOrNoContent`), or its stream stopped by itself (`streamStopped`, whose
+    /// frames then never lower the cover again). The display is covered whole, unless the plan it shows came from a
+    /// newer stream than the report is about: that stream is running, or its own end is reported too.
+    public func fault(_ id: UInt32, _ cause: FaultCause, generation g: Int) {
+        if cause == .streamStopped { required[id] = max(required[id] ?? 0, g + 1) }
+        if let shownFrom = acceptedGeneration[id], shownFrom > g { return }
         accepted[id] = nil; acceptedGeneration[id] = nil
         causes[id] = cause
     }
+
+    /// A stream of this generation was stopped on purpose (a newer start, a newer stream for the display, pause). Its
+    /// frames never count again. If the plan shown came from it, or from an older stream, the display is covered
+    /// whole until a newer stream's frame is judged.
+    public func retire(_ id: UInt32, generation g: Int) {
+        required[id] = max(required[id] ?? 0, g + 1)
+        guard let shownFrom = acceptedGeneration[id], shownFrom <= g else { return }
+        accepted[id] = nil; acceptedGeneration[id] = nil
+        causes[id] = .notYetJudged
+    }
+
+    /// A new capture request: the generation its streams carry. A display change after this always outranks it.
+    public func newRequest() -> Int { generations.next() }
 
     /// What every display shows now: exactly one plan per listed display. `stalled`: displays whose judging has fallen
     /// too far behind (`JUDGING_STALL`), covered whole until they catch up.

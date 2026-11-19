@@ -15,7 +15,6 @@ import Foundation
 final class WatcherController: CaptureSink, @unchecked Sendable {
     // Capture queues, the judging queue and the main thread.
     private let frames = FrameQueue()
-    private let generations: GenerationCounter
 
     // Judging queue only.
     private let judgeQueue = DispatchQueue(label: "safesightmac.judge", qos: .userInitiated)
@@ -28,13 +27,13 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     // Main thread only.
     private let coordinator: CoverCoordinator
+    /// Capture requests and reports between the coordinator and the stream scheduler (ready once the detector is).
+    private let link: CaptureLink
     private var busySince: [UInt32: TimeInterval] = [:]
     private var wholeSince: TimeInterval?
     private(set) var detectorFailed = false
-    private var detectorReady = false
     private(set) var running = false
     private let repairCard: RepairCard
-    private var capture: ScreenCapture?
     private var timer: Timer?
     var onChange: (() -> Void)?
     var repairActions: RepairCard.Actions?
@@ -44,12 +43,11 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     let ownPID = getpid()
 
     @MainActor init(presenter: CoverPresenter) {
-        let g = GenerationCounter()
-        self.generations = g
         self.repairCard = RepairCard()
-        self.coordinator = CoverCoordinator(presenter: presenter, generations: g)
-        coordinator.restartCapture = { [weak self] in self?.restartStreams() }
-        coordinator.topUpCapture = { [weak self] in self?.topUpStreams() }
+        let c = CoverCoordinator(presenter: presenter, generations: GenerationCounter())
+        self.coordinator = c
+        // The link sets the coordinator's capture requests: every request carries a generation taken on this thread.
+        self.link = CaptureLink(coordinator: c)
         coordinator.judging = { [weak self] judged, required in
             self?.judgeQueue.async { self?.setJudging(judged, required) }
         }
@@ -75,8 +73,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         running = true
         detectorFailed = false
         frames.open()
-        capture = ScreenCapture(sink: self, ownPID: ownPID, generations: generations)
         coordinator.start()
+        link.attach(ScreenCaptureBackend(sink: self, ownPID: ownPID))
         startTimer()
         loadDetector(rule: rule)
         onChange?()
@@ -85,11 +83,9 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// Stops capture and removes every cover. Used for Pause (practice state only) and Quit.
     @MainActor func stop() {
         running = false
-        detectorReady = false
         frames.close()
-        let cap = capture
-        capture = nil
-        Task { await cap?.stop() }
+        // Not waited for: anything the old streams still send carries a generation outranked when covering starts again.
+        link.detach()
         judgeQueue.async { [weak self] in
             self?.pipelines.values.forEach { $0.reset() }
             self?.pipelines = [:]
@@ -129,7 +125,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     func setRule(_ rule: DetectorRule) { judgeQueue.async { [weak self] in self?.detector?.setRule(rule) } }
 
     @MainActor private func loadDetector(rule: DetectorRule) {
-        detectorReady = false
+        link.ready = false
         judgeQueue.async { [weak self] in
             guard let self else { return }
             if self.detector == nil {
@@ -140,7 +136,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             }
             DispatchQueue.main.async {
                 guard self.running else { return }
-                self.detectorReady = true
+                self.link.ready = true
                 self.coordinator.restartNow()
             }
         }
@@ -153,36 +149,12 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         onChange?()
     }
 
-    // MARK: Capture (main thread)
-
-    /// Streams only the judged displays, counted from the OS's lists: a display past `DISPLAYS_MAX` stays covered
-    /// whole and costs no capture memory.
-    @MainActor private func restartStreams() {
-        guard running, detectorReady, let cap = capture else { return }
-        let judged = Set(coordinator.coverage.list.judged)
-        Task { await cap.start(only: judged) }
-    }
-
-    @MainActor private func topUpStreams() {
-        guard running, detectorReady, let cap = capture else { return }
-        let judged = Set(coordinator.coverage.list.judged)
-        Task { await cap.topUp(only: judged) }
-    }
-
     // MARK: CaptureSink (capture queues)
 
     func capture(_ frame: CapturedFrame) {
         if frames.offer(frame, now: ProcessInfo.processInfo.systemUptime) {
             judgeQueue.async { [weak self] in self?.judgeNext() }
         }
-    }
-
-    func captureFault(display id: UInt32, cause: FaultCause, generation: Int?) {
-        DispatchQueue.main.async { [weak self] in self?.coordinator.fault(id, cause, generation: generation) }
-    }
-
-    func captureDisplays(_ ids: [UInt32]) {
-        DispatchQueue.main.async { [weak self] in self?.coordinator.captureSaw(ids) }
     }
 
     // MARK: Judging queue

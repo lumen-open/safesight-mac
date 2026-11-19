@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// The watcher's capture layer (chapter 05, section 5.1): one ScreenCaptureKit display stream per
-// active display, always at full capture resolution, 8-bit BGRA in sRGB, no cursor, no audio, with
-// the watcher's own windows left out so the detector keeps seeing what lies under a cover.
+// The watcher's capture layer (chapter 05, section 5.1): ScreenCaptureKit display streams at full capture
+// resolution, 8-bit BGRA in sRGB, no cursor, no audio, with the watcher's own windows left out so the detector
+// keeps seeing what lies under a cover. Which streams run, and when, is decided by the stream scheduler
+// (SafeSightMacWatcher/Streams.swift); this file is its ScreenCaptureKit backend.
 //
 // This file opens no network connection and links no networking API: no part both reads the screen
 // and has network access. `tools/check-no-network.sh` enforces it.
@@ -13,17 +14,11 @@ import Foundation
 import Preprocess
 import ScreenCaptureKit
 
-/// Receives frames and faults. Called on each stream's own serial queue, or from the capture actor.
+/// Receives frames, on each stream's own serial queue.
 public protocol CaptureSink: AnyObject, Sendable {
     /// A frame, tagged with its stream's generation. A frame that could not be read arrives as a complete frame
     /// with no pixels, in order with the others, and covers its display whole until a later frame is judged.
     func capture(_ frame: CapturedFrame)
-    /// A display with no stream: none could be started, or its stream stopped (`generation`: that stream's, if any).
-    /// The cover layer covers it whole, and frames from that stream never lower its cover again.
-    func captureFault(display: UInt32, cause: FaultCause, generation: Int?)
-    /// The displays ScreenCaptureKit listed at its last discovery. A cross-check only: which displays are covered, and
-    /// how many are judged, is decided from the OS's own display lists, never from this list.
-    func captureDisplays(_ ids: [UInt32])
 }
 
 public enum ScreenRecordingPermission {
@@ -33,144 +28,64 @@ public enum ScreenRecordingPermission {
     @discardableResult public static func request() -> Bool { CGRequestScreenCaptureAccess() }
 }
 
-/// Owns the display streams. Start, top-up and stop are serialised on one actor; a start or top-up that resumes
-/// after a newer start or stop began gives up and stops what it started, so no stream is ever left running unowned.
-public actor ScreenCapture {
-    private let sink: CaptureSink
-    private let ownPID: pid_t
-    private let generations: GenerationCounter
-    private var streams: [UInt32: DisplayStream] = [:]
-    /// Raised by every start and stop.
-    private var epoch = 0
-    /// Streams that stopped by themselves before they were kept (by serial number): never kept.
-    private var stoppedEarly: Set<Int> = []
-    private var serial = 0
+/// ScreenCaptureKit, as the stream scheduler sees it.
+public struct ScreenCaptureBackend: CaptureBackend {
+    let sink: CaptureSink
+    let ownPID: pid_t
 
-    public init(sink: CaptureSink, ownPID: pid_t = getpid(), generations: GenerationCounter = GenerationCounter()) {
-        self.sink = sink; self.ownPID = ownPID; self.generations = generations
+    public init(sink: CaptureSink, ownPID: pid_t = getpid()) { self.sink = sink; self.ownPID = ownPID }
+
+    public func list() async throws -> any CaptureListing {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        return ScreenCaptureListing(content: content, sink: sink, ownPID: ownPID)
     }
+}
 
-    public var runningDisplays: [UInt32] { Array(streams.keys) }
+enum ScreenCaptureFailure: Error { case notListed }
 
-    /// Stops every stream, then starts one stream for each display, all of a new generation. `only`: the displays to
-    /// stream (the judged displays, counted by the caller from the OS's own lists); nil streams every active display
-    /// and every display ScreenCaptureKit lists that is not a mirror. Any display that cannot be streamed is reported
-    /// as a fault, so it stays covered whole.
-    public func start(only: Set<UInt32>? = nil) async {
-        epoch += 1
-        let mine = epoch
-        await stopStreams()
-        guard mine == epoch else { return }
-        await addMissing(mine, only: only)
-    }
+/// One ScreenCaptureKit content list: its displays, and the app's own windows to leave out of every stream.
+struct ScreenCaptureListing: CaptureListing, @unchecked Sendable {
+    let content: SCShareableContent
+    let sink: CaptureSink
+    let ownPID: pid_t
 
-    /// Starts a stream for each display that has none (one ScreenCaptureKit did not list yet, one whose stream
-    /// stopped), leaving running streams alone.
-    public func topUp(only: Set<UInt32>? = nil) async { await addMissing(epoch, only: only) }
+    var displays: [UInt32] { content.displays.map(\.displayID) }
 
-    public func stop() async {
-        epoch += 1
-        await stopStreams()
-    }
-
-    private func stopStreams() async {
-        let old = streams
-        streams = [:]
-        for s in old.values { await s.stop() }
-    }
-
-    /// A stream that stopped by itself is forgotten, so a top-up can start it again. One that stopped before it was
-    /// kept is never kept.
-    func forget(_ id: UInt32, _ s: DisplayStream) {
-        if streams[id] === s { streams[id] = nil } else { stoppedEarly.insert(s.serial) }
-    }
-
-    private func addMissing(_ mine: Int, only: Set<UInt32>?) async {
-        let content: SCShareableContent
-        do {
-            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        } catch {
-            guard mine == epoch else { return }
-            for id in (only.map { Array($0) } ?? Self.activeDisplayIDs()) where streams[id] == nil {
-                sink.captureFault(display: id, cause: .noPermissionOrNoContent, generation: nil)
-            }
-            return
-        }
-        guard mine == epoch else { return }
-        // Taken after the content list was read: every frame of these streams shows the displays as they are now.
-        let generation = generations.next()
-        let listed = content.displays.map(\.displayID)
-        sink.captureDisplays(listed)
-        // The displays asked for; by default every active display, and any display ScreenCaptureKit lists that does not
-        // repeat an active one (a mirror shows its source's pixels, covers included, and needs no stream of its own).
-        let active = Self.activeDisplayIDs()
-        let wanted = only ?? Set(active).union(listed.filter { id in
-            let source = CGDisplayMirrorsDisplay(id)
-            return source == kCGNullDirectDisplay || !active.contains(source)
-        })
+    func open(_ id: UInt32, generation: Int, stoppedByItself: @escaping @Sendable () -> Void) async throws -> any CaptureStream {
+        guard let display = content.displays.first(where: { $0.displayID == id }) else { throw ScreenCaptureFailure.notListed }
         let own = content.applications.filter { $0.processID == ownPID }
-        for id in wanted.sorted() where streams[id] == nil {
-            // An attempt overtaken by a newer start or a stop reports nothing more.
-            guard mine == epoch else { return }
-            guard let display = content.displays.first(where: { $0.displayID == id }) else {
-                // A display ScreenCaptureKit cannot see: covered whole for as long as it exists.
-                sink.captureFault(display: id, cause: .noStream, generation: nil); continue
-            }
-            serial += 1
-            let s = DisplayStream(display: display, excluding: own, sink: sink, generation: generation, serial: serial) { [weak self] stopped in
-                Task { await self?.forget(id, stopped) }
-            }
-            do {
-                try await s.start()
-            } catch {
-                guard mine == epoch else { return }
-                sink.captureFault(display: id, cause: .noStream, generation: nil); continue
-            }
-            // A newer start or stop began while this one waited, or a top-up got here first: not needed. One that has
-            // already stopped by itself is not kept either (its fault is reported; a top-up starts it again).
-            guard mine == epoch, streams[id] == nil, !stoppedEarly.contains(s.serial) else {
-                await s.stop()
-                if mine != epoch { return }
-                continue
-            }
-            streams[id] = s
-        }
-    }
-
-    /// The displays CoreGraphics reports as active.
-    public static func activeDisplayIDs() -> [UInt32] {
-        var count: UInt32 = 0
-        guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return [] }
-        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetActiveDisplayList(count, &ids, &count) == .success else { return [] }
-        return Array(ids.prefix(Int(count)))
+        let s = DisplayStream(display: display, excluding: own, sink: sink, generation: generation, stoppedByItself: stoppedByItself)
+        try await s.start()
+        return s
     }
 }
 
 /// One running display stream.
-final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureStream, @unchecked Sendable {
     let display: SCDisplay
     let filter: SCContentFilter
     let sink: CaptureSink
     let queue: DispatchQueue
     /// Every frame of this stream carries it.
     let generation: Int
-    /// Tells this stream from others started for the same display.
-    let serial: Int
-    private let onStop: (DisplayStream) -> Void
+    private let stoppedByItself: @Sendable () -> Void
+    private let lock = NSLock()
+    private var ended = false
     private var stream: SCStream?
 
-    init(display: SCDisplay, excluding own: [SCRunningApplication], sink: CaptureSink, generation: Int, serial: Int,
-         onStop: @escaping (DisplayStream) -> Void) {
+    init(display: SCDisplay, excluding own: [SCRunningApplication], sink: CaptureSink, generation: Int,
+         stoppedByItself: @escaping @Sendable () -> Void) {
         self.display = display
         // Excluded: the watcher itself (its cover windows). Nothing else is excluded.
         self.filter = SCContentFilter(display: display, excludingApplications: own, exceptingWindows: [])
         self.sink = sink
         self.generation = generation
-        self.serial = serial
-        self.onStop = onStop
+        self.stoppedByItself = stoppedByItself
         self.queue = DispatchQueue(label: "safesightmac.capture.\(display.displayID)", qos: .userInitiated)
     }
+
+    /// True the first time: the stream ends once, by `close` or by itself.
+    private func end() -> Bool { lock.withLock { defer { ended = true }; return !ended } }
 
     static func configuration(for filter: SCContentFilter, displayID: CGDirectDisplayID) -> SCStreamConfiguration {
         let c = SCStreamConfiguration()
@@ -198,7 +113,8 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         stream = s
     }
 
-    func stop() async {
+    func close() async {
+        _ = end()
         guard let s = stream else { return }
         stream = nil
         try? await s.stopCapture()
@@ -245,8 +161,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         // Any stop is "capture not ok" for this display: it is covered whole until a new stream's frame is judged.
         // Frames of this stream still waiting to be judged never lower that cover (the generation is retired).
-        sink.captureFault(display: display.displayID, cause: .streamStopped, generation: generation)
-        onStop(self)
+        if end() { stoppedByItself() }
     }
 }
 

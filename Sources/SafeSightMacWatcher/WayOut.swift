@@ -44,14 +44,16 @@ public enum WayOut {
     /// not the Dock, menus, the desktop picture or other system surfaces.
     public static func carriesLine(_ w: WindowInfo) -> Bool { w.layer == 0 }
 
-    /// Whether a whole-display cover on this display may leave its menu bar in sight: only on the main display (the
-    /// one `CGMainDisplayID` names, or the display it repeats when it is part of a mirror set). Every other display's
-    /// menu bar is covered with the rest of it. The macOS 26 menu bar is see-through, so on a display that is covered
-    /// for a long time (one past `DISPLAYS_MAX`, one that cannot be captured) the strip would show unjudged content
-    /// for as long as the display is attached. The main display's menu bar, the shortcuts and the repair card remain
-    /// the way out.
-    public static func leavesMenuBar(display id: UInt32, main: UInt32, mainRepeats: UInt32? = nil) -> Bool {
-        id == main || (mainRepeats != nil && id == mainRepeats)
+    /// Whether a whole-display cover on this display may leave its menu bar in sight: only on the main display's mirror
+    /// set (the main display, the display it repeats, or a display that repeats it: they all show the main display's
+    /// picture). Every other display's menu bar is covered with the rest of it. The macOS 26 menu bar is see-through,
+    /// so on a display that is covered for a long time (one past `DISPLAYS_MAX`, one that cannot be captured) the strip
+    /// would show unjudged content for as long as the display is attached. The main display's menu bar, the shortcuts
+    /// and the repair card remain the way out.
+    public static func leavesMenuBar(display id: UInt32, main: UInt32, mirrorOf: (UInt32) -> UInt32? = { _ in nil }) -> Bool {
+        if id == main { return true }
+        guard let a = MirrorSets.root(of: id, mirrorOf: mirrorOf), let b = MirrorSets.root(of: main, mirrorOf: mirrorOf) else { return false }
+        return a == b
     }
 
     /// The window-list layers of the menu bar (kCGMainMenuWindowLevel 24, kCGStatusWindowLevel 25).

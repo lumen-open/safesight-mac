@@ -112,11 +112,30 @@ extension DisplayCoverage {
         #expect(f.list.mirrors.isEmpty)
     }
 
-    @Test func aDisplayThatIsDrawnOnIsCoveredEvenIfItClaimsToMirrorAnother() {
+    @Test func anActiveDisplayThatRepeatsAnotherIsAMirror() {
+        // Software mirroring: CoreGraphics lists every member of the set as active (and AppKit may list it as a
+        // screen), and the window system draws the same windows, covers included, into each.
         var f = FakeDisplays.two
         f.mirrors = [2: 1]
-        #expect(f.list.ids == [1, 2])
-        #expect(f.list.mirrors.isEmpty)
+        f.bounds[2] = f.bounds[1]
+        #expect(f.list.ids == [1], "no canvas of its own, which would sit over the main display's and hide its menu bar")
+        #expect(f.list.mirrors == [2: 1])
+        #expect(f.list.judged == [1], "and no judged place or stream of its own")
+    }
+
+    @Test func whenTheMainDisplayIsAMirrorTheDisplayItRepeatsComesFirst() {
+        var f = FakeDisplays.two
+        f.active = [1, 2, 3]; f.screens = [2, 3]; f.online = [1, 2, 3]
+        f.bounds[3] = CGRect(x: 0, y: 0, width: 300, height: 200)
+        f.mirrors = [1: 3]
+        #expect(f.list.ids == [3, 2])
+        #expect(f.list.mirrors == [1: 3])
+    }
+
+    @Test func aMirrorLoopIsCoveredAsSeparateDisplays() {
+        var f = FakeDisplays.two
+        f.mirrors = [1: 2, 2: 1]
+        #expect(f.list.ids == [1, 2], "a loop never happens in a real mirror set; covered, never left out")
     }
 
     @Test func theLimitIsCountedFromTheOSListsNotFromTheCaptureList() {
@@ -237,7 +256,7 @@ extension DisplayCoverage {
     @Test func aDisplayTheCaptureLayerCannotSeeIsCoveredForAsLongAsItExists() {
         let c = DisplayCoverage()
         c.reset(FakeDisplays.two.list)
-        c.fault(2, .noStream, generation: nil)
+        c.fault(2, .noStream, generation: c.newRequest())
         for _ in 0..<5 {
             let g = c.generations.next()
             #expect(c.accept(.clear(a), generation: g))
@@ -268,15 +287,42 @@ extension DisplayCoverage {
         #expect(c.accept(.clear(b), generation: c.generations.next()), "a new stream's frame lowers it")
     }
 
-    @Test func aLateReportAboutAnOlderStreamDoesNotCoverADisplayANewerStreamIsJudging() {
+    @Test func aDisplayLeftWithoutAStreamIsCoveredEvenThoughItShowedAPlan() {
+        // The plan came from stream g. A newer request stopped that stream and could not start another (the display
+        // was not listed yet): the display must not keep showing the old plan.
         let (c, g) = judgedTwo()
-        c.fault(1, .streamStopped, generation: g - 1)
-        #expect(c.shownPlan(1)?.wholeDisplay == nil, "a stream older than the one judging it")
-        c.fault(1, .noStream, generation: nil)
-        #expect(c.shownPlan(1)?.wholeDisplay == nil, "a start that found no stream, while another start's stream judges it")
-        c.fault(1, .streamStopped, generation: g)
-        #expect(c.shownPlan(1)?.wholeDisplay == .streamStopped, "the stream that judged it stopped: covered")
-        #expect(!c.accept(.clear(a), generation: g), "and its waiting frames never count")
+        let restart = c.newRequest()
+        c.retire(2, generation: g)
+        c.fault(2, .noStream, generation: restart)
+        #expect(c.shownPlan(2)?.wholeDisplay == .noStream)
+        #expect(!c.accept(.clear(b), generation: g), "frames of the stopped stream never count again")
+        // Without the retirement report too: a failed request newer than the plan's stream covers the display.
+        let (c2, _) = judgedTwo()
+        c2.fault(2, .noStream, generation: c2.newRequest())
+        #expect(c2.shownPlan(2)?.wholeDisplay == .noStream)
+    }
+
+    @Test func aReportOlderThanTheStreamJudgingTheDisplayChangesNothingShown() {
+        let (c, g) = judgedTwo()
+        let topUp = c.newRequest()
+        #expect(c.accept(.clear(b), generation: topUp), "display 2 is now judged by a newer stream")
+        c.fault(2, .noStream, generation: g)
+        c.fault(2, .streamStopped, generation: g)
+        c.retire(2, generation: g)
+        #expect(c.shownPlan(2)?.wholeDisplay == nil, "the newer stream runs, or its own end is reported too")
+        #expect(!c.accept(.clear(b), generation: g), "but the older stream's frames never count again")
+        c.fault(2, .streamStopped, generation: topUp)
+        #expect(c.shownPlan(2)?.wholeDisplay == .streamStopped, "the stream that judged it stopped: covered")
+        #expect(!c.accept(.clear(b), generation: topUp))
+    }
+
+    @Test func aStreamStoppedOnPurposeTakesItsPlanWithIt() {
+        let (c, g) = judgedTwo()
+        c.retire(2, generation: g)
+        #expect(c.shownPlan(2)?.wholeDisplay == .notYetJudged)
+        #expect(c.shownPlan(1)?.wholeDisplay == nil, "the other display is untouched")
+        #expect(!c.accept(.clear(b), generation: g), "its frames still on their way never count")
+        #expect(c.accept(.clear(b), generation: c.newRequest()))
     }
 
     @Test func aDisplayRemovedAndAddedBackWithTheSameIDStaysCoveredUntilJudgedAgain() {
@@ -337,20 +383,39 @@ extension DisplayCoverage {
         #expect(c.shown().allSatisfy { $0.wholeDisplay == .detectorUnavailable })
     }
 
-    @Test func aDisplayOnlyTheCaptureLayerListsIsAddedWithoutUncoveringOrRecoveringTheOthers() {
+    @Test func aDisplayOnlyTheCaptureLayerListsPastTheLimitIsAddedWithoutTouchingTheOthers() {
+        let (c, _) = judgedTwo()
+        var f = FakeDisplays.two
+        f.capture = [1, 2, 6]; f.bounds[6] = CGRect(x: 0, y: 400, width: 300, height: 200)
+        #expect(!c.add(f.list), "the judged displays are as they were: not a change")
+        #expect(c.shownPlan(6)?.wholeDisplay == .tooManyDisplays, "covered whole like any third display")
+        #expect(c.shownPlan(1)?.wholeDisplay == nil && c.shownPlan(2)?.wholeDisplay == nil, "the others keep their plans")
+    }
+
+    @Test func aDisplayOnlyTheCaptureLayerListsThatIsJudgedIsAChange() {
+        // It needs a stream, which only a capture restart with it among the judged displays gives it.
         var f = FakeDisplays.two
         f.screens = [1]; f.active = [1]; f.online = [1]; f.capture = [1]
         let c = DisplayCoverage()
         c.reset(f.list)
-        #expect(c.accept(.clear(a), generation: c.generations.next()))
+        #expect(c.accept(.clear(a), generation: c.newRequest()))
         f.capture = [1, 5]; f.bounds[5] = CGRect(x: 0, y: 200, width: 300, height: 200)
-        #expect(!c.add(f.list), "not a change")
-        #expect(c.shownPlan(5)?.wholeDisplay == .notYetJudged, "covered until judged")
-        #expect(c.shownPlan(1)?.wholeDisplay == nil, "the other display keeps its plan")
-        // Past the limit, it is covered like any third display.
-        f.capture = [1, 5, 6]; f.bounds[6] = CGRect(x: 0, y: 400, width: 300, height: 200)
-        #expect(!c.add(f.list))
-        #expect(c.shownPlan(6)?.wholeDisplay == .tooManyDisplays)
+        #expect(c.add(f.list))
+        #expect(c.list.judged == [1, 5])
+        #expect(c.shown().allSatisfy { $0.wholeDisplay != nil }, "covered until judged by restarted streams")
+    }
+
+    @Test func aDisplayOnlyTheCaptureLayerListsThatPushesAnotherPastTheLimitIsAChange() {
+        var f = FakeDisplays.two
+        f.screens = [1, 5]; f.active = [1, 5]; f.online = [1, 5]; f.capture = [1, 5]
+        f.bounds[5] = CGRect(x: 0, y: 200, width: 300, height: 200)
+        let c = DisplayCoverage()
+        c.reset(f.list)
+        #expect(c.list.judged == [1, 5])
+        f.capture = [1, 3, 5]; f.bounds[3] = CGRect(x: 0, y: 400, width: 300, height: 200)
+        #expect(c.add(f.list), "display 5 loses its judged place: its stream must stop")
+        #expect(c.list.judged == [1, 3])
+        #expect(c.shownPlan(5)?.wholeDisplay == .tooManyDisplays)
     }
 
     @Test func aStalledDisplayIsCoveredUntilItCatchesUp() {
@@ -394,6 +459,16 @@ extension DisplayCoverage {
         _ = newStream.process(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, t: 0, generation: 1), snapshot: window, now: 0)
         let fresh = newStream.process(Fixtures.frame(img, display: d, scale: 1, dirty: tiny, t: 0.1, generation: 2), snapshot: window, now: 0.1)
         #expect(fresh.covers(g, kind: .plain), "a new stream's first frame is judged whole")
+    }
+
+    @Test func aLateFrameFromAnOlderStreamNeverReplacesANewerStreamsFrame() throws {
+        var box = FrameMailbox()
+        box.offer(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, dirty: nil, t: 1, generation: 2))
+        box.offer(Fixtures.frame(Fixtures.blank(300, 200), display: d, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 8, h: 8)], t: 2, generation: 1))
+        let taken = box.take()
+        let f = try #require(taken)
+        #expect(f.generation == 2, "the new stream's first frame is kept: on a still screen no other may come")
+        #expect(f.dirty == nil)
     }
 
     @Test func framesOfDifferentStreamsNeverMergeInTheMailbox() throws {

@@ -175,12 +175,16 @@ extension CoverPlan {
         #expect(WayOut.menuBarHeight(display: display, topInset: 30, windows: [bar]) == 24, "never more than the menu bar window")
     }
 
-    @Test func onlyTheMainDisplayLeavesItsMenuBar() {
+    @Test func onlyTheMainDisplaysMirrorSetLeavesItsMenuBar() {
         #expect(WayOut.leavesMenuBar(display: 1, main: 1))
         #expect(!WayOut.leavesMenuBar(display: 2, main: 1),
                 "another display's menu bar is covered with the rest of it: on a display covered for a long time it would show unjudged content")
-        #expect(WayOut.leavesMenuBar(display: 5, main: 1, mainRepeats: 5), "in a mirror set, the display the main one repeats")
-        #expect(!WayOut.leavesMenuBar(display: 2, main: 1, mainRepeats: 5))
+        #expect(WayOut.leavesMenuBar(display: 5, main: 1, mirrorOf: { $0 == 1 ? 5 : nil }), "the display the main one repeats")
+        #expect(WayOut.leavesMenuBar(display: 7, main: 1, mirrorOf: { $0 == 7 ? 1 : nil }),
+                "a display that repeats the main one: a canvas of its own would sit over the main display's menu bar")
+        #expect(WayOut.leavesMenuBar(display: 7, main: 1, mirrorOf: { [1: 5, 7: 5][$0] }), "two displays repeating the same one")
+        #expect(!WayOut.leavesMenuBar(display: 2, main: 1, mirrorOf: { $0 == 1 ? 5 : nil }))
+        #expect(!WayOut.leavesMenuBar(display: 2, main: 1, mirrorOf: { [1: 2, 2: 1][$0] }), "a loop never happens; it leaves nothing")
     }
 
     @Test func aWholeDisplayCoverLeavesTheMenuBarAndCoversTheDock() throws {

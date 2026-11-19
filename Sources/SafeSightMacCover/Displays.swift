@@ -41,6 +41,24 @@ public enum SystemDisplays {
     }
 }
 
+/// What the coordinator reads to end a hold whose counterpart notification never came.
+public struct SystemState: Equatable, Sendable {
+    /// Some listed display is asleep.
+    public var displaysAsleep: Bool
+    /// This login session is the one on the console (not switched away).
+    public var sessionOnConsole: Bool
+    public init(displaysAsleep: Bool, sessionOnConsole: Bool) {
+        self.displaysAsleep = displaysAsleep; self.sessionOnConsole = sessionOnConsole
+    }
+
+    /// Reads CoreGraphics: `CGDisplayIsAsleep` for the listed displays, and the session's on-console flag.
+    public static func read(displays: [UInt32]) -> SystemState {
+        let asleep = displays.contains { CGDisplayIsAsleep($0) != 0 }
+        let session = (CGSessionCopyCurrentDictionary() as? [String: Any])?[kCGSessionOnConsoleKey as String] as? Bool
+        return SystemState(displaysAsleep: asleep, sessionOnConsole: session ?? false)
+    }
+}
+
 /// CoreGraphics' display reconfiguration callback (CGDisplayRegisterReconfigurationCallback): called before a change
 /// is applied (`willChange`, the begin flag) and once for each display after it (`didChange`).
 public final class DisplayReconfiguration {
@@ -80,10 +98,12 @@ public final class CoverCoordinator {
     public private(set) var running = false
     /// What was drawn last: one plan per display the OS lists.
     public private(set) var shown: [CoverPlan] = []
-    /// Restarts every capture stream (after a change has settled, or when the detector is ready).
-    public var restartCapture: (@MainActor () -> Void)?
+    /// Restarts every capture stream (after a change has settled, or when the detector is ready). The generation is
+    /// taken here, on the main thread, when the restart is asked for: a display change after this outranks it, however
+    /// late the streams start.
+    public var restartCapture: (@MainActor (_ generation: Int) -> Void)?
     /// Starts streams only for displays without one: a display ScreenCaptureKit did not list yet, a stream that stopped.
-    public var topUpCapture: (@MainActor () -> Void)?
+    public var topUpCapture: (@MainActor (_ generation: Int) -> Void)?
     /// Hands the judging queue the judged displays (counted here from the OS's lists) and each display's required
     /// stream generation. Called whenever either changes.
     public var judging: (@MainActor (_ judged: [UInt32], _ required: [UInt32: Int]) -> Void)?
@@ -99,11 +119,16 @@ public final class CoverCoordinator {
     /// Retries for a display with no stream (ScreenCaptureKit's list can lag a new display): after 1, 2 and 4 s, then
     /// not until the next change. The display stays covered whole meanwhile.
     public nonisolated static let topUpDelays: [TimeInterval] = [1, 2, 4]
+    /// A sleep, display-sleep or session hold whose wake or return notification never came ends once the OS says it
+    /// is over and the hold has lasted this long (awake time): displays awake, the session on the console.
+    public nonisolated static let holdCheckAfter: [HoldReason: TimeInterval] = [.displaysAsleep: 2, .session: 2, .sleep: 10]
 
     private let presenter: CoverPresenter
     private let read: @MainActor ([UInt32]) -> DisplayList?
     private let flush: @MainActor () -> Void
     private let clock: @MainActor () -> TimeInterval
+    private let state: @MainActor ([UInt32]) -> SystemState
+    private var holdSince: [HoldReason: TimeInterval] = [:]
     private var seenByCapture: [UInt32] = []
     public private(set) var restartDue: TimeInterval?
     public private(set) var topUpDue: TimeInterval?
@@ -114,9 +139,10 @@ public final class CoverCoordinator {
     public init(presenter: CoverPresenter, generations: GenerationCounter,
                 read: @escaping @MainActor ([UInt32]) -> DisplayList? = { SystemDisplays.read(capture: $0) },
                 flush: @escaping @MainActor () -> Void = { CATransaction.flush() },
-                clock: @escaping @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+                clock: @escaping @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+                state: @escaping @MainActor ([UInt32]) -> SystemState = { SystemState.read(displays: $0) }) {
         self.coverage = DisplayCoverage(generations: generations)
-        self.presenter = presenter; self.read = read; self.flush = flush; self.clock = clock
+        self.presenter = presenter; self.read = read; self.flush = flush; self.clock = clock; self.state = state
     }
 
     // MARK: Life
@@ -127,6 +153,7 @@ public final class CoverCoordinator {
         running = true
         coverage.detectorFailed = false
         coverage.reset(read(seenByCapture) ?? coverage.list)
+        holdSince = [:]
         resetRetries(); restartDue = nil
         handedToJudging = nil
         present(urgent: true)
@@ -146,6 +173,7 @@ public final class CoverCoordinator {
         guard running else { start(); return }
         coverage.detectorFailed = false
         coverage.reset(read(seenByCapture) ?? coverage.list)
+        holdSince = [:]
         resetRetries(); restartDue = nil
         present(urgent: true)
     }
@@ -155,7 +183,7 @@ public final class CoverCoordinator {
         guard running else { return }
         guard coverage.hold == nil else { restartDue = clock(); return }
         restartDue = nil
-        restartCapture?()
+        restartCapture?(coverage.newRequest())
     }
 
     /// The detector could not load: every display is covered whole, including any display attached later.
@@ -173,6 +201,7 @@ public final class CoverCoordinator {
     public func willChange(_ reason: HoldReason = .change) {
         guard running else { return }
         let ends = reason == .change ? clock() + Self.unfinishedChange : nil
+        if holdSince[reason] == nil { holdSince[reason] = clock() }
         coverage.hold(reason, until: ends)
         if ends != nil { wake?(Self.unfinishedChange) }
         present(urgent: true)
@@ -183,6 +212,7 @@ public final class CoverCoordinator {
     /// started after the change has settled.
     public func didChange(_ reason: HoldReason = .change) {
         guard running else { return }
+        holdSince[reason] = nil
         if let new = read(seenByCapture) {
             coverage.release(reason, new)
         } else {
@@ -202,13 +232,22 @@ public final class CoverCoordinator {
         present()
     }
 
-    /// A display has no stream (none could start, or it stopped). It is covered whole, and retried a few times.
-    public func fault(_ id: UInt32, _ cause: FaultCause, generation: Int?) {
+    /// A display has no stream for request or stream `generation` (none could start, or it stopped by itself). It is
+    /// covered whole, and retried a few times.
+    public func fault(_ id: UInt32, _ cause: FaultCause, generation: Int) {
         guard running else { return }
         coverage.fault(id, cause, generation: generation)
         if [.noStream, .streamStopped, .noPermissionOrNoContent].contains(cause), coverage.list.descriptor(id) != nil {
             scheduleTopUp()
         }
+        present()
+    }
+
+    /// A stream of this generation was stopped on purpose: its frames never count again, and a plan from it no longer
+    /// shows.
+    public func retire(_ id: UInt32, generation: Int) {
+        guard running else { return }
+        coverage.retire(id, generation: generation)
         present()
     }
 
@@ -233,13 +272,14 @@ public final class CoverCoordinator {
         var redraw = stalled != self.stalled
         self.stalled = stalled
         if let e = coverage.holdEnds, now >= e { didChange(); redraw = false }
+        endHoldsThatAreOver(now)
         if coverage.hold == nil, let r = restartDue, now >= r {
             restartDue = nil; topUpDue = nil
-            restartCapture?()
+            restartCapture?(coverage.newRequest())
         }
         if coverage.hold == nil, let t = topUpDue, now >= t {
             topUpDue = nil
-            topUpCapture?()
+            topUpCapture?(coverage.newRequest())
         }
         if refresh() { redraw = true }
         if redraw { draw(urgent: true) }
@@ -296,4 +336,24 @@ public final class CoverCoordinator {
     }
 
     private func resetRetries() { topUps = 0; topUpDue = nil }
+
+    /// A sleep, display-sleep or session hold ends without its notification once the OS says it is over: the listed
+    /// displays are awake (and, for sleep, the session is on the console), or the session is back on the console. It
+    /// is ended as its notification would end it: every display stays covered until judged by restarted streams.
+    private func endHoldsThatAreOver(_ now: TimeInterval) {
+        let waiting = coverage.holds.filter { $0 != .change }
+        guard !waiting.isEmpty else { return }
+        let s = state(coverage.list.ids)
+        for reason in waiting.sorted(by: { "\($0)" < "\($1)" }) {
+            guard let since = holdSince[reason], let after = Self.holdCheckAfter[reason], now - since >= after else { continue }
+            let over: Bool
+            switch reason {
+            case .displaysAsleep: over = !s.displaysAsleep
+            case .session: over = s.sessionOnConsole
+            case .sleep: over = !s.displaysAsleep && s.sessionOnConsole
+            case .change: over = false
+            }
+            if over { didChange(reason) }
+        }
+    }
 }
