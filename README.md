@@ -27,6 +27,8 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 | Change your Mac's clock | Fools some timers | The wait is checked against a public time signal |
 | Wipe the Mac | Works | Works here too. That's an evening of work, not a click |
 
+**About that last row:** wiping is the one way around it we haven't closed yet, and we're working on it. If you know macOS well and have ideas for making a wipe harder to use as an escape hatch, we'd love your help. Open an issue or start with [CONTRIBUTING.md](CONTRIBUTING.md). If your idea involves a way around the lock, please send it privately through [SECURITY.md](SECURITY.md) instead.
+
 ## How it works
 
 - **Everything stays on your Mac.** There's no account and no server, and your screen is checked on the device itself. Nothing you see is ever uploaded.
