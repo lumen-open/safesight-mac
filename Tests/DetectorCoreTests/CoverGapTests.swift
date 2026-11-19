@@ -101,4 +101,39 @@ final class CoverGapTests: XCTestCase {
         XCTAssertFalse(rv.isEmpty, "the finder sees the small picture")
         XCTAssertTrue(rv.allSatisfy { $0.display != .clear }, "\(rv)")
     }
+
+    // MARK: Thin strips
+
+    func testAThinStripIsJudgedBySlicesNotDozensOfWholePassPieces() {
+        let img = canvas(3000, 40)
+        let (d, _, _) = detector()
+        let strip = PixelRect(x: 0, y: 0, w: 3000, h: 16)
+        let v = d.judge(img, context: ctx, within: strip)
+        XCTAssertFalse(v.regions.contains { $0.pass == .whole })
+        XCTAssertLessThanOrEqual(v.judgements, 40, "was about 250")
+        XCTAssertEqual(v.overloaded, 0)
+        // Nothing of the strip is left unjudged: its slices reach every pixel of it.
+        let slices = v.regions.filter { $0.pass == .slice }.map(\.rect)
+        for x in stride(from: 0, to: 3000, by: 7) {
+            XCTAssertTrue(slices.contains { $0.x <= x && x < $0.maxX && $0.y <= 0 && $0.maxY >= 16 }, "x \(x)")
+        }
+    }
+
+    func testAShortThinStripStillGetsOneSlice() {
+        let img = canvas(600, 40)
+        let (d, _, _) = detector()
+        let strip = PixelRect(x: 10, y: 4, w: 450, h: 12)
+        let v = d.judge(img, context: ctx, within: strip)
+        XCTAssertFalse(v.regions.contains { $0.pass == .whole })
+        XCTAssertTrue(v.regions.contains { $0.pass == .slice && $0.rect == strip })
+    }
+
+    func testAThinStripWithAFlaggedSliceStillCovers() {
+        var img = canvas(1200, 40)
+        paint(&img, PixelRect(x: 0, y: 0, w: 600, h: 40), channel: 0, seed: 1)
+        paint(&img, PixelRect(x: 600, y: 0, w: 600, h: 40), channel: 2, seed: 2)
+        let (d, _, _) = detector(cover: 0.3)
+        let v = d.judge(img, context: ctx, within: PixelRect(x: 0, y: 0, w: 1200, h: 40))
+        XCTAssertTrue(v.regions.contains { $0.display == .cover })
+    }
 }

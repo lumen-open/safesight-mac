@@ -71,6 +71,11 @@ public final class Detector {
 
     typealias Pass = JudgePass
 
+    /// A call area whose short side is below this, and whose whole pass would take more than `thinWholePiecesMax`
+    /// pieces, skips the whole pass: its regions and slices judge it.
+    static let thinBelow = 64
+    static let thinWholePiecesMax = 4
+
     /// Changes the detector rule. The verdict cache is emptied, because a cached outcome was made under
     /// the other rule (the tie-breaker is asked only under Balanced).
     public func setRule(_ rule: DetectorRule) {
@@ -213,8 +218,16 @@ public final class Detector {
             tasks.append(Task(rect: r, pieces: Self.pieces(r), pass: .region, gridMember: gridMembers.contains(r),
                               key: VerdictCache.key(frame, r, pass: "region", version: v)))
         }
-        tasks.append(Task(rect: A, pieces: Self.pieces(A), pass: .whole, gridMember: false, key: VerdictCache.key(frame, A, pass: "whole", version: v)))
-        for s in Self.slices(A, size: config.sliceSize, stride: config.sliceStride, anchor: ctx.sliceAnchor) {
+        // A thin strip (a wide, short changed area) would cost dozens of whole-pass pieces. It is left to the regions
+        // and the slices, with at least one slice over it, so every part of it is still judged.
+        let wholePieces = Self.pieces(A)
+        let thin = A.shortSide < Self.thinBelow && wholePieces.count > Self.thinWholePiecesMax
+        if !thin {
+            tasks.append(Task(rect: A, pieces: wholePieces, pass: .whole, gridMember: false, key: VerdictCache.key(frame, A, pass: "whole", version: v)))
+        }
+        var sliceRects = Self.slices(A, size: config.sliceSize, stride: config.sliceStride, anchor: ctx.sliceAnchor)
+        if thin && sliceRects.isEmpty { sliceRects = [A] }
+        for s in sliceRects {
             tasks.append(Task(rect: s, pieces: [s], pass: .slice, gridMember: false, key: VerdictCache.key(frame, s, pass: "slice", version: v)))
         }
 
