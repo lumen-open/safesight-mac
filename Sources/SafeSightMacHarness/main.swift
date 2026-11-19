@@ -12,6 +12,9 @@
 //   safesightmac-harness wayout --out DIR [--appearance light|dark]
 //            (lab build only) synthetic desktops whose covers leave the way out in sight, and the "How it works"
 //            window drawn from its own views; see WayOutScenes.swift
+//   safesightmac-harness vanish
+//            a real cover window, invisible and off every display, goes the moment its process is killed or quits;
+//            see Vanish.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
 //            --models DIR (real models, checked against the sealed hash list)  --null-models (lab build only)
@@ -163,6 +166,11 @@ func report(_ i: Int, _ label: String, _ plan: CoverPlan, primaryHeight: CGFloat
 }
 
 // MARK: Run
+
+if CommandLine.arguments.dropFirst().first == "vanish" {
+    if CommandLine.arguments.contains("--child") { Vanish.child() }
+    Vanish.run()
+}
 
 let o = parse()
 

@@ -77,6 +77,12 @@ final class CoverPanel: NSPanel {
     }
 }
 
+extension CoverDrawing {
+    /// A cover window exactly as the cover layer makes it, for the lab harness's check that a process's covers go
+    /// when it ends (`safesightmac-harness vanish`). The harness keeps it invisible and off every display.
+    @MainActor public static func coverWindowForLifetimeCheck(frame: CGRect) -> NSPanel { CoverPanel.make(frame: frame) }
+}
+
 /// The canvas's layers for one plan, built without any window. The canvas form uses it, and the lab
 /// harness's bench times it on a detached layer (no window, nothing drawn on a screen); the harness also
 /// renders it into its frames.
