@@ -161,12 +161,15 @@ public final class DisplayPipeline {
         // 1. What to judge: the changed areas; regions waiting to lift; overflow from earlier calls;
         //    old and new places of moved windows; and a full pass on the `FULL_REJUDGE` rhythm.
         var areas: [CGRect]
+        // What the frame itself reports as changed (global points), without the areas added for re-judging.
+        var reported: [CGRect] = [d]
         let fullDue = lastFullPass.map { now - $0 >= Register.FULL_REJUDGE_SHOW_FIRST } ?? true
         if dirty == nil || fullDue || !judged {
             areas = [d]
             lastFullPass = now
         } else {
             areas = DirtyRegions.prepare(dirty!, width: img.width, height: img.height).map(map.toGlobal)
+            reported = areas
             areas += pending
             for h in held { if let g = fullRect(h, snapshot, visible) { areas.append(g) } }
             for (_, old, new) in moved { areas += [old.intersection(d), new.intersection(d)].filter(\.hasArea) }
@@ -190,13 +193,19 @@ public final class DisplayPipeline {
         }
         timing.changeMs = PipelineTimings.ms(since: tStage)
 
+        // 2a. A window moved: its covers are drawn at its new place (and its old one) now, before anything is judged.
+        if judged, !moved.isEmpty, let provisional {
+            provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: [])))
+            timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
+        }
+
         // 2b. Content that moved by a translation (scrolling): its covers move with it now, in this update,
         //     before the moved area is judged again. Each moved cover is also drawn reaching ahead along the
         //     motion, for this update, as far as the content will go before the next plan.
         var lead: [Held] = []
         if judged, let prev = previous, dirty != nil {
             tStage = PipelineTimings.now()
-            lead = followMotion(prev, img, parts: parts, map: map, snapshot: snapshot, frameInterval: frameInterval)
+            lead = followMotion(prev, img, parts: parts, map: map, snapshot: snapshot, frameInterval: frameInterval, reported: reported)
             timing.translateMs = PipelineTimings.ms(since: tStage)
             if !lead.isEmpty, let provisional {
                 provisional(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead)))
@@ -371,7 +380,11 @@ public final class DisplayPipeline {
     /// is covered as well as its old one. Returns each moved cover stretched along the motion as far as the
     /// content will go before the next plan can be drawn (drawn for this update only). Nothing is lifted here.
     func followMotion(_ prev: RGBAImage, _ img: RGBAImage, parts: [TargetArea], map: CaptureMap, snapshot: WindowSnapshot,
-                      frameInterval: TimeInterval) -> [Held] {
+                      frameInterval: TimeInterval, reported: [CGRect]) -> [Held] {
+        // True when all of a pixel rectangle lies in what the frame reported as changed.
+        func inChanged(_ r: PixelRect) -> Bool {
+            reported.reduce([map.toGlobal(r)]) { $0.subtracting($1) }.allSatisfy { $0.width < 0.5 || $0.height < 0.5 }
+        }
         var lead: [Held] = [], copies: [Held] = []
         let ppx = map.pointsPerPixel
         for p in parts {
@@ -393,8 +406,11 @@ public final class DisplayPipeline {
             for i in held.indices where held[i].target == p.target && !held[i].whole {
                 guard let px = map.toPixels(held[i].rel.offsetBy(dx: o.x, dy: o.y)), px.intersects(area) else { continue }
                 let movedRel = held[i].rel.offsetBy(dx: step.dx, dy: step.dy)
-                let dest = PixelRect(x: px.x + t.dx, y: px.y + t.dy, w: px.w, h: px.h).intersection(area)
-                if let dest, MotionFinder.matches(old: prev, new: img, r: dest, t: t) {
+                // It moves only when all of it, and all of where it goes, lie in the changed area and the pixels there
+                // match: a cover merged over content that moved only in part stays, with a copy where that part went.
+                let dest = PixelRect(x: px.x + t.dx, y: px.y + t.dy, w: px.w, h: px.h)
+                if px.intersection(area) == px, dest.intersection(area) == dest, inChanged(px), inChanged(dest),
+                   MotionFinder.matches(old: prev, new: img, r: dest, t: t) {
                     held[i].rel = movedRel
                 } else {
                     var c = held[i]; c.rel = movedRel; copies.append(c)

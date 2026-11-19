@@ -236,7 +236,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         // The pointer, in global points: the window under it and the pictures nearest it go first.
         let pointer = CGEvent(source: nil)?.location
         let generation = f.generation
-        let plan = p.process(f, snapshot: WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
+        let plan = p.process(f, snapshot: f.windows ?? WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
             DispatchQueue.main.async { self?.coordinator.deliver(early, generation: generation) }
         }
         let ended = ProcessInfo.processInfo.systemUptime

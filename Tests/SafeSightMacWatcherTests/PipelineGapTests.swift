@@ -202,4 +202,70 @@ final class VerdictScript: Judging {
         #expect(vis.first?.0 == .window(number: 1, ownerPID: 500))
         #expect(!vis.contains { $0.0 == .window(number: 9, ownerPID: 900) })
     }
+
+    // MARK: Moved windows and moving content
+
+    @Test func aMovedWindowsCoversAreRedrawnBeforeAnythingIsJudged() {
+        final class Watch: Judging {
+            let inner = Fixtures.detector()
+            var early: [CoverPlan] = []
+            var earlyBeforeFirstCall: [CoverPlan]?
+            func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                           progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+                if earlyBeforeFirstCall == nil { earlyBeforeFirstCall = early }
+                return inner.judgeArea(frame, context: context, within: area, budget: budget, progress: progress)
+            }
+            func setRule(_ rule: DetectorRule) {}
+        }
+        let j = Watch()
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: 1e6, ignoredPIDs: [])
+        p.coverGoalMs = 1e9
+        _ = p.process(Fixtures.frame(flaggedAt(PixelRect(x: 60, y: 60, w: 100, h: 100)), display: d, scale: 1, t: 0),
+                      snapshot: Fixtures.oneWindow(CGRect(x: 40, y: 40, width: 300, height: 300)), now: 0)
+        j.earlyBeforeFirstCall = nil; j.early = []
+        // The window moves and its content changes too, so nothing is found to have scrolled.
+        var movedImg = Fixtures.blank(600, 400)
+        Fixtures.paintFlagged(&movedImg, PixelRect(x: 160, y: 60, w: 100, h: 100), seed: 9)
+        Fixtures.paint(&movedImg, PixelRect(x: 280, y: 200, w: 120, h: 100), channel: nil, seed: 21)
+        _ = p.process(Fixtures.frame(movedImg, display: d, scale: 1, dirty: [PixelRect(x: 40, y: 40, w: 400, h: 300)], t: 0.1),
+                      snapshot: Fixtures.oneWindow(CGRect(x: 140, y: 40, width: 300, height: 300)), now: 0.1) { j.early.append($0) }
+        let early = j.earlyBeforeFirstCall ?? []
+        #expect(early.contains { $0.covers(CGRect(x: 160, y: 60, width: 100, height: 100)) }, "new place, before judging")
+        #expect(early.contains { $0.covers(CGRect(x: 60, y: 60, width: 100, height: 100)) }, "old place too")
+    }
+
+    @Test func theWindowListTravelsWithThePixels() {
+        var box = FrameMailbox()
+        let a = WindowSnapshot(windows: [win], time: 1)
+        let b = WindowSnapshot(windows: [WindowInfo(number: 2, ownerPID: 600, layer: 0, bounds: d.bounds)], time: 2)
+        let img = Fixtures.blank(600, 400)
+        box.offer(Fixtures.frame(img, display: d, scale: 1, dirty: [], t: 1).with(windows: a))
+        box.offer(Fixtures.frame(img, display: d, scale: 1, dirty: [], t: 2).with(windows: b))
+        box.offer(idle(3))
+        #expect(box.take()?.windows == b, "the list read with the newest pixels")
+    }
+
+    @Test func aMergedCoverMovesOnlyWhenAllOfItMoved() {
+        // Textured content in one column scrolls up 16 points; the rest of the window stays still. A cover reaching
+        // beyond the column must not move with it.
+        let p = pipeline()
+        p.coverGoalMs = 1e9
+        var tall = Fixtures.blank(600, 432)
+        Fixtures.paint(&tall, PixelRect(x: 64, y: 0, w: 200, h: 432), channel: nil, seed: 11)
+        func view(_ off: Int) -> RGBAImage {
+            var img = Fixtures.blank(600, 400)
+            for y in 0..<400 { for x in 64..<264 { for c in 0..<4 { img.pixels[(y * 600 + x) * 4 + c] = tall.pixels[((y + off) * 600 + x) * 4 + c] } } }
+            return img
+        }
+        _ = p.process(Fixtures.frame(view(0), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        let wide = CGRect(x: 100, y: 100, width: 300, height: 100)
+        p.held = [DisplayPipeline.Held(target: .window(number: 1, ownerPID: 500), rel: wide, whole: false, kind: .plain, clean: 0)]
+        let plan = p.process(Fixtures.frame(view(16), display: d, scale: 1, dirty: [PixelRect(x: 64, y: 0, w: 200, h: 400)], t: 0.1),
+                             snapshot: snap, now: 0.1)
+        #expect(plan.covers(wide), "\(plan.items.map(\.rect))")
+    }
+}
+
+extension CapturedFrame {
+    func with(windows w: WindowSnapshot) -> CapturedFrame { var f = self; f.windows = w; return f }
 }

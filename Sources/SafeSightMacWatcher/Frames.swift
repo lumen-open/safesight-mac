@@ -53,11 +53,14 @@ public struct CapturedFrame: Sendable {
     /// The generation of the stream that captured it (`GenerationCounter`). A display change raises the generation a
     /// display's frames need, so a frame from an older stream never lowers a cover drawn because of the change.
     public var generation: Int
+    /// The window list read when the frame arrived, so covers are placed on the windows these pixels show; nil when it
+    /// was not read (the cover layer then reads it when it judges).
+    public var windows: WindowSnapshot?
 
     public init(display: DisplayDescriptor, status: FrameStatus, image: RGBAImage?, map: CaptureMap?,
-                dirty: [PixelRect]?, time: TimeInterval, generation: Int = 0) {
+                dirty: [PixelRect]?, time: TimeInterval, generation: Int = 0, windows: WindowSnapshot? = nil) {
         self.display = display; self.status = status; self.image = image; self.map = map; self.dirty = dirty; self.time = time
-        self.generation = generation
+        self.generation = generation; self.windows = windows
     }
 }
 
@@ -121,6 +124,7 @@ public struct FrameMailbox: Sendable {
             old.status = f.status
             old.image = f.image
             old.map = f.map
+            old.windows = f.windows
         }
         old.display = f.display
         old.dirty = dirty

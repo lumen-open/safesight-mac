@@ -152,8 +152,10 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
         let map = meta.map(displayBounds: bounds, pixelWidth: w, pixelHeight: h)
         // The detector copies the pixels it needs; the buffer is released as soon as this returns.
         let img = RGBAImage.fromBGRA(width: w, height: h, bytesPerRow: CVPixelBufferGetBytesPerRow(pb), base: base)
+        // The window list goes with the pixels, so covers are placed on the windows this frame shows.
         sink.capture(CapturedFrame(display: desc, status: .complete, image: img, map: map,
-                                   dirty: meta.dirtyPixels(width: w, height: h), time: now, generation: generation))
+                                   dirty: meta.dirtyPixels(width: w, height: h), time: now, generation: generation,
+                                   windows: WindowList.snapshot()))
     }
 
     // MARK: SCStreamDelegate
