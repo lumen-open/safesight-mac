@@ -1,0 +1,3036 @@
+{
+ "bench": "safesightmac-bench/1",
+ "label": "two clean checks before a clean verdict is reused: main, check on reuse only, and background checks",
+ "note": "Real models checked against the sealed hash list, sealed cut-off table, the six busy pages of harmless photos. 'main' is main at 73b6568 (one clean judgement cached). 'on-reuse' is this build with --no-background-checks: a picture seen clean once is judged again only when it comes back. 'background' is this build as shipped: also judged again while the display is still. The reuse case judges each page or view in full at the detector in one uncapped call, so its judgement counts are exact; background judgements are counted apart. The reappear case runs the cover layer with its per-call cap and per-frame time limit, so its per-step counts are capped and not exact. The 'on-reuse-reappear' run was made before the background checks existed (same rule otherwise). Runs on one M1 Max shared with other work (load average about 9), partly on battery: times vary between runs, counts do not.",
+ "runs": {
+  "background-reappear": {
+   "backgroundSecondChecks": true,
+   "bench": "safesightmac-bench/1",
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 3.6,
+     "n": 10,
+     "worst": 5
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "background-reappear",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reappear": {
+    "reload": {
+     "firstShowMs": {
+      "median": 281.9,
+      "n": 6,
+      "worst": 296.6
+     },
+     "firstShowStages": {
+      "cacheHashMs": 40.2,
+      "cacheHits": 0,
+      "cacheMisses": 582,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.1,
+      "decisionMs": 0.1,
+      "finderMs": 0,
+      "judgeTotalMs": 73.2,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 21,
+      "model.marqo-vit-tiny-384.preprocessMs": 5.9,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3.1,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 2.1,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 568,
+      "planningMs": 0.8,
+      "processTotalMs": 281.9,
+      "secondCheckJudgements": 0,
+      "translationMs": 20.9
+     },
+     "pages": 6,
+     "reloadMs": {
+      "median": 186,
+      "n": 6,
+      "worst": 211.6
+     },
+     "reloadStages": {
+      "cacheHashMs": 40.2,
+      "cacheHits": 84,
+      "cacheMisses": 540,
+      "changeDetectionMs": 0.1,
+      "coverDrawMs": 1.1,
+      "decisionMs": 0.1,
+      "finderMs": 0,
+      "judgeTotalMs": 158.3,
+      "judgements": 18,
+      "model.bumble-private-detector.inferenceMs": 0,
+      "model.bumble-private-detector.preprocessMs": 0,
+      "model.bumble-private-detector.tiles": 0,
+      "model.marqo-vit-tiny-384.inferenceMs": 66.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 26.1,
+      "model.marqo-vit-tiny-384.tiles": 9,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 11.2,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 9.3,
+      "model.nsfwjs-mobilenet-v2.tiles": 9,
+      "modelFaults": 0,
+      "overloaded": 520,
+      "planningMs": 2.5,
+      "processTotalMs": 186,
+      "secondCheckJudgements": 0,
+      "translationMs": 16
+     }
+    },
+    "scrollBack-otherOffsets": {
+     "backMs": {
+      "median": 318.7,
+      "n": 9,
+      "worst": 360.2
+     },
+     "backStages": {
+      "cacheHashMs": 40.6,
+      "cacheHits": 34,
+      "cacheMisses": 12,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 179.4,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 20.5,
+      "model.marqo-vit-tiny-384.preprocessMs": 57.7,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 2.8,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 50.1,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 10,
+      "planningMs": 0,
+      "processTotalMs": 318.7,
+      "secondCheckJudgements": 0,
+      "translationMs": 5.1
+     },
+     "downMs": {
+      "median": 234.9,
+      "n": 7,
+      "worst": 294.5
+     }
+    },
+    "scrollBack-sameOffsets": {
+     "backMs": {
+      "median": 57.7,
+      "n": 6,
+      "worst": 77.4
+     },
+     "backStages": {
+      "cacheHashMs": 40.8,
+      "cacheHits": 48,
+      "cacheMisses": 0,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 40.9,
+      "judgements": 0,
+      "model.marqo-vit-tiny-384.inferenceMs": 0,
+      "model.marqo-vit-tiny-384.preprocessMs": 0,
+      "model.marqo-vit-tiny-384.tiles": 0,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 0,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 0,
+      "model.nsfwjs-mobilenet-v2.tiles": 0,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 57.7,
+      "secondCheckJudgements": 0,
+      "translationMs": 5.1
+     },
+     "downMs": {
+      "median": 292.8,
+      "n": 7,
+      "worst": 310.3
+     }
+    },
+    "windowMove": {
+     "moveMs": {
+      "median": 321.2,
+      "n": 6,
+      "worst": 332.2
+     },
+     "pages": 6,
+     "stages": {
+      "cacheHashMs": 0.1,
+      "cacheHits": 0,
+      "cacheMisses": 1,
+      "changeDetectionMs": 0.3,
+      "coverDrawMs": 6.4,
+      "decisionMs": 0,
+      "finderMs": 0.1,
+      "judgeTotalMs": 19.4,
+      "judgements": 2,
+      "model.marqo-vit-tiny-384.inferenceMs": 13.8,
+      "model.marqo-vit-tiny-384.preprocessMs": 3,
+      "model.marqo-vit-tiny-384.tiles": 1,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 1.4,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 1.1,
+      "model.nsfwjs-mobilenet-v2.tiles": 1,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0.2,
+      "processTotalMs": 321.2,
+      "secondCheckJudgements": 0,
+      "translationMs": 30.4
+     }
+    }
+   },
+   "rule": "balanced"
+  },
+  "background-reuse": {
+   "backgroundSecondChecks": true,
+   "bench": "safesightmac-bench/1",
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 4.5,
+     "n": 10,
+     "worst": 6.3
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "background-reuse",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 772,
+     "n": 6,
+     "total": 4654,
+     "worst": 902
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8418.5,
+     "n": 6,
+     "total": 49096.1,
+     "worst": 9179.8
+    },
+    "moveBackgroundJudgements": {
+     "median": 552,
+     "n": 6,
+     "total": 3388,
+     "worst": 684
+    },
+    "moveJudgements": {
+     "median": 170,
+     "n": 6,
+     "total": 1250,
+     "worst": 392
+    },
+    "moveMs": {
+     "median": 1177.1,
+     "n": 6,
+     "total": 8970.6,
+     "worst": 2439.3
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 232,
+     "n": 6,
+     "total": 1694,
+     "worst": 546
+    },
+    "reloadMs": {
+     "median": 1800.2,
+     "n": 6,
+     "total": 12531.6,
+     "worst": 3619.8
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 242,
+     "backMsTotal": 4260.6,
+     "backgroundJudgementsTotal": 546
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 14,
+     "backMsTotal": 411,
+     "backgroundJudgementsTotal": 358
+    },
+    "thirdShowJudgements": {
+     "median": 232,
+     "n": 6,
+     "total": 1694,
+     "worst": 546
+    },
+    "thirdShowMs": {
+     "median": 1722.4,
+     "n": 6,
+     "total": 12335.4,
+     "worst": 3607.6
+    }
+   },
+   "rule": "balanced"
+  },
+  "background-single-busy-scroll": {
+   "backgroundSecondChecks": true,
+   "bench": "safesightmac-bench/1",
+   "busy": {
+    "register": {
+     "allHarmlessShownAfterS": {
+      "median": 63.2,
+      "n": 6,
+      "worst": 68.2
+     },
+     "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+     "budget": "register (JUDGEMENT_BUDGET 40/s, JUDGEMENT_BURST 400)",
+     "fastModelFlags": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "firstCallMs": {
+      "median": 287.2,
+      "n": 6,
+      "worst": 444.2
+     },
+     "firstCallStages": {
+      "cacheHashMs": 42.7,
+      "cacheHits": 0,
+      "cacheMisses": 583,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.2,
+      "decisionMs": 0.1,
+      "finderMs": 0,
+      "judgeTotalMs": 65.2,
+      "judgements": 2,
+      "model.marqo-vit-tiny-384.inferenceMs": 14.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 3,
+      "model.marqo-vit-tiny-384.tiles": 1,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 1.7,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 1.1,
+      "model.nsfwjs-mobilenet-v2.tiles": 1,
+      "modelFaults": 0,
+      "overloaded": 564,
+      "planningMs": 0.9,
+      "processTotalMs": 287.2,
+      "secondCheckJudgements": 0,
+      "translationMs": 20.7
+     },
+     "firstPlanHandedOutMs": {
+      "median": 22.9,
+      "n": 6,
+      "worst": 190.2
+     },
+     "fullyJudgedAfterS": {
+      "median": -1,
+      "n": 0,
+      "worst": -1
+     },
+     "pages": 6,
+     "perPage": [
+      {
+       "calls": 600,
+       "computeMs": 49305.2,
+       "firstCallJudgements": 44,
+       "firstCallMs": 444.2,
+       "firstCallOverloaded": 536,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.6,
+       "lastOverloadAfterS": 62.6,
+       "page": "synthetic-0058.png",
+       "photoShownLateS": {
+        "median": 62.7,
+        "worst": 62.7
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 191.9
+      },
+      {
+       "calls": 600,
+       "computeMs": 48673.9,
+       "firstCallJudgements": 2,
+       "firstCallMs": 281.4,
+       "firstCallOverloaded": 582,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 64.9,
+       "lastOverloadAfterS": 64.9,
+       "page": "synthetic-0048.png",
+       "photoShownLateS": {
+        "median": 65,
+        "worst": 65
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 38.1
+      },
+      {
+       "calls": 600,
+       "computeMs": 49874.6,
+       "firstCallJudgements": 2,
+       "firstCallMs": 287.2,
+       "firstCallOverloaded": 696,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 63,
+       "lastOverloadAfterS": 63,
+       "page": "synthetic-0057.png",
+       "photoShownLateS": {
+        "median": 63.1,
+        "worst": 63.1
+       },
+       "photos": 234,
+       "photosCoveredOrBlurredAtSomePoint": 234,
+       "standInCoveredAfterMs": 22.8
+      },
+      {
+       "calls": 600,
+       "computeMs": 50884.5,
+       "firstCallJudgements": 0,
+       "firstCallMs": 301.3,
+       "firstCallOverloaded": 0,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 63.2,
+       "lastOverloadAfterS": 63.2,
+       "page": "synthetic-0040.png",
+       "photoShownLateS": {
+        "median": 63.2,
+        "worst": 63.2
+       },
+       "photos": 194,
+       "photosCoveredOrBlurredAtSomePoint": 194,
+       "standInCoveredAfterMs": 22.9
+      },
+      {
+       "calls": 600,
+       "computeMs": 48615.8,
+       "firstCallJudgements": 2,
+       "firstCallMs": 283.5,
+       "firstCallOverloaded": 521,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.9,
+       "lastOverloadAfterS": 62.9,
+       "page": "synthetic-0025.png",
+       "photoShownLateS": {
+        "median": 63,
+        "worst": 63
+       },
+       "photos": 159,
+       "photosCoveredOrBlurredAtSomePoint": 159,
+       "standInCoveredAfterMs": 23
+      },
+      {
+       "calls": 600,
+       "computeMs": 52263.4,
+       "firstCallJudgements": 2,
+       "firstCallMs": 285.9,
+       "firstCallOverloaded": 564,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 68.2,
+       "lastOverloadAfterS": 68.2,
+       "page": "synthetic-0013.png",
+       "photoShownLateS": {
+        "median": 68.3,
+        "worst": 68.3
+       },
+       "photos": 157,
+       "photosCoveredOrBlurredAtSomePoint": 157,
+       "standInCoveredAfterMs": 23.5
+      }
+     ],
+     "photoShownLateMedianS": {
+      "median": 63.2,
+      "n": 6,
+      "worst": 68.3
+     },
+     "photoShownLateWorstS": {
+      "median": 63.2,
+      "n": 6,
+      "worst": 68.3
+     },
+     "photoShownSharpBeforeFirstCoverS": {
+      "median": 0,
+      "n": 6,
+      "worst": 0.2
+     },
+     "photosCoveredOrBlurredShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "photosNearProbeShownAfterS": {
+      "median": 63.1,
+      "n": 74,
+      "worst": 68.3
+     },
+     "plansHidingATenthOfTheText": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "pointer": "none",
+     "probe": "photos within 220 points of 1080, 675",
+     "regionsCoveredFirst": {
+      "median": 542,
+      "n": 6,
+      "worst": 657
+     },
+     "standInTimeToCoverMs": {
+      "median": 23.5,
+      "n": 6,
+      "worst": 191.9
+     },
+     "textHiddenMaxShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     }
+    },
+    "registerPointer": {
+     "allHarmlessShownAfterS": {
+      "median": 63.3,
+      "n": 6,
+      "worst": 65.9
+     },
+     "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+     "budget": "register (JUDGEMENT_BUDGET 40/s, JUDGEMENT_BURST 400)",
+     "fastModelFlags": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "firstCallMs": {
+      "median": 281.5,
+      "n": 6,
+      "worst": 303.1
+     },
+     "firstCallStages": {
+      "cacheHashMs": 40.5,
+      "cacheHits": 0,
+      "cacheMisses": 583,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 74.2,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 21.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 5.8,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3.2,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 3.4,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 573,
+      "planningMs": 0.9,
+      "processTotalMs": 281.5,
+      "secondCheckJudgements": 0,
+      "translationMs": 20.7
+     },
+     "firstPlanHandedOutMs": {
+      "median": 22.3,
+      "n": 6,
+      "worst": 27.1
+     },
+     "fullyJudgedAfterS": {
+      "median": -1,
+      "n": 0,
+      "worst": -1
+     },
+     "pages": 6,
+     "perPage": [
+      {
+       "calls": 600,
+       "computeMs": 47042,
+       "firstCallJudgements": 10,
+       "firstCallMs": 274.1,
+       "firstCallOverloaded": 596,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.7,
+       "lastOverloadAfterS": 62.7,
+       "page": "synthetic-0058.png",
+       "photoShownLateS": {
+        "median": 62.8,
+        "worst": 62.8
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 23.4
+      },
+      {
+       "calls": 600,
+       "computeMs": 47946.6,
+       "firstCallJudgements": 10,
+       "firstCallMs": 263.5,
+       "firstCallOverloaded": 573,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 63.1,
+       "lastOverloadAfterS": 63.1,
+       "page": "synthetic-0048.png",
+       "photoShownLateS": {
+        "median": 63.2,
+        "worst": 63.2
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 22.8
+      },
+      {
+       "calls": 600,
+       "computeMs": 49912.2,
+       "firstCallJudgements": 2,
+       "firstCallMs": 299.6,
+       "firstCallOverloaded": 697,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 65.9,
+       "lastOverloadAfterS": 65.9,
+       "page": "synthetic-0057.png",
+       "photoShownLateS": {
+        "median": 66,
+        "worst": 66
+       },
+       "photos": 234,
+       "photosCoveredOrBlurredAtSomePoint": 234,
+       "standInCoveredAfterMs": 27.6
+      },
+      {
+       "calls": 600,
+       "computeMs": 51308.6,
+       "firstCallJudgements": 0,
+       "firstCallMs": 303.1,
+       "firstCallOverloaded": 0,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 63.1,
+       "lastOverloadAfterS": 63.1,
+       "page": "synthetic-0040.png",
+       "photoShownLateS": {
+        "median": 63.2,
+        "worst": 63.2
+       },
+       "photos": 194,
+       "photosCoveredOrBlurredAtSomePoint": 194,
+       "standInCoveredAfterMs": 22.9
+      },
+      {
+       "calls": 600,
+       "computeMs": 49535,
+       "firstCallJudgements": 2,
+       "firstCallMs": 280.7,
+       "firstCallOverloaded": 521,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 63.3,
+       "lastOverloadAfterS": 63.3,
+       "page": "synthetic-0025.png",
+       "photoShownLateS": {
+        "median": 63.4,
+        "worst": 63.4
+       },
+       "photos": 159,
+       "photosCoveredOrBlurredAtSomePoint": 159,
+       "standInCoveredAfterMs": 23.1
+      },
+      {
+       "calls": 600,
+       "computeMs": 51110.7,
+       "firstCallJudgements": 4,
+       "firstCallMs": 281.5,
+       "firstCallOverloaded": 557,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 64.5,
+       "lastOverloadAfterS": 64.5,
+       "page": "synthetic-0013.png",
+       "photoShownLateS": {
+        "median": 64.6,
+        "worst": 64.6
+       },
+       "photos": 157,
+       "photosCoveredOrBlurredAtSomePoint": 157,
+       "standInCoveredAfterMs": 22.8
+      }
+     ],
+     "photoShownLateMedianS": {
+      "median": 63.4,
+      "n": 6,
+      "worst": 66
+     },
+     "photoShownLateWorstS": {
+      "median": 63.4,
+      "n": 6,
+      "worst": 66
+     },
+     "photoShownSharpBeforeFirstCoverS": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "photosCoveredOrBlurredShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "photosNearProbeShownAfterS": {
+      "median": 66,
+      "n": 74,
+      "worst": 66
+     },
+     "plansHidingATenthOfTheText": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "pointer": "at 1080, 675 points",
+     "probe": "photos within 220 points of 1080, 675",
+     "regionsCoveredFirst": {
+      "median": 542,
+      "n": 6,
+      "worst": 657
+     },
+     "standInTimeToCoverMs": {
+      "median": 23.1,
+      "n": 6,
+      "worst": 27.6
+     },
+     "textHiddenMaxShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     }
+    },
+    "unlimited": {
+     "allHarmlessShownAfterS": {
+      "median": 90.1,
+      "n": 6,
+      "worst": 90.2
+     },
+     "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+     "budget": "unlimited (compute-bound; DETECTOR_CALL_CAP still applies)",
+     "fastModelFlags": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "firstCallMs": {
+      "median": 283.3,
+      "n": 6,
+      "worst": 306.8
+     },
+     "firstCallStages": {
+      "cacheHashMs": 40.1,
+      "cacheHits": 0,
+      "cacheMisses": 583,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.2,
+      "decisionMs": 0.1,
+      "finderMs": 0,
+      "judgeTotalMs": 68.5,
+      "judgements": 2,
+      "model.marqo-vit-tiny-384.inferenceMs": 14.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 7,
+      "model.marqo-vit-tiny-384.tiles": 1,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 1.7,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 1.1,
+      "model.nsfwjs-mobilenet-v2.tiles": 1,
+      "modelFaults": 0,
+      "overloaded": 570,
+      "planningMs": 0.8,
+      "processTotalMs": 283.3,
+      "secondCheckJudgements": 0,
+      "translationMs": 21.3
+     },
+     "firstPlanHandedOutMs": {
+      "median": 23,
+      "n": 6,
+      "worst": 23.4
+     },
+     "fullyJudgedAfterS": {
+      "median": -1,
+      "n": 0,
+      "worst": -1
+     },
+     "pages": 6,
+     "perPage": [
+      {
+       "calls": 423,
+       "computeMs": 90360.8,
+       "firstCallJudgements": 10,
+       "firstCallMs": 269.1,
+       "firstCallOverloaded": 596,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.1,
+       "lastOverloadAfterS": 90.1,
+       "page": "synthetic-0058.png",
+       "photoShownLateS": {
+        "median": 90.4,
+        "worst": 90.4
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 23.2
+      },
+      {
+       "calls": 477,
+       "computeMs": 90233,
+       "firstCallJudgements": 8,
+       "firstCallMs": 258.1,
+       "firstCallOverloaded": 570,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.1,
+       "lastOverloadAfterS": 90.1,
+       "page": "synthetic-0048.png",
+       "photoShownLateS": {
+        "median": 90.3,
+        "worst": 90.3
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 24.1
+      },
+      {
+       "calls": 428,
+       "computeMs": 90448.6,
+       "firstCallJudgements": 2,
+       "firstCallMs": 283.3,
+       "firstCallOverloaded": 696,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.2,
+       "lastOverloadAfterS": 90.2,
+       "page": "synthetic-0057.png",
+       "photoShownLateS": {
+        "median": 90.4,
+        "worst": 90.4
+       },
+       "photos": 234,
+       "photosCoveredOrBlurredAtSomePoint": 234,
+       "standInCoveredAfterMs": 23.5
+      },
+      {
+       "calls": 393,
+       "computeMs": 90316.9,
+       "firstCallJudgements": 0,
+       "firstCallMs": 306.8,
+       "firstCallOverloaded": 0,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.1,
+       "lastOverloadAfterS": 90.1,
+       "page": "synthetic-0040.png",
+       "photoShownLateS": {
+        "median": 90.3,
+        "worst": 90.3
+       },
+       "photos": 194,
+       "photosCoveredOrBlurredAtSomePoint": 194,
+       "standInCoveredAfterMs": 23.6
+      },
+      {
+       "calls": 373,
+       "computeMs": 90310.9,
+       "firstCallJudgements": 2,
+       "firstCallMs": 277.2,
+       "firstCallOverloaded": 521,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90,
+       "lastOverloadAfterS": 90,
+       "page": "synthetic-0025.png",
+       "photoShownLateS": {
+        "median": 90.3,
+        "worst": 90.3
+       },
+       "photos": 159,
+       "photosCoveredOrBlurredAtSomePoint": 159,
+       "standInCoveredAfterMs": 23
+      },
+      {
+       "calls": 385,
+       "computeMs": 90316.6,
+       "firstCallJudgements": 2,
+       "firstCallMs": 290.2,
+       "firstCallOverloaded": 564,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.1,
+       "lastOverloadAfterS": 90.1,
+       "page": "synthetic-0013.png",
+       "photoShownLateS": {
+        "median": 90.3,
+        "worst": 90.3
+       },
+       "photos": 157,
+       "photosCoveredOrBlurredAtSomePoint": 157,
+       "standInCoveredAfterMs": 23.5
+      }
+     ],
+     "photoShownLateMedianS": {
+      "median": 90.3,
+      "n": 6,
+      "worst": 90.4
+     },
+     "photoShownLateWorstS": {
+      "median": 90.3,
+      "n": 6,
+      "worst": 90.4
+     },
+     "photoShownSharpBeforeFirstCoverS": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "photosCoveredOrBlurredShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "photosNearProbeShownAfterS": {
+      "median": 90.4,
+      "n": 74,
+      "worst": 90.4
+     },
+     "plansHidingATenthOfTheText": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "pointer": "none",
+     "probe": "photos within 220 points of 1080, 675",
+     "regionsCoveredFirst": {
+      "median": 542,
+      "n": 6,
+      "worst": 657
+     },
+     "standInTimeToCoverMs": {
+      "median": 23.5,
+      "n": 6,
+      "worst": 24.1
+     },
+     "textHiddenMaxShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     }
+    }
+   },
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 3.6,
+     "n": 10,
+     "worst": 4.9
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "background-single-busy-scroll",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "rule": "balanced",
+   "scroll": {
+    "32px-register": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 12,
+     "perFrameMs": {
+      "median": 237.3,
+      "n": 12,
+      "worst": 433.8
+     },
+     "scrollingS": 1.875,
+     "simulatedS": 3,
+     "speed": "32 px per frame at 60 Hz (960 points per second)",
+     "stages": {
+      "cacheHashMs": 37.6,
+      "cacheHits": 2,
+      "cacheMisses": 43,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 172,
+      "judgements": 8,
+      "model.marqo-vit-tiny-384.inferenceMs": 32.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 58,
+      "model.marqo-vit-tiny-384.tiles": 4,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 5.7,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 50.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 4,
+      "modelFaults": 0,
+      "overloaded": 40,
+      "planningMs": 0,
+      "processTotalMs": 237.3,
+      "secondCheckJudgements": 4,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0.47600000000000003,
+      "maxShareExposed": 0
+     }
+    },
+    "32px-unlimited": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 12,
+     "perFrameMs": {
+      "median": 232.4,
+      "n": 12,
+      "worst": 433.8
+     },
+     "scrollingS": 1.875,
+     "simulatedS": 2.9899999999999998,
+     "speed": "32 px per frame at 60 Hz (960 points per second)",
+     "stages": {
+      "cacheHashMs": 37.8,
+      "cacheHits": 2,
+      "cacheMisses": 43,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 175.2,
+      "judgements": 8,
+      "model.marqo-vit-tiny-384.inferenceMs": 26.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 55.5,
+      "model.marqo-vit-tiny-384.tiles": 4,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 5.8,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 49.8,
+      "model.nsfwjs-mobilenet-v2.tiles": 4,
+      "modelFaults": 0,
+      "overloaded": 40,
+      "planningMs": 0,
+      "processTotalMs": 232.4,
+      "secondCheckJudgements": 4,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0.47600000000000003,
+      "maxShareExposed": 0
+     }
+    },
+    "8px-register": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 25,
+     "perFrameMs": {
+      "median": 214.8,
+      "n": 25,
+      "worst": 451.5
+     },
+     "scrollingS": 5,
+     "simulatedS": 6.0200000000000005,
+     "speed": "8 px per frame at 60 Hz (240 points per second)",
+     "stages": {
+      "cacheHashMs": 39,
+      "cacheHits": 3,
+      "cacheMisses": 44,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 97.8,
+      "judgements": 6,
+      "model.marqo-vit-tiny-384.inferenceMs": 17.6,
+      "model.marqo-vit-tiny-384.preprocessMs": 18.7,
+      "model.marqo-vit-tiny-384.tiles": 3,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3.4,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 12.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 3,
+      "modelFaults": 0,
+      "overloaded": 41,
+      "planningMs": 0,
+      "processTotalMs": 214.8,
+      "secondCheckJudgements": 0,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 1.896,
+      "maxShareExposed": 0
+     }
+    },
+    "8px-unlimited": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 26,
+     "perFrameMs": {
+      "median": 225.8,
+      "n": 26,
+      "worst": 434
+     },
+     "scrollingS": 5,
+     "simulatedS": 6.04,
+     "speed": "8 px per frame at 60 Hz (240 points per second)",
+     "stages": {
+      "cacheHashMs": 38.9,
+      "cacheHits": 3,
+      "cacheMisses": 44,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 101.2,
+      "judgements": 6,
+      "model.marqo-vit-tiny-384.inferenceMs": 18.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 19.7,
+      "model.marqo-vit-tiny-384.tiles": 3,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.3,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 13.3,
+      "model.nsfwjs-mobilenet-v2.tiles": 3,
+      "modelFaults": 0,
+      "overloaded": 42,
+      "planningMs": 0,
+      "processTotalMs": 225.8,
+      "secondCheckJudgements": 0,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 1.896,
+      "maxShareExposed": 0
+     }
+    },
+    "96px-register": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 6,
+     "perFrameMs": {
+      "median": 279,
+      "n": 6,
+      "worst": 427.2
+     },
+     "scrollingS": 0.625,
+     "simulatedS": 1.69,
+     "speed": "96 px per frame at 60 Hz (2880 points per second)",
+     "stages": {
+      "cacheHashMs": 40.7,
+      "cacheHits": 1,
+      "cacheMisses": 48,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 208.5,
+      "judgements": 14,
+      "model.marqo-vit-tiny-384.inferenceMs": 50.1,
+      "model.marqo-vit-tiny-384.preprocessMs": 67.3,
+      "model.marqo-vit-tiny-384.tiles": 7,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 9.6,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 56.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 7,
+      "modelFaults": 0,
+      "overloaded": 42,
+      "planningMs": 0,
+      "processTotalMs": 279,
+      "secondCheckJudgements": 6,
+      "translationMs": 5.2
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0.16,
+      "maxShareExposed": 0
+     }
+    },
+    "96px-unlimited": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 6,
+     "perFrameMs": {
+      "median": 264,
+      "n": 6,
+      "worst": 436
+     },
+     "scrollingS": 0.625,
+     "simulatedS": 1.67,
+     "speed": "96 px per frame at 60 Hz (2880 points per second)",
+     "stages": {
+      "cacheHashMs": 41.6,
+      "cacheHits": 1,
+      "cacheMisses": 48,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 205,
+      "judgements": 12,
+      "model.marqo-vit-tiny-384.inferenceMs": 50.6,
+      "model.marqo-vit-tiny-384.preprocessMs": 67.2,
+      "model.marqo-vit-tiny-384.tiles": 6,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 8.8,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 54.8,
+      "model.nsfwjs-mobilenet-v2.tiles": 6,
+      "modelFaults": 0,
+      "overloaded": 42,
+      "planningMs": 0,
+      "processTotalMs": 264,
+      "secondCheckJudgements": 6,
+      "translationMs": 5.2
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0.16,
+      "maxShareExposed": 0
+     }
+    }
+   },
+   "single": {
+    "128+": {
+     "covered": 16,
+     "finalPlanMs": {
+      "median": 58.1,
+      "n": 16,
+      "worst": 75.8
+     },
+     "stages": {
+      "cacheHashMs": 0.8,
+      "cacheHits": 0,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0,
+      "decisionMs": 0,
+      "finderMs": 2.6,
+      "judgeTotalMs": 57,
+      "judgements": 6,
+      "model.marqo-vit-tiny-384.inferenceMs": 28.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 12.5,
+      "model.marqo-vit-tiny-384.tiles": 3,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.6,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 5.5,
+      "model.nsfwjs-mobilenet-v2.tiles": 3,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 58.1,
+      "secondCheckJudgements": 0,
+      "translationMs": 0.3
+     },
+     "timeToCoverMs": {
+      "median": 9,
+      "n": 16,
+      "worst": 11.2
+     },
+     "trials": 16
+    },
+    "16-31": {
+     "covered": 16,
+     "finalPlanMs": {
+      "median": 68.7,
+      "n": 16,
+      "worst": 394.7
+     },
+     "stages": {
+      "cacheHashMs": 0.1,
+      "cacheHits": 0,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0,
+      "decisionMs": 0,
+      "finderMs": 0.1,
+      "judgeTotalMs": 67.9,
+      "judgements": 10,
+      "model.marqo-vit-tiny-384.inferenceMs": 41.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 14.9,
+      "model.marqo-vit-tiny-384.tiles": 5,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 6,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 5.3,
+      "model.nsfwjs-mobilenet-v2.tiles": 5,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 68.7,
+      "secondCheckJudgements": 0,
+      "translationMs": 0
+     },
+     "timeToCoverMs": {
+      "median": 3.7,
+      "n": 16,
+      "worst": 10.4
+     },
+     "trials": 16
+    },
+    "32-63": {
+     "covered": 16,
+     "finalPlanMs": {
+      "median": 56.1,
+      "n": 16,
+      "worst": 59
+     },
+     "stages": {
+      "cacheHashMs": 0.1,
+      "cacheHits": 0,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0,
+      "decisionMs": 0,
+      "finderMs": 0.2,
+      "judgeTotalMs": 55.2,
+      "judgements": 8,
+      "model.marqo-vit-tiny-384.inferenceMs": 33.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 12,
+      "model.marqo-vit-tiny-384.tiles": 4,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.8,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 4.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 4,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 56.1,
+      "secondCheckJudgements": 0,
+      "translationMs": 0
+     },
+     "timeToCoverMs": {
+      "median": 3.9,
+      "n": 16,
+      "worst": 8.9
+     },
+     "trials": 16
+    },
+    "64-127": {
+     "covered": 16,
+     "finalPlanMs": {
+      "median": 56.5,
+      "n": 16,
+      "worst": 61
+     },
+     "stages": {
+      "cacheHashMs": 0.2,
+      "cacheHits": 0,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0,
+      "decisionMs": 0,
+      "finderMs": 0.5,
+      "judgeTotalMs": 55.7,
+      "judgements": 8,
+      "model.marqo-vit-tiny-384.inferenceMs": 32.9,
+      "model.marqo-vit-tiny-384.preprocessMs": 12.5,
+      "model.marqo-vit-tiny-384.tiles": 4,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.7,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 4.6,
+      "model.nsfwjs-mobilenet-v2.tiles": 4,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 56.5,
+      "secondCheckJudgements": 0,
+      "translationMs": 0
+     },
+     "timeToCoverMs": {
+      "median": 8.9,
+      "n": 16,
+      "worst": 9.9
+     },
+     "trials": 16
+    }
+   }
+  },
+  "main-reappear": {
+   "bench": "safesightmac-bench/1",
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 3.5,
+     "n": 10,
+     "worst": 4.8
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "main-reappear",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reappear": {
+    "reload": {
+     "firstShowMs": {
+      "median": 284,
+      "n": 6,
+      "worst": 289.3
+     },
+     "firstShowStages": {
+      "cacheHashMs": 39.4,
+      "cacheHits": 0,
+      "cacheMisses": 582,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 82.7,
+      "judgements": 6,
+      "model.marqo-vit-tiny-384.inferenceMs": 26.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 8.6,
+      "model.marqo-vit-tiny-384.tiles": 3,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.5,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 3,
+      "model.nsfwjs-mobilenet-v2.tiles": 3,
+      "modelFaults": 0,
+      "overloaded": 564,
+      "planningMs": 0.8,
+      "processTotalMs": 284,
+      "translationMs": 20.4
+     },
+     "pages": 6,
+     "reloadMs": {
+      "median": 224.9,
+      "n": 6,
+      "worst": 240.6
+     },
+     "reloadStages": {
+      "cacheHashMs": 39.2,
+      "cacheHits": 164,
+      "cacheMisses": 539,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 193.3,
+      "judgements": 26,
+      "model.bumble-private-detector.inferenceMs": 0,
+      "model.bumble-private-detector.preprocessMs": 0,
+      "model.bumble-private-detector.tiles": 0,
+      "model.marqo-vit-tiny-384.inferenceMs": 87.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 37,
+      "model.marqo-vit-tiny-384.tiles": 13,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 15.3,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 13,
+      "model.nsfwjs-mobilenet-v2.tiles": 13,
+      "modelFaults": 0,
+      "overloaded": 512,
+      "planningMs": 2.3,
+      "processTotalMs": 224.9,
+      "translationMs": 15.4
+     }
+    },
+    "scrollBack-otherOffsets": {
+     "backMs": {
+      "median": 329.3,
+      "n": 9,
+      "worst": 438.9
+     },
+     "backStages": {
+      "cacheHashMs": 42.8,
+      "cacheHits": 34,
+      "cacheMisses": 12,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 175.1,
+      "judgements": 2,
+      "model.marqo-vit-tiny-384.inferenceMs": 13.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 56.9,
+      "model.marqo-vit-tiny-384.tiles": 1,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 1.9,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 53.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 1,
+      "modelFaults": 0,
+      "overloaded": 11,
+      "planningMs": 0,
+      "processTotalMs": 329.3,
+      "translationMs": 5.4
+     },
+     "downMs": {
+      "median": 247.5,
+      "n": 7,
+      "worst": 324.8
+     }
+    },
+    "scrollBack-sameOffsets": {
+     "backMs": {
+      "median": 46.9,
+      "n": 6,
+      "worst": 64.2
+     },
+     "backStages": {
+      "cacheHashMs": 40.9,
+      "cacheHits": 48,
+      "cacheMisses": 0,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 40.9,
+      "judgements": 0,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 46.9,
+      "translationMs": 5.1
+     },
+     "downMs": {
+      "median": 308.7,
+      "n": 7,
+      "worst": 384
+     }
+    },
+    "windowMove": {
+     "moveMs": {
+      "median": 315.9,
+      "n": 6,
+      "worst": 345.4
+     },
+     "pages": 6,
+     "stages": {
+      "cacheHashMs": 0.1,
+      "cacheHits": 0,
+      "cacheMisses": 1,
+      "changeDetectionMs": 0.3,
+      "coverDrawMs": 5.4,
+      "decisionMs": 0,
+      "finderMs": 0.1,
+      "judgeTotalMs": 20.2,
+      "judgements": 2,
+      "model.marqo-vit-tiny-384.inferenceMs": 14.8,
+      "model.marqo-vit-tiny-384.preprocessMs": 3.3,
+      "model.marqo-vit-tiny-384.tiles": 1,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 1.6,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 1.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 1,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0.2,
+      "processTotalMs": 315.9,
+      "translationMs": 29.6
+     }
+    }
+   },
+   "rule": "balanced"
+  },
+  "main-reuse": {
+   "bench": "safesightmac-bench/1",
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 4.4,
+     "n": 10,
+     "worst": 6.1
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "main-reuse",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 0,
+     "n": 6,
+     "total": 0,
+     "worst": 0
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8388.6,
+     "n": 6,
+     "total": 48594.8,
+     "worst": 9176.8
+    },
+    "moveBackgroundJudgements": {
+     "median": 0,
+     "n": 6,
+     "total": 0,
+     "worst": 0
+    },
+    "moveJudgements": {
+     "median": 168,
+     "n": 6,
+     "total": 1200,
+     "worst": 386
+    },
+    "moveMs": {
+     "median": 1333,
+     "n": 6,
+     "total": 9453.9,
+     "worst": 2718
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 228,
+     "n": 6,
+     "total": 1610,
+     "worst": 534
+    },
+    "reloadMs": {
+     "median": 1734.8,
+     "n": 6,
+     "total": 11729.5,
+     "worst": 3482.1
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 228,
+     "backMsTotal": 4600.8,
+     "backgroundJudgementsTotal": 0
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 10,
+     "backMsTotal": 436.3,
+     "backgroundJudgementsTotal": 0
+    },
+    "thirdShowJudgements": {
+     "median": 216,
+     "n": 6,
+     "total": 1520,
+     "worst": 522
+    },
+    "thirdShowMs": {
+     "median": 1610.1,
+     "n": 6,
+     "total": 11127.8,
+     "worst": 3488.8
+    }
+   },
+   "rule": "balanced"
+  },
+  "main-single-busy-scroll": {
+   "bench": "safesightmac-bench/1",
+   "busy": {
+    "register": {
+     "allHarmlessShownAfterS": {
+      "median": 62.6,
+      "n": 6,
+      "worst": 65.8
+     },
+     "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+     "budget": "register (JUDGEMENT_BUDGET 40/s, JUDGEMENT_BURST 400)",
+     "fastModelFlags": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "firstCallMs": {
+      "median": 290.6,
+      "n": 6,
+      "worst": 449
+     },
+     "firstCallStages": {
+      "cacheHashMs": 40.5,
+      "cacheHits": 0,
+      "cacheMisses": 583,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.3,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 72.8,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 19.7,
+      "model.marqo-vit-tiny-384.preprocessMs": 6,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3.3,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 2.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 563,
+      "planningMs": 0.9,
+      "processTotalMs": 290.6,
+      "translationMs": 20.9
+     },
+     "firstPlanHandedOutMs": {
+      "median": 23.4,
+      "n": 6,
+      "worst": 194.9
+     },
+     "fullyJudgedAfterS": {
+      "median": -1,
+      "n": 0,
+      "worst": -1
+     },
+     "pages": 6,
+     "perPage": [
+      {
+       "calls": 600,
+       "computeMs": 47484,
+       "firstCallJudgements": 44,
+       "firstCallMs": 449,
+       "firstCallOverloaded": 536,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.6,
+       "lastOverloadAfterS": 62.6,
+       "page": "synthetic-0058.png",
+       "photoShownLateS": {
+        "median": 62.7,
+        "worst": 62.7
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 196.7
+      },
+      {
+       "calls": 600,
+       "computeMs": 45911.6,
+       "firstCallJudgements": 10,
+       "firstCallMs": 268,
+       "firstCallOverloaded": 569,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.4,
+       "lastOverloadAfterS": 62.4,
+       "page": "synthetic-0048.png",
+       "photoShownLateS": {
+        "median": 62.5,
+        "worst": 62.5
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 23.2
+      },
+      {
+       "calls": 600,
+       "computeMs": 45460.4,
+       "firstCallJudgements": 2,
+       "firstCallMs": 282.1,
+       "firstCallOverloaded": 696,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.4,
+       "lastOverloadAfterS": 62.4,
+       "page": "synthetic-0057.png",
+       "photoShownLateS": {
+        "median": 62.5,
+        "worst": 62.5
+       },
+       "photos": 234,
+       "photosCoveredOrBlurredAtSomePoint": 234,
+       "standInCoveredAfterMs": 23
+      },
+      {
+       "calls": 600,
+       "computeMs": 51875,
+       "firstCallJudgements": 0,
+       "firstCallMs": 308.9,
+       "firstCallOverloaded": 0,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 65.8,
+       "lastOverloadAfterS": 65.8,
+       "page": "synthetic-0040.png",
+       "photoShownLateS": {
+        "median": 65.9,
+        "worst": 65.9
+       },
+       "photos": 194,
+       "photosCoveredOrBlurredAtSomePoint": 194,
+       "standInCoveredAfterMs": 24.3
+      },
+      {
+       "calls": 600,
+       "computeMs": 43994.1,
+       "firstCallJudgements": 2,
+       "firstCallMs": 282.8,
+       "firstCallOverloaded": 521,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.2,
+       "lastOverloadAfterS": 62.2,
+       "page": "synthetic-0025.png",
+       "photoShownLateS": {
+        "median": 62.3,
+        "worst": 62.3
+       },
+       "photos": 159,
+       "photosCoveredOrBlurredAtSomePoint": 159,
+       "standInCoveredAfterMs": 22.8
+      },
+      {
+       "calls": 600,
+       "computeMs": 50020.9,
+       "firstCallJudgements": 4,
+       "firstCallMs": 290.6,
+       "firstCallOverloaded": 563,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 64.5,
+       "lastOverloadAfterS": 64.5,
+       "page": "synthetic-0013.png",
+       "photoShownLateS": {
+        "median": 64.6,
+        "worst": 64.6
+       },
+       "photos": 157,
+       "photosCoveredOrBlurredAtSomePoint": 157,
+       "standInCoveredAfterMs": 24
+      }
+     ],
+     "photoShownLateMedianS": {
+      "median": 62.7,
+      "n": 6,
+      "worst": 65.9
+     },
+     "photoShownLateWorstS": {
+      "median": 62.7,
+      "n": 6,
+      "worst": 65.9
+     },
+     "photoShownSharpBeforeFirstCoverS": {
+      "median": 0,
+      "n": 6,
+      "worst": 0.2
+     },
+     "photosCoveredOrBlurredShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "photosNearProbeShownAfterS": {
+      "median": 62.5,
+      "n": 74,
+      "worst": 65.9
+     },
+     "plansHidingATenthOfTheText": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "pointer": "none",
+     "probe": "photos within 220 points of 1080, 675",
+     "regionsCoveredFirst": {
+      "median": 542,
+      "n": 6,
+      "worst": 657
+     },
+     "standInTimeToCoverMs": {
+      "median": 24,
+      "n": 6,
+      "worst": 196.7
+     },
+     "textHiddenMaxShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     }
+    },
+    "registerPointer": {
+     "allHarmlessShownAfterS": {
+      "median": 63.2,
+      "n": 6,
+      "worst": 64.1
+     },
+     "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+     "budget": "register (JUDGEMENT_BUDGET 40/s, JUDGEMENT_BURST 400)",
+     "fastModelFlags": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "firstCallMs": {
+      "median": 280.4,
+      "n": 6,
+      "worst": 298.2
+     },
+     "firstCallStages": {
+      "cacheHashMs": 39.3,
+      "cacheHits": 0,
+      "cacheMisses": 583,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 72.9,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 20.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 5.8,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3.1,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 2,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 573,
+      "planningMs": 0.7,
+      "processTotalMs": 280.4,
+      "translationMs": 21.1
+     },
+     "firstPlanHandedOutMs": {
+      "median": 22.7,
+      "n": 6,
+      "worst": 25.6
+     },
+     "fullyJudgedAfterS": {
+      "median": -1,
+      "n": 0,
+      "worst": -1
+     },
+     "pages": 6,
+     "perPage": [
+      {
+       "calls": 600,
+       "computeMs": 46474.1,
+       "firstCallJudgements": 10,
+       "firstCallMs": 266.1,
+       "firstCallOverloaded": 596,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.9,
+       "lastOverloadAfterS": 62.9,
+       "page": "synthetic-0058.png",
+       "photoShownLateS": {
+        "median": 63,
+        "worst": 63
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 22.7
+      },
+      {
+       "calls": 600,
+       "computeMs": 47202.5,
+       "firstCallJudgements": 10,
+       "firstCallMs": 272.5,
+       "firstCallOverloaded": 573,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.4,
+       "lastOverloadAfterS": 62.4,
+       "page": "synthetic-0048.png",
+       "photoShownLateS": {
+        "median": 62.5,
+        "worst": 62.5
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 22.9
+      },
+      {
+       "calls": 600,
+       "computeMs": 49999.2,
+       "firstCallJudgements": 2,
+       "firstCallMs": 289,
+       "firstCallOverloaded": 697,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 62.7,
+       "lastOverloadAfterS": 62.7,
+       "page": "synthetic-0057.png",
+       "photoShownLateS": {
+        "median": 62.7,
+        "worst": 62.7
+       },
+       "photos": 234,
+       "photosCoveredOrBlurredAtSomePoint": 234,
+       "standInCoveredAfterMs": 23.5
+      },
+      {
+       "calls": 600,
+       "computeMs": 51465.2,
+       "firstCallJudgements": 0,
+       "firstCallMs": 298.2,
+       "firstCallOverloaded": 0,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 63.2,
+       "lastOverloadAfterS": 63.2,
+       "page": "synthetic-0040.png",
+       "photoShownLateS": {
+        "median": 63.3,
+        "worst": 63.3
+       },
+       "photos": 194,
+       "photosCoveredOrBlurredAtSomePoint": 194,
+       "standInCoveredAfterMs": 22.9
+      },
+      {
+       "calls": 600,
+       "computeMs": 46456.4,
+       "firstCallJudgements": 0,
+       "firstCallMs": 269.9,
+       "firstCallOverloaded": 0,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 64.1,
+       "lastOverloadAfterS": 64.1,
+       "page": "synthetic-0025.png",
+       "photoShownLateS": {
+        "median": 64.2,
+        "worst": 64.2
+       },
+       "photos": 159,
+       "photosCoveredOrBlurredAtSomePoint": 159,
+       "standInCoveredAfterMs": 27.1
+      },
+      {
+       "calls": 600,
+       "computeMs": 50302,
+       "firstCallJudgements": 4,
+       "firstCallMs": 280.4,
+       "firstCallOverloaded": 557,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 64.1,
+       "lastOverloadAfterS": 64.1,
+       "page": "synthetic-0013.png",
+       "photoShownLateS": {
+        "median": 64.1,
+        "worst": 64.1
+       },
+       "photos": 157,
+       "photosCoveredOrBlurredAtSomePoint": 157,
+       "standInCoveredAfterMs": 23.2
+      }
+     ],
+     "photoShownLateMedianS": {
+      "median": 63.3,
+      "n": 6,
+      "worst": 64.2
+     },
+     "photoShownLateWorstS": {
+      "median": 63.3,
+      "n": 6,
+      "worst": 64.2
+     },
+     "photoShownSharpBeforeFirstCoverS": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "photosCoveredOrBlurredShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "photosNearProbeShownAfterS": {
+      "median": 62.7,
+      "n": 74,
+      "worst": 64.2
+     },
+     "plansHidingATenthOfTheText": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "pointer": "at 1080, 675 points",
+     "probe": "photos within 220 points of 1080, 675",
+     "regionsCoveredFirst": {
+      "median": 542,
+      "n": 6,
+      "worst": 657
+     },
+     "standInTimeToCoverMs": {
+      "median": 23.2,
+      "n": 6,
+      "worst": 27.1
+     },
+     "textHiddenMaxShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     }
+    },
+    "unlimited": {
+     "allHarmlessShownAfterS": {
+      "median": 90.1,
+      "n": 6,
+      "worst": 90.2
+     },
+     "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+     "budget": "unlimited (compute-bound; DETECTOR_CALL_CAP still applies)",
+     "fastModelFlags": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "firstCallMs": {
+      "median": 285.3,
+      "n": 6,
+      "worst": 302
+     },
+     "firstCallStages": {
+      "cacheHashMs": 41.1,
+      "cacheHits": 0,
+      "cacheMisses": 583,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.2,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 76,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 22.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 5.9,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3.1,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 2.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 569,
+      "planningMs": 0.9,
+      "processTotalMs": 285.3,
+      "translationMs": 21.3
+     },
+     "firstPlanHandedOutMs": {
+      "median": 22.9,
+      "n": 6,
+      "worst": 23.6
+     },
+     "fullyJudgedAfterS": {
+      "median": -1,
+      "n": 0,
+      "worst": -1
+     },
+     "pages": 6,
+     "perPage": [
+      {
+       "calls": 370,
+       "computeMs": 90401.8,
+       "firstCallJudgements": 10,
+       "firstCallMs": 276.4,
+       "firstCallOverloaded": 596,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.2,
+       "lastOverloadAfterS": 90.2,
+       "page": "synthetic-0058.png",
+       "photoShownLateS": {
+        "median": 90.4,
+        "worst": 90.4
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 24.3
+      },
+      {
+       "calls": 372,
+       "computeMs": 90364.5,
+       "firstCallJudgements": 10,
+       "firstCallMs": 269.4,
+       "firstCallOverloaded": 569,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.1,
+       "lastOverloadAfterS": 90.1,
+       "page": "synthetic-0048.png",
+       "photoShownLateS": {
+        "median": 90.4,
+        "worst": 90.4
+       },
+       "photos": 288,
+       "photosCoveredOrBlurredAtSomePoint": 288,
+       "standInCoveredAfterMs": 23.7
+      },
+      {
+       "calls": 369,
+       "computeMs": 90316.9,
+       "firstCallJudgements": 2,
+       "firstCallMs": 280.1,
+       "firstCallOverloaded": 696,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.1,
+       "lastOverloadAfterS": 90.1,
+       "page": "synthetic-0057.png",
+       "photoShownLateS": {
+        "median": 90.3,
+        "worst": 90.3
+       },
+       "photos": 234,
+       "photosCoveredOrBlurredAtSomePoint": 234,
+       "standInCoveredAfterMs": 22.7
+      },
+      {
+       "calls": 363,
+       "computeMs": 90500.1,
+       "firstCallJudgements": 0,
+       "firstCallMs": 302,
+       "firstCallOverloaded": 0,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.2,
+       "lastOverloadAfterS": 90.2,
+       "page": "synthetic-0040.png",
+       "photoShownLateS": {
+        "median": 90.5,
+        "worst": 90.5
+       },
+       "photos": 194,
+       "photosCoveredOrBlurredAtSomePoint": 194,
+       "standInCoveredAfterMs": 23.1
+      },
+      {
+       "calls": 376,
+       "computeMs": 90353.9,
+       "firstCallJudgements": 2,
+       "firstCallMs": 285.3,
+       "firstCallOverloaded": 521,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90.1,
+       "lastOverloadAfterS": 90.1,
+       "page": "synthetic-0025.png",
+       "photoShownLateS": {
+        "median": 90.4,
+        "worst": 90.4
+       },
+       "photos": 159,
+       "photosCoveredOrBlurredAtSomePoint": 159,
+       "standInCoveredAfterMs": 23.7
+      },
+      {
+       "calls": 373,
+       "computeMs": 90239.5,
+       "firstCallJudgements": 4,
+       "firstCallMs": 286.2,
+       "firstCallOverloaded": 563,
+       "fullyJudgedAfterS": null,
+       "harmlessClearAfterS": 90,
+       "lastOverloadAfterS": 90,
+       "page": "synthetic-0013.png",
+       "photoShownLateS": {
+        "median": 90.2,
+        "worst": 90.2
+       },
+       "photos": 157,
+       "photosCoveredOrBlurredAtSomePoint": 157,
+       "standInCoveredAfterMs": 22.8
+      }
+     ],
+     "photoShownLateMedianS": {
+      "median": 90.4,
+      "n": 6,
+      "worst": 90.5
+     },
+     "photoShownLateWorstS": {
+      "median": 90.4,
+      "n": 6,
+      "worst": 90.5
+     },
+     "photoShownSharpBeforeFirstCoverS": {
+      "median": 0,
+      "n": 6,
+      "worst": 0
+     },
+     "photosCoveredOrBlurredShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "photosNearProbeShownAfterS": {
+      "median": 90.3,
+      "n": 74,
+      "worst": 90.5
+     },
+     "plansHidingATenthOfTheText": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     },
+     "pointer": "none",
+     "probe": "photos within 220 points of 1080, 675",
+     "regionsCoveredFirst": {
+      "median": 542,
+      "n": 6,
+      "worst": 657
+     },
+     "standInTimeToCoverMs": {
+      "median": 23.7,
+      "n": 6,
+      "worst": 24.3
+     },
+     "textHiddenMaxShare": {
+      "median": 1,
+      "n": 6,
+      "worst": 1
+     }
+    }
+   },
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 3.6,
+     "n": 10,
+     "worst": 4.9
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "main-single-busy-scroll",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "rule": "balanced",
+   "scroll": {
+    "32px-register": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 12,
+     "perFrameMs": {
+      "median": 225,
+      "n": 12,
+      "worst": 427.2
+     },
+     "scrollingS": 1.875,
+     "simulatedS": 3.04,
+     "speed": "32 px per frame at 60 Hz (960 points per second)",
+     "stages": {
+      "cacheHashMs": 37.7,
+      "cacheHits": 7,
+      "cacheMisses": 43,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 192.5,
+      "judgements": 8,
+      "model.marqo-vit-tiny-384.inferenceMs": 30.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 45,
+      "model.marqo-vit-tiny-384.tiles": 4,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 6,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 30.3,
+      "model.nsfwjs-mobilenet-v2.tiles": 4,
+      "modelFaults": 0,
+      "overloaded": 35,
+      "planningMs": 0,
+      "processTotalMs": 225,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0.47600000000000003,
+      "maxShareExposed": 0
+     }
+    },
+    "32px-unlimited": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 12,
+     "perFrameMs": {
+      "median": 233.2,
+      "n": 12,
+      "worst": 418.9
+     },
+     "scrollingS": 1.875,
+     "simulatedS": 2.94,
+     "speed": "32 px per frame at 60 Hz (960 points per second)",
+     "stages": {
+      "cacheHashMs": 38,
+      "cacheHits": 10,
+      "cacheMisses": 42,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 164.8,
+      "judgements": 8,
+      "model.marqo-vit-tiny-384.inferenceMs": 28.9,
+      "model.marqo-vit-tiny-384.preprocessMs": 32.7,
+      "model.marqo-vit-tiny-384.tiles": 4,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 5.2,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 22.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 4,
+      "modelFaults": 0,
+      "overloaded": 38,
+      "planningMs": 0,
+      "processTotalMs": 233.2,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0.47600000000000003,
+      "maxShareExposed": 0
+     }
+    },
+    "8px-register": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 27,
+     "perFrameMs": {
+      "median": 214.1,
+      "n": 27,
+      "worst": 415.5
+     },
+     "scrollingS": 5,
+     "simulatedS": 6.17,
+     "speed": "8 px per frame at 60 Hz (240 points per second)",
+     "stages": {
+      "cacheHashMs": 38.6,
+      "cacheHits": 4,
+      "cacheMisses": 43,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 101.4,
+      "judgements": 6,
+      "model.marqo-vit-tiny-384.inferenceMs": 18.8,
+      "model.marqo-vit-tiny-384.preprocessMs": 19.3,
+      "model.marqo-vit-tiny-384.tiles": 3,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.3,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 13.3,
+      "model.nsfwjs-mobilenet-v2.tiles": 3,
+      "modelFaults": 0,
+      "overloaded": 41,
+      "planningMs": 0.1,
+      "processTotalMs": 214.1,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 1.896,
+      "maxShareExposed": 0
+     }
+    },
+    "8px-unlimited": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 27,
+     "perFrameMs": {
+      "median": 206.5,
+      "n": 27,
+      "worst": 429.4
+     },
+     "scrollingS": 5,
+     "simulatedS": 6.07,
+     "speed": "8 px per frame at 60 Hz (240 points per second)",
+     "stages": {
+      "cacheHashMs": 38.7,
+      "cacheHits": 4,
+      "cacheMisses": 44,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 91.4,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 14.1,
+      "model.marqo-vit-tiny-384.preprocessMs": 16.2,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 11.7,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 42,
+      "planningMs": 0,
+      "processTotalMs": 206.5,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 1.896,
+      "maxShareExposed": 0
+     }
+    },
+    "96px-register": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 6,
+     "perFrameMs": {
+      "median": 251.3,
+      "n": 6,
+      "worst": 430.2
+     },
+     "scrollingS": 0.625,
+     "simulatedS": 1.65,
+     "speed": "96 px per frame at 60 Hz (2880 points per second)",
+     "stages": {
+      "cacheHashMs": 40.6,
+      "cacheHits": 13,
+      "cacheMisses": 41,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 208.9,
+      "judgements": 14,
+      "model.marqo-vit-tiny-384.inferenceMs": 72.7,
+      "model.marqo-vit-tiny-384.preprocessMs": 45.8,
+      "model.marqo-vit-tiny-384.tiles": 7,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 10.3,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 31.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 7,
+      "modelFaults": 0,
+      "overloaded": 31,
+      "planningMs": 0,
+      "processTotalMs": 251.3,
+      "translationMs": 5.2
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0.16,
+      "maxShareExposed": 0
+     }
+    },
+    "96px-unlimited": {
+     "coveredDisplayShare": {
+      "median": 1,
+      "worst": 1
+     },
+     "framesJudged": 6,
+     "perFrameMs": {
+      "median": 251.5,
+      "n": 6,
+      "worst": 428.8
+     },
+     "scrollingS": 0.625,
+     "simulatedS": 1.6300000000000001,
+     "speed": "96 px per frame at 60 Hz (2880 points per second)",
+     "stages": {
+      "cacheHashMs": 40.6,
+      "cacheHits": 13,
+      "cacheMisses": 41,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 205.3,
+      "judgements": 14,
+      "model.marqo-vit-tiny-384.inferenceMs": 73.7,
+      "model.marqo-vit-tiny-384.preprocessMs": 44.9,
+      "model.marqo-vit-tiny-384.tiles": 7,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 10.2,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 30.5,
+      "model.nsfwjs-mobilenet-v2.tiles": 7,
+      "modelFaults": 0,
+      "overloaded": 31,
+      "planningMs": 0,
+      "processTotalMs": 251.5,
+      "translationMs": 5.1
+     },
+     "standInInView": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0,
+      "maxShareExposed": 0
+     },
+     "standInScrollingIn": {
+      "coveredAfterVisibleS": 0,
+      "exposedS": 0,
+      "firstVisibleS": 0.16,
+      "maxShareExposed": 0
+     }
+    }
+   },
+   "single": {
+    "128+": {
+     "covered": 16,
+     "finalPlanMs": {
+      "median": 58.9,
+      "n": 16,
+      "worst": 75.5
+     },
+     "stages": {
+      "cacheHashMs": 0.8,
+      "cacheHits": 0,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0,
+      "decisionMs": 0,
+      "finderMs": 2.5,
+      "judgeTotalMs": 57.8,
+      "judgements": 6,
+      "model.marqo-vit-tiny-384.inferenceMs": 29.5,
+      "model.marqo-vit-tiny-384.preprocessMs": 12.3,
+      "model.marqo-vit-tiny-384.tiles": 3,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.6,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 5.5,
+      "model.nsfwjs-mobilenet-v2.tiles": 3,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 58.9,
+      "translationMs": 0.3
+     },
+     "timeToCoverMs": {
+      "median": 8.9,
+      "n": 16,
+      "worst": 10.8
+     },
+     "trials": 16
+    },
+    "16-31": {
+     "covered": 16,
+     "finalPlanMs": {
+      "median": 66.7,
+      "n": 16,
+      "worst": 81
+     },
+     "stages": {
+      "cacheHashMs": 0.1,
+      "cacheHits": 0,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0,
+      "decisionMs": 0,
+      "finderMs": 0.1,
+      "judgeTotalMs": 65.9,
+      "judgements": 10,
+      "model.marqo-vit-tiny-384.inferenceMs": 39.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 14.9,
+      "model.marqo-vit-tiny-384.tiles": 5,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 5.8,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 5.2,
+      "model.nsfwjs-mobilenet-v2.tiles": 5,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 66.7,
+      "translationMs": 0
+     },
+     "timeToCoverMs": {
+      "median": 3.8,
+      "n": 16,
+      "worst": 10.5
+     },
+     "trials": 16
+    },
+    "32-63": {
+     "covered": 16,
+     "finalPlanMs": {
+      "median": 56.1,
+      "n": 16,
+      "worst": 59.7
+     },
+     "stages": {
+      "cacheHashMs": 0.1,
+      "cacheHits": 0,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0,
+      "decisionMs": 0,
+      "finderMs": 0.2,
+      "judgeTotalMs": 55.2,
+      "judgements": 8,
+      "model.marqo-vit-tiny-384.inferenceMs": 33.7,
+      "model.marqo-vit-tiny-384.preprocessMs": 11.9,
+      "model.marqo-vit-tiny-384.tiles": 4,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.8,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 4.3,
+      "model.nsfwjs-mobilenet-v2.tiles": 4,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 56.1,
+      "translationMs": 0
+     },
+     "timeToCoverMs": {
+      "median": 4.1,
+      "n": 16,
+      "worst": 9
+     },
+     "trials": 16
+    },
+    "64-127": {
+     "covered": 16,
+     "finalPlanMs": {
+      "median": 56.3,
+      "n": 16,
+      "worst": 59.5
+     },
+     "stages": {
+      "cacheHashMs": 0.2,
+      "cacheHits": 0,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0,
+      "decisionMs": 0,
+      "finderMs": 0.5,
+      "judgeTotalMs": 55.4,
+      "judgements": 8,
+      "model.marqo-vit-tiny-384.inferenceMs": 32.4,
+      "model.marqo-vit-tiny-384.preprocessMs": 12.4,
+      "model.marqo-vit-tiny-384.tiles": 4,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 4.7,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 4.6,
+      "model.nsfwjs-mobilenet-v2.tiles": 4,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 56.3,
+      "translationMs": 0
+     },
+     "timeToCoverMs": {
+      "median": 8.9,
+      "n": 16,
+      "worst": 9.7
+     },
+     "trials": 16
+    }
+   }
+  },
+  "on-reuse-reappear": {
+   "bench": "safesightmac-bench/1",
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 3.7,
+     "n": 10,
+     "worst": 5.2
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "on-reuse-reappear",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reappear": {
+    "reload": {
+     "firstShowMs": {
+      "median": 287.5,
+      "n": 6,
+      "worst": 304.1
+     },
+     "firstShowStages": {
+      "cacheHashMs": 41.6,
+      "cacheHits": 0,
+      "cacheMisses": 582,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 1.3,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 75.2,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 21.4,
+      "model.marqo-vit-tiny-384.preprocessMs": 5.9,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3.2,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 2.1,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 568,
+      "planningMs": 1,
+      "processTotalMs": 287.5,
+      "secondCheckJudgements": 0,
+      "translationMs": 22.5
+     },
+     "pages": 6,
+     "reloadMs": {
+      "median": 205,
+      "n": 6,
+      "worst": 223.8
+     },
+     "reloadStages": {
+      "cacheHashMs": 41.3,
+      "cacheHits": 135,
+      "cacheMisses": 539,
+      "changeDetectionMs": 0.1,
+      "coverDrawMs": 1.5,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 175.4,
+      "judgements": 22,
+      "model.bumble-private-detector.inferenceMs": 0,
+      "model.bumble-private-detector.preprocessMs": 0,
+      "model.bumble-private-detector.tiles": 0,
+      "model.marqo-vit-tiny-384.inferenceMs": 76.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 32.6,
+      "model.marqo-vit-tiny-384.tiles": 11,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 12.8,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 11,
+      "model.nsfwjs-mobilenet-v2.tiles": 11,
+      "modelFaults": 0,
+      "overloaded": 518,
+      "planningMs": 2.6,
+      "processTotalMs": 205,
+      "secondCheckJudgements": 0,
+      "translationMs": 16.3
+     }
+    },
+    "scrollBack-otherOffsets": {
+     "backMs": {
+      "median": 329.7,
+      "n": 9,
+      "worst": 371.5
+     },
+     "backStages": {
+      "cacheHashMs": 42.6,
+      "cacheHits": 34,
+      "cacheMisses": 12,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 188,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 22.8,
+      "model.marqo-vit-tiny-384.preprocessMs": 58.3,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 3.9,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 51.6,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 10,
+      "planningMs": 0,
+      "processTotalMs": 329.7,
+      "secondCheckJudgements": 0,
+      "translationMs": 5.1
+     },
+     "downMs": {
+      "median": 345.7,
+      "n": 7,
+      "worst": 401.5
+     }
+    },
+    "scrollBack-sameOffsets": {
+     "backMs": {
+      "median": 123.6,
+      "n": 6,
+      "worst": 163.9
+     },
+     "backStages": {
+      "cacheHashMs": 42.4,
+      "cacheHits": 47,
+      "cacheMisses": 3,
+      "changeDetectionMs": 0,
+      "coverDrawMs": 0.1,
+      "decisionMs": 0,
+      "finderMs": 0,
+      "judgeTotalMs": 107.3,
+      "judgements": 6,
+      "model.marqo-vit-tiny-384.inferenceMs": 25.2,
+      "model.marqo-vit-tiny-384.preprocessMs": 19.5,
+      "model.marqo-vit-tiny-384.tiles": 3,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 6,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 13.3,
+      "model.nsfwjs-mobilenet-v2.tiles": 3,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0,
+      "processTotalMs": 123.6,
+      "secondCheckJudgements": 6,
+      "translationMs": 5.1
+     },
+     "downMs": {
+      "median": 337.2,
+      "n": 7,
+      "worst": 388.5
+     }
+    },
+    "windowMove": {
+     "moveMs": {
+      "median": 343.9,
+      "n": 6,
+      "worst": 385.1
+     },
+     "pages": 6,
+     "stages": {
+      "cacheHashMs": 0.1,
+      "cacheHits": 0,
+      "cacheMisses": 2,
+      "changeDetectionMs": 0.3,
+      "coverDrawMs": 6,
+      "decisionMs": 0,
+      "finderMs": 0.1,
+      "judgeTotalMs": 26.2,
+      "judgements": 4,
+      "model.marqo-vit-tiny-384.inferenceMs": 14.3,
+      "model.marqo-vit-tiny-384.preprocessMs": 7.1,
+      "model.marqo-vit-tiny-384.tiles": 2,
+      "model.nsfwjs-mobilenet-v2.inferenceMs": 2.4,
+      "model.nsfwjs-mobilenet-v2.preprocessMs": 2.7,
+      "model.nsfwjs-mobilenet-v2.tiles": 2,
+      "modelFaults": 0,
+      "overloaded": 0,
+      "planningMs": 0.3,
+      "processTotalMs": 343.9,
+      "secondCheckJudgements": 0,
+      "translationMs": 31.8
+     }
+    }
+   },
+   "rule": "balanced"
+  },
+  "on-reuse-reuse": {
+   "backgroundSecondChecks": false,
+   "bench": "safesightmac-bench/1",
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 4.3,
+     "n": 10,
+     "worst": 7.2
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "on-reuse-reuse",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 0,
+     "n": 6,
+     "total": 0,
+     "worst": 0
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8476.8,
+     "n": 6,
+     "total": 48237.8,
+     "worst": 8852.3
+    },
+    "moveBackgroundJudgements": {
+     "median": 0,
+     "n": 6,
+     "total": 0,
+     "worst": 0
+    },
+    "moveJudgements": {
+     "median": 818,
+     "n": 6,
+     "total": 4584,
+     "worst": 902
+    },
+    "moveMs": {
+     "median": 6291.5,
+     "n": 6,
+     "total": 34656.7,
+     "worst": 6762.5
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "reloadMs": {
+     "median": 8162.7,
+     "n": 6,
+     "total": 46883.2,
+     "worst": 8855.3
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 324,
+     "backMsTotal": 6121,
+     "backgroundJudgementsTotal": 0
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 226,
+     "backMsTotal": 3647.8,
+     "backgroundJudgementsTotal": 0
+    },
+    "thirdShowJudgements": {
+     "median": 234,
+     "n": 6,
+     "total": 1674,
+     "worst": 538
+    },
+    "thirdShowMs": {
+     "median": 1673.9,
+     "n": 6,
+     "total": 11943.7,
+     "worst": 3459.2
+    }
+   },
+   "rule": "balanced"
+  }
+ }
+}

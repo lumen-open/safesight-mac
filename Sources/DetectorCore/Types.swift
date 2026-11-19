@@ -59,6 +59,9 @@ public struct FrameVerdict: Sendable {
     /// family model failed on is in `overloaded`, and a dispute the tie-breaker failed on is unanswered, so it
     /// is covered. A count only.
     public var modelFaults = 0
+    /// Entries of this call seen clean once (`VerdictCache.CLEAN_CHECKS`), still waiting for their second clean
+    /// check. A count only; the cover layer may give them that check in the background (`Detector.secondChecks`).
+    public var secondChecksLeft = 0
 }
 
 /// Size bands in detail pixels (short side), as in the small-picture policy.

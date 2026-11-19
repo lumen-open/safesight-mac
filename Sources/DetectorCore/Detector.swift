@@ -58,6 +58,9 @@ public final class Detector {
     var rng = SystemRandomNumberGenerator()
     #if KESTREL_LAB
     public var standIn: StandInDetector?
+    /// LAB ONLY (absent from release builds): changes the per-call cap, so the lab bench can judge a whole page in one
+    /// call and count exactly what reuse costs.
+    public func labSetCallCap(_ n: Int) { config.maxJudgementsPerCall = n }
     #endif
 
     public convenience init(models: ModelSet, thresholdsURL: URL?, config: DetectorConfig = DetectorConfig(), finder: RegionFinder = RegionFinder()) throws {
@@ -206,6 +209,20 @@ public final class Detector {
     /// the work changes, and every verdict comes from the full rule.
     public func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect? = nil, budget callerBudget: Int? = nil,
                       progress: ((JudgeProgress) -> Void)? = nil) -> FrameVerdict {
+        judge(frame, context: ctx, within: area, budget: callerBudget, progress: progress, secondChecksOnly: false)
+    }
+
+    /// Second clean checks in the background (`VerdictCache.CLEAN_CHECKS`): within `budget`, judges once more,
+    /// with fresh jitter, only the entries of `area` that are seen clean once, so that when they come back they
+    /// are served from the cache. Every other entry is left as it is and not reported. The verdict holds only the
+    /// entries judged here: a flag (or a blur) is reported to cover at once; a clean result only adds to the
+    /// entry's count, and lifts or clears nothing. `secondChecksLeft` says how many are still waiting.
+    public func secondChecks(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict {
+        judge(frame, context: ctx, within: area, budget: budget, progress: nil, secondChecksOnly: true)
+    }
+
+    func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect?, budget callerBudget: Int?,
+               progress: ((JudgeProgress) -> Void)?, secondChecksOnly: Bool) -> FrameVerdict {
         let tCall = nowNs()
         let faultsBefore = faultTotal
         timings.calls += 1
@@ -269,15 +286,19 @@ public final class Detector {
 
         // Cache, then choose what to judge within the budget: in task order, every uncached task whose cost
         // still fits (as the lab build did, judging as it went). A task with the same pixels as one chosen
-        // earlier in this call takes that task's outcome, as the cache would have given it. Where a blur can
-        // apply, a cached clean outcome is used only if it was settled for the blur too (the margin rule,
-        // `TileOutcome.settledForBlur`); otherwise the picture is judged again, with fresh jitter.
+        // earlier in this call takes that task's outcome, as the cache would have given it. A picture seen
+        // clean only once is not in the cache for this (`VerdictCache.CLEAN_CHECKS`): it is judged again, with
+        // fresh jitter. Where a blur can apply, a cached clean outcome is used only if it was settled for the
+        // blur too (the margin rule, `TileOutcome.settledForBlur`); otherwise the picture is judged again.
         var budget = min(config.maxJudgementsPerCall, max(0, callerBudget ?? config.maxJudgementsPerCall))
         var judgements = 0
         var chosen: [Int] = [], sameAs: [Int: Int] = [:], firstWithKey: [ExactKey: Int] = [:]
         var pendingCost = 0
         for i in tasks.indices {
-            if let o = cache.get(tasks[i].key), o.settledForBlur || !blurCanApply(tasks[i]) {
+            if secondChecksOnly {
+                // Only pictures seen clean once; nothing else is looked up, judged or reported.
+                guard cache.seenCleanOnce(tasks[i].key) else { continue }
+            } else if let o = cache.get(tasks[i].key), o.settledForBlur || !blurCanApply(tasks[i]) {
                 tasks[i].outcome = o; tasks[i].judged = true; tasks[i].fromCache = true; timings.cacheHits += 1; continue
             }
             timings.cacheMisses += 1
@@ -287,6 +308,7 @@ public final class Detector {
             budget -= cost
             judgements += cost
             pendingCost += cost
+            if cache.seenCleanOnce(tasks[i].key) { timings.secondCheckJudgements += cost }
             chosen.append(i)
             firstWithKey[tasks[i].key] = i
         }
@@ -304,7 +326,7 @@ public final class Detector {
         var fastFailed: Set<Int> = []
         if progress != nil, let fm = fastestModel {
             for i in chosen where tasks[i].pass == .region {
-                guard let top = topScore(frame, tasks[i], fm) else { fastFailed.insert(i); continue }
+                guard let top = topScore(frame, tasks[i], fm) else { fastFailed.insert(i); cache.forget(tasks[i].key); continue }
                 fast[i] = [fm.id: top]
                 var flagged = top >= table.cutoffs(model: fm.id, band: Band(shortSide: tasks[i].rect.shortSide)).cover
                 #if KESTREL_LAB
@@ -323,8 +345,12 @@ public final class Detector {
         for i in chosen where !fastFailed.contains(i) {
             if let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) {
                 tasks[i].outcome = o; tasks[i].judged = true
-                // Kept only if it covers or was clearly clean (the margin rule); otherwise judged again next time.
-                if o.cacheable { cache.put(tasks[i].key, o) }
+                // A cover is kept; a clearly clean judgement adds to the entry's clean count (two in a row make it
+                // reusable); anything else starts the count again (the margin rule and `CLEAN_CHECKS`).
+                cache.put(tasks[i].key, o)
+            } else {
+                // A model failed: the entry is left unjudged (covered or blurred) and its clean count starts again.
+                cache.forget(tasks[i].key)
             }
         }
         for (i, j) in sameAs where tasks[j].judged { tasks[i].outcome = tasks[j].outcome; tasks[i].judged = true }
@@ -342,8 +368,12 @@ public final class Detector {
 
         var out: [RegionVerdict] = []
         var coverWindow = false, strike = false, overloaded = 0
-        for t in tasks {
+        // Second checks: the entries asked about in this call. One a model failed on is reported unjudged, as any fault.
+        let asked = Set(chosen).union(sameAs.keys)
+        for (ti, t) in tasks.enumerated() {
             guard t.judged, let o = t.outcome else {
+                // A second check not reached is simply left for later: the entry was not asked about.
+                if secondChecksOnly && !asked.contains(ti) { continue }
                 overloaded += 1
                 // Never show a picture unjudged: cover in covered-start contexts and for the whole/slice
                 // passes; blur regions in show-first windows (the judged copy takes over there).
@@ -396,8 +426,11 @@ public final class Detector {
         }
         timings.judgements += judgements
         timings.overloaded += overloaded
+        // Pictures of this call still seen clean once, waiting for their second check (counted once per key).
+        var waiting = Set<ExactKey>()
+        for t in tasks where cache.seenCleanOnce(t.key) { waiting.insert(t.key) }
         return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded,
-                            modelFaults: faultTotal - faultsBefore)
+                            modelFaults: faultTotal - faultsBefore, secondChecksLeft: waiting.count)
     }
 
     #if KESTREL_LAB
@@ -549,10 +582,12 @@ public final class Detector {
                 refereeCalls += t.pieces.count
             }
         }
-        // Cache a cover (reusing it only ever covers) or a clearly clean outcome. A borderline-clean one, a
-        // dispute the tie-breaker declined among them, is judged again with fresh jitter when it comes back; one
-        // not settled for a blur is judged again wherever a blur can apply.
+        // Cache a cover (reusing it only ever covers) or count a clearly clean outcome towards the two clean
+        // checks a clean verdict needs (`VerdictCache.CLEAN_CHECKS`). A borderline-clean one, a dispute the
+        // tie-breaker declined among them, is judged again with fresh jitter when it comes back; one not settled
+        // for a blur is judged again wherever a blur can apply.
         let c = covers(o)
+        o.covering = c
         o.cacheable = c || clearlyClean
         o.settledForBlur = c || (clearlyClean && settledForBlur)
         return o

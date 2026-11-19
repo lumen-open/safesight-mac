@@ -14,10 +14,13 @@ public protocol Judging: AnyObject {
     func setRule(_ rule: DetectorRule)
     /// The pictures the finder sees in an area (no model runs), or nil when this judge cannot say.
     func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]?
+    /// Second clean checks in the background (`Detector.secondChecks`), or nil when this judge has none.
+    func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict?
 }
 
 extension Judging {
     public func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { nil }
+    public func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? { nil }
 
     public func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict {
         judgeArea(frame, context: context, within: area, budget: budget, progress: nil)
@@ -31,6 +34,10 @@ extension Detector: Judging {
     }
 
     public func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { pictures(frame, within: area) }
+
+    public func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? {
+        secondChecks(frame, context: context, within: area, budget: budget)
+    }
 }
 
 /// A token bucket per display: filled at `JUDGEMENT_BUDGET` divided by the number of active displays,
@@ -72,6 +79,8 @@ public struct PipelineTimings: Sendable, Equatable {
     public var calls = 0
     public var judgements = 0
     public var overloaded = 0
+    /// Judgements spent on second clean checks in the background (`DisplayPipeline`, step 3c); not in `judgements`.
+    public var secondCheckJudgements = 0
     /// Model failures reported by the judge calls (counts only; their entries are covered or blurred).
     public var modelFaults = 0
     /// Plans handed out before the final one (moved covers, cover-first blurs, fast-model blurs), with the

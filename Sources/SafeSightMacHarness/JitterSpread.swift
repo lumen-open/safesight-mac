@@ -3,7 +3,7 @@
 // harmless screens, per size band. The clean-cache margin (`VerdictCache.CLEAN_CACHE_MARGIN`) is checked against it.
 //
 //   SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter \
-//       --models DIR --list FILE --root DIR [--draws N] [--per-band K] [--background B] [--every K] [--json FILE]
+//       --models DIR --list FILE --root DIR [--draws N] [--per-band K] [--background B] [--every K] [--bands B,...] [--json FILE]
 //
 // Harmless pictures only (the lab's held-out harmless screens). Every entry the detector's first call would
 // judge on a screen (finder regions, the whole pass, the slices) is judged once with each scoring model, as in
@@ -11,7 +11,12 @@
 // per model and band, up to `--per-band` entries that came within `SELECT` of the entry's lowest action cut-off
 // (cover, or containment where a blur can apply), and `--background` entries at random. The spread of each
 // entry's scores (highest minus lowest, and the largest distance from its median) is summarised per model and
-// band. Scores are summarised, never written one by one.
+// band. Scores are summarised, never written one by one. `--bands` limits the many-draw sample to those size bands.
+//
+// Two clean checks (`VerdictCache.CLEAN_CHECKS`): the draws of an entry, in the order they were made, stand for the
+// judgements it would get each time it comes back. With one check, an entry is cached clean on its first draw under
+// half its action cut-off; with two, only on two draws in a row under it. Both are counted per model and band, among
+// the borderline entries that also had a draw at or over the action cut-off (the crossings).
 #if SAFESIGHTMAC_LAB
 import DetectorCore
 import Foundation
@@ -37,6 +42,8 @@ enum JitterSpread {
         /// The entry's single first score (pass 1), which chose it for the sample.
         var first: Float
         var selected: Bool, background: Bool
+        /// Of the draws, in the order made: how many were under half the action cut-off, and whether two in a row were.
+        var underHalf = 0, draws = 0, twoInARowUnderHalf = false
         var range: Float { hi - lo }
         /// The lowest cut-off at which this entry's outcome changes: containment where a blur can apply.
         var action: Float { containable ? min(cover, clean) : cover }
@@ -102,14 +109,15 @@ enum JitterSpread {
         }
         var selected = Set<Int>(), background = Set<Int>()
         var candidates: [String: Int] = [:]
+        let sampled = o.bands.isEmpty ? Band.allCases : Band.allCases.filter { o.bands.contains($0.rawValue) }
         for m in ids {
-            for b in Band.allCases {
+            for b in sampled {
                 let c = seen.indices.filter { Band(shortSide: seen[$0].entry.rect.shortSide) == b && seen[$0].first[m]! >= SELECT * action(m, seen[$0].entry) }
                 candidates["\(m)|\(b.rawValue)"] = c.count
                 selected.formUnion(shuffled(c).prefix(o.perBand))
             }
         }
-        for b in Band.allCases {
+        for b in sampled {
             background.formUnion(shuffled(seen.indices.filter { Band(shortSide: seen[$0].entry.rect.shortSide) == b }).prefix(o.background))
         }
         let chosen = selected.union(background)
@@ -125,13 +133,20 @@ enum JitterSpread {
                 let e = seen[k].entry
                 if s.count < ids.count { failed += 1; continue }
                 for m in ids {
-                    let v = s[m]!.sorted()
+                    let inOrder = s[m]!
+                    let v = inOrder.sorted()
                     let med = v.count % 2 == 1 ? v[v.count / 2] : (v[v.count / 2 - 1] + v[v.count / 2]) / 2
                     let c = d.labCutoffs(model: m, shortSide: e.rect.shortSide)
-                    spreads.append(Spread(model: m, band: Band(shortSide: e.rect.shortSide).rawValue, pass: e.pass.rawValue, containable: e.containable,
-                                          cover: c.cover, clean: c.clean, lo: v.first!, hi: v.last!, median: med,
-                                          dev: max(med - v.first!, v.last! - med), first: seen[k].first[m]!,
-                                          selected: selected.contains(k), background: background.contains(k)))
+                    var sp = Spread(model: m, band: Band(shortSide: e.rect.shortSide).rawValue, pass: e.pass.rawValue, containable: e.containable,
+                                    cover: c.cover, clean: c.clean, lo: v.first!, hi: v.last!, median: med,
+                                    dev: max(med - v.first!, v.last! - med), first: seen[k].first[m]!,
+                                    selected: selected.contains(k), background: background.contains(k))
+                    let half = 0.5 * sp.action
+                    let under = inOrder.map { $0 < half }
+                    sp.underHalf = under.filter { $0 }.count
+                    sp.draws = under.count
+                    sp.twoInARowUnderHalf = zip(under, under.dropFirst()).contains { $0 && $1 }
+                    spreads.append(sp)
                 }
                 done += 1
             }
@@ -170,8 +185,17 @@ enum JitterSpread {
                 let byLevel: [String: Any] = ["under0.5xAction": summary(border.filter { $0.median < 0.5 * $0.action }),
                                               "0.5to0.8xAction": summary(border.filter { $0.median >= 0.5 * $0.action && $0.median < 0.8 * $0.action }),
                                               "atLeast0.8xAction": summary(border.filter { $0.median >= 0.8 * $0.action })]
+                // Two clean checks: among the crossings at half, those that two draws in a row under half would still cache
+                // clean, and the chance that an entry's first judgement (one check) or first two (two checks) cache it.
+                let crossing = border.filter { $0.lo < 0.5 * $0.action && $0.hi >= $0.action }
+                func share(_ s: Spread) -> Double { Double(s.underHalf) / Double(max(1, s.draws)) }
+                let twoChecks: [String: Any] = [
+                    "crossings": crossing.count,
+                    "stillCachedWithTwoInARow": crossing.filter(\.twoInARowUnderHalf).count,
+                    "expectedCachedOnFirstJudgementOneCheck": (crossing.reduce(0.0) { $0 + share($1) } * 100).rounded() / 100,
+                    "expectedCachedOnFirstTwoJudgementsTwoChecks": (crossing.reduce(0.0) { $0 + share($1) * share($1) } * 100).rounded() / 100]
                 let c = mine[0]
-                bands[b.rawValue] = ["cutoffs": ["cover": r4(c.cover), "clean": r4(c.clean)],
+                bands[b.rawValue] = ["twoChecks": twoChecks, "cutoffs": ["cover": r4(c.cover), "clean": r4(c.clean)],
                                      "candidatesNearACutoff": candidates["\(m)|\(b.rawValue)"] ?? 0,
                                      "borderline": summary(border), "borderlineByPass": byPass, "borderlineByMedian": byLevel,
                                      "background": summary(bg), "allSampled": summary(mine),
@@ -183,7 +207,7 @@ enum JitterSpread {
                                      "crossingsAtToday0.5": crossings { 0.5 * $0.action },
                                      "crossingsAtMeasuredLevel": crossings { $0.action - gap },
                                      "borderlineEntriesWithRangeOverGap": border.filter { $0.range > gap }.count]
-                print("\(m) \(b.rawValue): borderline \(border.count), range p999 \(r4(spread)), max \(r4(border.map(\.range).max() ?? .nan)), gap \(r4(gap)); background \(bg.count) p999 \(r4(quantile(bg.map(\.range), 0.999)))")
+                print("\(m) \(b.rawValue): borderline \(border.count), range p999 \(r4(spread)), max \(r4(border.map(\.range).max() ?? .nan)), gap \(r4(gap)); background \(bg.count) p999 \(r4(quantile(bg.map(\.range), 0.999))); crossings \(crossing.count), still cached with two checks \(crossing.filter(\.twoInARowUnderHalf).count)")
             }
             table[m] = bands
         }
@@ -193,6 +217,7 @@ enum JitterSpread {
         out["list"] = (list as NSString).lastPathComponent
         out["screens"] = files.count
         out["every"] = o.every
+        out["bands"] = o.bands.isEmpty ? "all" : o.bands.joined(separator: ",")
         out["entriesJudgedOnce"] = seen.count
         out["entriesSampled"] = chosen.count
         out["draws"] = o.draws

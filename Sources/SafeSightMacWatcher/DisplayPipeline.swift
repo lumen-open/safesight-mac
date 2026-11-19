@@ -78,6 +78,12 @@ public final class DisplayPipeline {
     static let recheckFloor = 16
     /// Frames in a row whose judging took longer than the goal.
     var overrunFrames = 0
+    /// Pictures seen clean once are waiting for their second clean check (`VerdictCache.CLEAN_CHECKS`), which
+    /// frames where nothing changed give them in the background (step 3c).
+    public private(set) var secondChecksDue = false
+    /// Whether step 3c runs. Off, a picture seen clean once gets its second check only when it comes back (the lab
+    /// bench measures both).
+    public var backgroundSecondChecks = true
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
     public private(set) var judged = false
     /// Frames from streams older than this generation are never judged here: the display has changed since they
@@ -114,7 +120,7 @@ public final class DisplayPipeline {
     public func reset() {
         held = []; pending = []; lastImage = nil; lastMap = nil; lastFullPass = nil
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
-        judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []
+        judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []; secondChecksDue = false
         cover(because: .notYetJudged)
     }
 
@@ -144,8 +150,11 @@ public final class DisplayPipeline {
             return judged ? lastPlan : cover(because: .notYetJudged)
         case .idle:
             // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels (of this stream only).
-            guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap, !(held.isEmpty && pending.isEmpty) else { return lastPlan }
-            return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
+            // Pictures seen clean once get their second clean check meanwhile (step 3c).
+            guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap,
+                  !(held.isEmpty && pending.isEmpty && !(secondChecksDue && backgroundSecondChecks)) else { return lastPlan }
+            return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer,
+                       idle: true, provisional: provisional)
         case .complete:
             guard let img = f.image, let map = f.map, map.pixelWidth == img.width, map.pixelHeight == img.height, map.coversDisplay else {
                 return cover(because: .badFrameMetadata)
@@ -182,7 +191,7 @@ public final class DisplayPipeline {
     }
 
     func run(_ img: RGBAImage, previous: RGBAImage?, frameInterval: TimeInterval, map: CaptureMap, dirty: [PixelRect]?, snapshot: WindowSnapshot,
-             now: TimeInterval, date: Date, pointer: CGPoint? = nil, provisional: ((CoverPlan) -> Void)?) -> CoverPlan {
+             now: TimeInterval, date: Date, pointer: CGPoint? = nil, idle: Bool = false, provisional: ((CoverPlan) -> Void)?) -> CoverPlan {
         var timing = PipelineTimings()
         let tRun = PipelineTimings.now()
         defer {
@@ -378,6 +387,7 @@ public final class DisplayPipeline {
             timing.judgements += v.judgements
             timing.overloaded += v.overloaded
             timing.modelFaults += v.modelFaults
+            if v.secondChecksLeft > 0 { secondChecksDue = true }
             tStage = PipelineTimings.now()
             defer { timing.planMs += PipelineTimings.ms(since: tStage) }
             if judged { bucket.spend(v.judgements) }
@@ -432,6 +442,7 @@ public final class DisplayPipeline {
             timing.calls += 1; timing.judgements += v.judgements; timing.overloaded += v.overloaded
             timing.rechecks += 1
             checked += 1
+            if v.secondChecksLeft > 0 { secondChecksDue = true }
             if judged { bucket.spend(v.judgements) }
             if v.coverWindow || v.regions.contains(where: { $0.display != .clear && $0.reason != .overload }) {
                 held[i].clean = 0
@@ -445,6 +456,44 @@ public final class DisplayPipeline {
             }
         }
         if !waiting.isEmpty { recheckTurn = (recheckTurn + max(1, checked)) % max(1, waiting.count) }
+
+        // 3c. Second clean checks, in the background (`VerdictCache.CLEAN_CHECKS`). On a frame where nothing changed,
+        //     the pictures on show that were seen clean once are judged once more, with fresh jitter, so that when they
+        //     come back they are served from the cache. Low priority: only from judgements beyond half the bucket, and
+        //     within the time left. Nothing is lifted or cleared here, and no clean judgement is counted towards lifting
+        //     a cover: a flag covers (or a blur blurs) at once; a clean result only adds to the picture's count.
+        if idle, judged, secondChecksDue, backgroundSecondChecks {
+            var left = false
+            bucket.refill(now: now)
+            for p in snapshot.split(changed: [d], display: display, ignoring: ignoredPIDs) {
+                guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
+                      let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
+                let spent = PipelineTimings.ms(since: tRun)
+                let spare = bucket.available - Int(Register.JUDGEMENT_BURST / 2)
+                let budget = min(spare, Register.DETECTOR_CALL_CAP, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (callWallMs - spent) / msPerJudgement))))
+                guard budget > 0 else { left = true; break }
+                let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
+                                       sliceAnchor: sliceAnchor(p.target, snapshot, map))
+                tStage = PipelineTimings.now()
+                guard let v = judger.checkAgainInBackground(img, context: ctx, within: area, budget: budget) else { continue }
+                let callMs = PipelineTimings.ms(since: tStage)
+                timing.judgeMs += callMs
+                if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
+                timing.secondCheckJudgements += v.judgements
+                timing.modelFaults += v.modelFaults
+                bucket.spend(v.judgements)
+                if v.secondChecksLeft > 0 { left = true }
+                // A model failure in a second check is a fault like any other: the entry is blurred or covered and judged
+                // again in the next call.
+                pending += v.regions.filter { $0.reason == .overload }.map { map.toGlobal($0.rect) }
+                let wasHot = hot.contains(p.target)
+                if v.hot { hot.insert(p.target) }
+                if v.hot && !wasHot { pending += p.visible }
+                fresh += covers(from: v, target: p.target, origin: origin(of: p.target, snapshot), img: img, map: map,
+                                callArea: map.toGlobal(area), visibleBox: visBox)
+            }
+            secondChecksDue = left
+        }
         judged = true
         tStage = PipelineTimings.now()
         defer { timing.planMs += PipelineTimings.ms(since: tStage) }
