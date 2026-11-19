@@ -40,6 +40,8 @@ public final class DisplayPipeline {
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
     public private(set) var judged = false
     public private(set) var lastPlan: CoverPlan
+    /// Stage timings of the last `process` call (durations and counts only; nothing is written anywhere).
+    public private(set) var lastTimings = PipelineTimings()
 
     public init(display: DisplayDescriptor, judger: Judging, budgetShare: Double, ignoredPIDs: Set<Int32>) {
         self.display = display; self.judger = judger; self.ignoredPIDs = ignoredPIDs
@@ -91,6 +93,10 @@ public final class DisplayPipeline {
     }
 
     func run(_ img: RGBAImage, map: CaptureMap, dirty: [PixelRect]?, snapshot: WindowSnapshot, now: TimeInterval, date: Date) -> CoverPlan {
+        var timing = PipelineTimings()
+        let tRun = PipelineTimings.now()
+        defer { timing.totalMs = PipelineTimings.ms(since: tRun); lastTimings = timing }
+        var tStage = tRun
         let d = display.bounds
         let visible = visibleByTarget(snapshot)
         // Windows that moved or changed size since the last snapshot.
@@ -115,6 +121,7 @@ public final class DisplayPipeline {
         // 2. Split by window: one judge call per window (C05-6). Hot windows first.
         var parts = snapshot.split(changed: areas, display: display, ignoring: ignoredPIDs)
         parts.sort { hot.contains($0.target) && !hot.contains($1.target) }
+        timing.changeMs = PipelineTimings.ms(since: tStage)
 
         // 3. Judge and turn classes into covers.
         var fresh: [Held] = []
@@ -125,7 +132,14 @@ public final class DisplayPipeline {
             // The first judgement after the display was covered whole is not limited by the budget (SD-120).
             let budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
             let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
+            tStage = PipelineTimings.now()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget)
+            timing.judgeMs += PipelineTimings.ms(since: tStage)
+            timing.calls += 1
+            timing.judgements += v.judgements
+            timing.overloaded += v.overloaded
+            tStage = PipelineTimings.now()
+            defer { timing.planMs += PipelineTimings.ms(since: tStage) }
             if judged { bucket.spend(v.judgements) }
             if v.hot { hot.insert(p.target) } else { hot.remove(p.target) }
 
@@ -148,6 +162,8 @@ public final class DisplayPipeline {
             }
         }
         judged = true
+        tStage = PipelineTimings.now()
+        defer { timing.planMs += PipelineTimings.ms(since: tStage) }
 
         // 4. Lifted regions are gone; add the new covers, merging with any they overlap.
         held.removeAll { $0.clean >= Register.VIDEO_VOTE }

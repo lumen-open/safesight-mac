@@ -39,3 +39,28 @@ public struct TokenBucket: Sendable {
 
     public mutating func spend(_ n: Int) { tokens = max(0, tokens - Double(n)) }
 }
+
+/// Stage timings of one `DisplayPipeline.process` call, for the lab harness's bench. Durations and counts
+/// only: no score, no pixel and no verdict detail.
+public struct PipelineTimings: Sendable, Equatable {
+    /// Preparing changed areas and splitting them by window.
+    public var changeMs = 0.0
+    /// Finding content that moved by a translation (scrolling) and moving covers with it.
+    public var translateMs = 0.0
+    /// Inside `judge` calls (the detector's own stages are in `JudgeTimings`).
+    public var judgeMs = 0.0
+    /// Turning classes into covers and building the plan.
+    public var planMs = 0.0
+    /// The whole call.
+    public var totalMs = 0.0
+    public var calls = 0
+    public var judgements = 0
+    public var overloaded = 0
+    /// Plans handed out before the final one (moved covers, cover-first blurs, fast-model blurs), with the
+    /// time each was ready, from the start of the call.
+    public var provisionalMs: [Double] = []
+    public init() {}
+
+    static func now() -> UInt64 { DispatchTime.now().uptimeNanoseconds }
+    static func ms(since t: UInt64) -> Double { Double(DispatchTime.now().uptimeNanoseconds &- t) / 1_000_000 }
+}

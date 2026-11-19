@@ -35,7 +35,7 @@ var targets: [Target] = [
     .executableTarget(name: "SafeSightMacApp", dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCapture", "SafeSightMacCover", "DetectorCore"],
                       swiftSettings: detectorSettings),
     // The lab harness: frames from files or synthetic scenes through the pipeline, never the screen.
-    .executableTarget(name: "SafeSightMacHarness", dependencies: ["SafeSightMacWatcher", "DetectorCore", "Preprocess"] + (lab ? ["LabStandIn"] : []),
+    .executableTarget(name: "SafeSightMacHarness", dependencies: ["SafeSightMacWatcher", "SafeSightMacCover", "DetectorCore", "Preprocess"] + (lab ? ["LabStandIn"] : []),
                       swiftSettings: detectorSettings),
     .testTarget(name: "SafeSightMacWatcherTests", dependencies: ["SafeSightMacWatcher", "DetectorCore", "Preprocess", "RegionFinder"] + (lab ? ["LabStandIn"] : []),
                 swiftSettings: detectorSettings),

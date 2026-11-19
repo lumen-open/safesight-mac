@@ -5,6 +5,8 @@
 //
 //   safesightmac-harness demo [--out DIR]                         scripted synthetic scenes (lab build: with the stand-in)
 //   safesightmac-harness frames FILE... [--models DIR] [--out DIR] image files as successive frames of one display
+//   safesightmac-harness bench [--models DIR] [--pages DIR] [--json FILE] [--trials N] [--cases single,grid,busy,scroll]
+//            (lab build only) times the chain from frame to cover plan to cover layer update, by stage; see Bench.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
 //            --models DIR (real models, checked against the sealed hash list)  --null-models (lab build only)
@@ -34,6 +36,18 @@ struct Options {
     var models: String?
     var nullModels = false
     var out: String?
+    var bench = BenchSettings()
+}
+
+/// Bench options, parsed in every build so that a release build can refuse `bench` plainly.
+struct BenchSettings {
+    var trials = 8
+    var pages: String?
+    var json: String?
+    var cases: [String] = ["single", "grid", "busy", "scroll", "reappear"]
+    var label = "bench"
+    var busyPages = 6
+    var scrollSpeeds = [8, 32, 96]
 }
 
 func fail(_ s: String) -> Never { FileHandle.standardError.write(Data((s + "\n").utf8)); exit(2) }
@@ -55,6 +69,13 @@ func parse() -> Options {
         case "--models": o.models = v()
         case "--null-models": o.nullModels = true
         case "--out": o.out = v()
+        case "--trials": o.bench.trials = Int(v()) ?? 8
+        case "--pages": o.bench.pages = v()
+        case "--json": o.bench.json = v()
+        case "--cases": o.bench.cases = v().split(separator: ",").map(String.init)
+        case "--label": o.bench.label = v()
+        case "--busy-pages": o.bench.busyPages = Int(v()) ?? 6
+        case "--scroll-speeds": o.bench.scrollSpeeds = v().split(separator: ",").compactMap { Int($0) }
         case "--help", "-h": print("see the header of Sources/SafeSightMacHarness/main.swift"); exit(0)
         default:
             if k.hasPrefix("--") { fail("unknown option \(k)") }
@@ -182,6 +203,19 @@ func makeDetector() -> Detector {
 }
 
 let detector = makeDetector()
+
+if o.command == "bench" {
+    #if SAFESIGHTMAC_LAB
+    var b = BenchOptions()
+    b.trials = o.bench.trials; b.pages = o.bench.pages; b.json = o.bench.json; b.cases = Set(o.bench.cases)
+    b.label = o.bench.label; b.busyPages = o.bench.busyPages; b.scrollSpeeds = o.bench.scrollSpeeds
+    b.modelsNote = o.models.map { "real models (\(($0 as NSString).lastPathComponent)), checked against the sealed hash list; sealed cut-off table" } ?? "null models (lab): every model scores 0, only the stand-in covers"
+    Bench(detector: detector, options: b).run()
+    exit(0)
+    #else
+    fail("bench needs a lab build (it uses the lab stand-in): SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness bench")
+    #endif
+}
 
 struct Step { var label: String; var image: RGBAImage?; var status: FrameStatus; var dirty: [PixelRect]? }
 

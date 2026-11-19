@@ -45,6 +45,9 @@ public final class Detector {
     let hot = HotContexts()
     /// Referee judgements made so far (for budgets and benchmarks).
     public private(set) var refereeCalls = 0
+    /// Stage timings since the last `resetTimings()` (durations and counts only).
+    public private(set) var timings = JudgeTimings()
+    public func resetTimings() { timings = JudgeTimings() }
     var rng = SystemRandomNumberGenerator()
     #if KESTREL_LAB
     public var standIn: StandInDetector?
@@ -73,6 +76,18 @@ public final class Detector {
         guard rule != config.rule else { return }
         config.rule = rule
         cache.removeAll()
+    }
+
+    /// Empties the verdict cache (lab benches measure from scratch with it; pausing may use it). Emptying
+    /// only ever means judging again.
+    public func removeCachedVerdicts() { cache.removeAll() }
+
+    /// Runs every model once on a blank tensor, so that the first real judgement does not pay for loading
+    /// (the tie-breaker on the GPU costs about 0.2 s the first time). Used by the lab bench.
+    public func warmUp() {
+        for m in models.models + models.students + (models.referee.map { [$0] } ?? []) {
+            _ = try? m.flagScores([[UInt8](repeating: 128, count: 3 * m.side * m.side)])
+        }
     }
 
     /// The picture finder alone (the contract's `find`). Cheap; no model.
@@ -129,8 +144,14 @@ public final class Detector {
     /// `budget` is the caller's share of model judgements for this call; `DetectorConfig.maxJudgementsPerCall`
     /// (`DETECTOR_CALL_CAP`) stays as the backstop. A budget of 0 returns every uncached entry as `overload`.
     public func judge(_ frame: RGBAImage, context ctx: JudgeContext, within area: PixelRect? = nil, budget callerBudget: Int? = nil) -> FrameVerdict {
+        let tCall = nowNs()
+        timings.calls += 1
+        defer { timings.totalMs += msSince(tCall) }
         let A = area?.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
+        var t0 = nowNs()
         let found = finder.find(frame, within: A)
+        timings.finderMs += msSince(t0)
+        t0 = nowNs()
         let gridMembers = Set(found.grids.flatMap(\.members))
         var wasHot = hot.isHot(ctx.windowID, ctx.now)
         let v = models.bundleVersion
@@ -151,8 +172,10 @@ public final class Detector {
         // Cache, then judge within the budget.
         var budget = min(config.maxJudgementsPerCall, max(0, callerBudget ?? config.maxJudgementsPerCall))
         var judgements = 0
+        timings.cacheMs += msSince(t0)
         for i in tasks.indices {
-            if let o = cache.get(tasks[i].key) { tasks[i].outcome = o; tasks[i].judged = true; continue }
+            if let o = cache.get(tasks[i].key) { tasks[i].outcome = o; tasks[i].judged = true; timings.cacheHits += 1; continue }
+            timings.cacheMisses += 1
             let cost = tasks[i].pieces.count * (models.models.count + (tasks[i].rect.shortSide < config.containBelow ? models.students.count : 0))
             if cost > budget { continue }
             budget -= cost
@@ -165,6 +188,8 @@ public final class Detector {
 
         // A window turns hot only after a both-family hit (SD-125, C06-3 d). The lab's grid trigger
         // (several low-level tiles) and the tie-breaker-confirmed trigger are removed.
+        let tDecide = nowNs()
+        defer { timings.decisionMs += msSince(tDecide) }
         var becameHot = false
 
         var out: [RegionVerdict] = []
@@ -220,6 +245,8 @@ public final class Detector {
                 out[i].display = .contain; out[i].reason = .hotContext
             }
         }
+        timings.judgements += judgements
+        timings.overloaded += overloaded
         return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded)
     }
 
@@ -269,11 +296,16 @@ public final class Detector {
         for m in judges {
             let cut = table.cutoffs(model: m.id, band: band)
             var tensors: [[UInt8]] = []
+            var t0 = nowNs()
             for p in t.pieces {
                 guard let tensor = try? Preprocessor.run(frame, rect: p, side: m.side, jitterSeed: UInt32.random(in: 1...UInt32.max, using: &rng)) else { return nil }
                 tensors.append(tensor)
             }
+            timings.preprocessMs[m.id, default: 0] += msSince(t0)
+            t0 = nowNs()
             guard let scores = try? m.flagScores(tensors) else { return nil }
+            timings.inferenceMs[m.id, default: 0] += msSince(t0)
+            timings.tiles[m.id, default: 0] += tensors.count
             let top = scores.max() ?? 0
             let flag = top >= cut.cover
             if top > cut.clean { o.clean = false }
@@ -290,11 +322,17 @@ public final class Detector {
         if o.disputed, config.rule == .balanced, let r = models.referee {
             let cut = table.cutoffs(model: r.id, band: band)
             var tensors: [[UInt8]] = []
+            var t0 = nowNs()
             for p in t.pieces {
                 guard let tensor = try? Preprocessor.run(frame, rect: p, side: r.side, jitterSeed: UInt32.random(in: 1...UInt32.max, using: &rng)) else { return nil }
                 tensors.append(tensor)
             }
-            if let scores = try? r.flagScores(tensors) {
+            timings.preprocessMs[r.id, default: 0] += msSince(t0)
+            t0 = nowNs()
+            let refScores = try? r.flagScores(tensors)
+            timings.inferenceMs[r.id, default: 0] += msSince(t0)
+            timings.tiles[r.id, default: 0] += tensors.count
+            if let scores = refScores {
                 o.refereeRan = true
                 o.refereeFlag = (scores.max() ?? 0) >= cut.cover
                 refereeCalls += t.pieces.count

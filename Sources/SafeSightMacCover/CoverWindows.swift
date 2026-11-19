@@ -63,6 +63,22 @@ final class CoverPanel: NSPanel {
     }
 }
 
+/// The canvas's layers for one plan, built without any window. The canvas form uses it, and the lab
+/// harness's bench times it on a detached layer (no window, nothing drawn on a screen).
+public enum CoverDrawing {
+    public static func layers(for plan: CoverPlan) -> [CALayer] {
+        CoverLayout.layerFrames(plan).map { LayerFactory.layer($0.0, $0.1) }
+    }
+
+    /// Replaces a root layer's covers with this plan's, in one transaction with no animation.
+    public static func apply(_ plan: CoverPlan, to root: CALayer) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        root.sublayers = layers(for: plan)
+        CATransaction.commit()
+    }
+}
+
 enum LayerFactory {
     static func layer(_ frame: CGRect, _ kind: CoverKind) -> CALayer {
         let l = CALayer()
@@ -107,7 +123,7 @@ public final class CoverCanvas: CoverPresenter {
             if panel.frame != frame { panel.setFrame(frame, display: false) }
             let root = panel.contentView!.layer!
             root.frame = CGRect(origin: .zero, size: frame.size)
-            root.sublayers = CoverLayout.layerFrames(plan).map { LayerFactory.layer($0.0, $0.1) }
+            root.sublayers = CoverDrawing.layers(for: plan)
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()

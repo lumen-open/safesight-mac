@@ -1,0 +1,996 @@
+{
+ "bench": "safesightmac-bench/1",
+ "busy": {
+  "register": {
+   "allHarmlessShownAfterS": {
+    "median": 19,
+    "n": 6,
+    "worst": 22.2
+   },
+   "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+   "budget": "register (JUDGEMENT_BUDGET 40/s, JUDGEMENT_BURST 400)",
+   "firstCallMs": {
+    "median": 2828.1,
+    "n": 6,
+    "worst": 3011.4
+   },
+   "firstCallStages": {
+    "cacheHashMs": 37.9,
+    "cacheHits": 138,
+    "cacheMisses": 503,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0.5,
+    "decisionMs": 0,
+    "finderMs": 220.2,
+    "judgeTotalMs": 2827.1,
+    "judgements": 400,
+    "model.bumble-private-detector.inferenceMs": 0,
+    "model.bumble-private-detector.preprocessMs": 0,
+    "model.bumble-private-detector.tiles": 0,
+    "model.marqo-vit-tiny-384.inferenceMs": 1326.6,
+    "model.marqo-vit-tiny-384.preprocessMs": 687.2,
+    "model.marqo-vit-tiny-384.tiles": 200,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 270.9,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 244,
+    "model.nsfwjs-mobilenet-v2.tiles": 200,
+    "overloaded": 338,
+    "planningMs": 0.9,
+    "processTotalMs": 2828.1,
+    "translationMs": 0
+   },
+   "fullyJudgedAfterS": {
+    "median": 18.1,
+    "n": 6,
+    "worst": 21.5
+   },
+   "pages": 6,
+   "perPage": [
+    {
+     "calls": 37,
+     "computeMs": 14522.8,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2771.5,
+     "firstCallOverloaded": 288,
+     "fullyJudgedAfterS": 14.1,
+     "harmlessClearAfterS": 14.5,
+     "lastOverloadAfterS": 13.5,
+     "page": "synthetic-0058.png",
+     "photoShownLateS": {
+      "median": 14.5,
+      "worst": 14.5
+     },
+     "photos": 288,
+     "photosCoveredOrBlurredAtSomePoint": 288,
+     "standInCoveredAfterMs": 2772
+    },
+    {
+     "calls": 45,
+     "computeMs": 15908.2,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2695.5,
+     "firstCallOverloaded": 310,
+     "fullyJudgedAfterS": 15.3,
+     "harmlessClearAfterS": 15.9,
+     "lastOverloadAfterS": 14.7,
+     "page": "synthetic-0048.png",
+     "photoShownLateS": {
+      "median": 15.9,
+      "worst": 15.9
+     },
+     "photos": 288,
+     "photosCoveredOrBlurredAtSomePoint": 288,
+     "standInCoveredAfterMs": 2696
+    },
+    {
+     "calls": 40,
+     "computeMs": 19013.1,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2828.1,
+     "firstCallOverloaded": 375,
+     "fullyJudgedAfterS": 18.2,
+     "harmlessClearAfterS": 19,
+     "lastOverloadAfterS": 17.3,
+     "page": "synthetic-0057.png",
+     "photoShownLateS": {
+      "median": 19,
+      "worst": 19
+     },
+     "photos": 234,
+     "photosCoveredOrBlurredAtSomePoint": 234,
+     "standInCoveredAfterMs": 2828.7
+    },
+    {
+     "calls": 32,
+     "computeMs": 19104.3,
+     "firstCallJudgements": 400,
+     "firstCallMs": 3011.4,
+     "firstCallOverloaded": 427,
+     "fullyJudgedAfterS": 18.1,
+     "harmlessClearAfterS": 19.1,
+     "lastOverloadAfterS": 16.9,
+     "page": "synthetic-0040.png",
+     "photoShownLateS": {
+      "median": 19.1,
+      "worst": 19.1
+     },
+     "photos": 194,
+     "photosCoveredOrBlurredAtSomePoint": 194,
+     "standInCoveredAfterMs": 3012.1
+    },
+    {
+     "calls": 51,
+     "computeMs": 22230.7,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2702.6,
+     "firstCallOverloaded": 338,
+     "fullyJudgedAfterS": 21.5,
+     "harmlessClearAfterS": 22.2,
+     "lastOverloadAfterS": 20.6,
+     "page": "synthetic-0025.png",
+     "photoShownLateS": {
+      "median": 22.2,
+      "worst": 22.2
+     },
+     "photos": 159,
+     "photosCoveredOrBlurredAtSomePoint": 159,
+     "standInCoveredAfterMs": 2703.1
+    },
+    {
+     "calls": 29,
+     "computeMs": 13931.4,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2864.2,
+     "firstCallOverloaded": 260,
+     "fullyJudgedAfterS": 13.2,
+     "harmlessClearAfterS": 13.9,
+     "lastOverloadAfterS": 12.3,
+     "page": "synthetic-0013.png",
+     "photoShownLateS": {
+      "median": 13.9,
+      "worst": 13.9
+     },
+     "photos": 157,
+     "photosCoveredOrBlurredAtSomePoint": 157,
+     "standInCoveredAfterMs": 2864.6
+    }
+   ],
+   "photoShownLateMedianS": {
+    "median": 19,
+    "n": 6,
+    "worst": 22.2
+   },
+   "photoShownLateWorstS": {
+    "median": 19,
+    "n": 6,
+    "worst": 22.2
+   },
+   "photoShownSharpBeforeFirstCoverS": {
+    "median": 2.8,
+    "n": 6,
+    "worst": 3
+   },
+   "photosCoveredOrBlurredShare": {
+    "median": 1,
+    "n": 6,
+    "worst": 1
+   },
+   "standInTimeToCoverMs": {
+    "median": 2828.7,
+    "n": 6,
+    "worst": 3012.1
+   }
+  },
+  "unlimited": {
+   "allHarmlessShownAfterS": {
+    "median": 9.3,
+    "n": 6,
+    "worst": 10.3
+   },
+   "assumption": "idle frames every 0.1 s while nothing changes (whether a still screen sends idle frames is unproven, chapter 05)",
+   "budget": "unlimited (compute-bound; DETECTOR_CALL_CAP still applies)",
+   "firstCallMs": {
+    "median": 2862,
+    "n": 6,
+    "worst": 3034.3
+   },
+   "firstCallStages": {
+    "cacheHashMs": 38.4,
+    "cacheHits": 138,
+    "cacheMisses": 503,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0.5,
+    "decisionMs": 0,
+    "finderMs": 220.7,
+    "judgeTotalMs": 2861.1,
+    "judgements": 400,
+    "model.bumble-private-detector.inferenceMs": 0,
+    "model.bumble-private-detector.preprocessMs": 0,
+    "model.bumble-private-detector.tiles": 0,
+    "model.marqo-vit-tiny-384.inferenceMs": 1313.8,
+    "model.marqo-vit-tiny-384.preprocessMs": 685.9,
+    "model.marqo-vit-tiny-384.tiles": 200,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 272.2,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 244.6,
+    "model.nsfwjs-mobilenet-v2.tiles": 200,
+    "overloaded": 338,
+    "planningMs": 0.9,
+    "processTotalMs": 2862,
+    "translationMs": 0
+   },
+   "fullyJudgedAfterS": {
+    "median": 8.5,
+    "n": 6,
+    "worst": 9.5
+   },
+   "pages": 6,
+   "perPage": [
+    {
+     "calls": 6,
+     "computeMs": 8355.2,
+     "firstCallJudgements": 400,
+     "firstCallMs": 3034.3,
+     "firstCallOverloaded": 288,
+     "fullyJudgedAfterS": 7.8,
+     "harmlessClearAfterS": 8.4,
+     "lastOverloadAfterS": 3,
+     "page": "synthetic-0058.png",
+     "photoShownLateS": {
+      "median": 8.4,
+      "worst": 8.4
+     },
+     "photos": 288,
+     "photosCoveredOrBlurredAtSomePoint": 288,
+     "standInCoveredAfterMs": 3034.8
+    },
+    {
+     "calls": 6,
+     "computeMs": 7959.6,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2701.2,
+     "firstCallOverloaded": 310,
+     "fullyJudgedAfterS": 7.4,
+     "harmlessClearAfterS": 8,
+     "lastOverloadAfterS": 2.7,
+     "page": "synthetic-0048.png",
+     "photoShownLateS": {
+      "median": 8,
+      "worst": 8
+     },
+     "photos": 288,
+     "photosCoveredOrBlurredAtSomePoint": 288,
+     "standInCoveredAfterMs": 2701.7
+    },
+    {
+     "calls": 6,
+     "computeMs": 9271.7,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2762.6,
+     "firstCallOverloaded": 375,
+     "fullyJudgedAfterS": 8.5,
+     "harmlessClearAfterS": 9.3,
+     "lastOverloadAfterS": 2.8,
+     "page": "synthetic-0057.png",
+     "photoShownLateS": {
+      "median": 9.3,
+      "worst": 9.3
+     },
+     "photos": 234,
+     "photosCoveredOrBlurredAtSomePoint": 234,
+     "standInCoveredAfterMs": 2763.1
+    },
+    {
+     "calls": 6,
+     "computeMs": 9633,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2892.6,
+     "firstCallOverloaded": 427,
+     "fullyJudgedAfterS": 8.6,
+     "harmlessClearAfterS": 9.6,
+     "lastOverloadAfterS": 2.9,
+     "page": "synthetic-0040.png",
+     "photoShownLateS": {
+      "median": 9.6,
+      "worst": 9.6
+     },
+     "photos": 194,
+     "photosCoveredOrBlurredAtSomePoint": 194,
+     "standInCoveredAfterMs": 2893.3
+    },
+    {
+     "calls": 7,
+     "computeMs": 10254.9,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2738.8,
+     "firstCallOverloaded": 338,
+     "fullyJudgedAfterS": 9.5,
+     "harmlessClearAfterS": 10.3,
+     "lastOverloadAfterS": 5.5,
+     "page": "synthetic-0025.png",
+     "photoShownLateS": {
+      "median": 10.3,
+      "worst": 10.3
+     },
+     "photos": 159,
+     "photosCoveredOrBlurredAtSomePoint": 159,
+     "standInCoveredAfterMs": 2739.3
+    },
+    {
+     "calls": 6,
+     "computeMs": 8126.6,
+     "firstCallJudgements": 400,
+     "firstCallMs": 2862,
+     "firstCallOverloaded": 260,
+     "fullyJudgedAfterS": 7.4,
+     "harmlessClearAfterS": 8.1,
+     "lastOverloadAfterS": 2.9,
+     "page": "synthetic-0013.png",
+     "photoShownLateS": {
+      "median": 8.1,
+      "worst": 8.1
+     },
+     "photos": 157,
+     "photosCoveredOrBlurredAtSomePoint": 157,
+     "standInCoveredAfterMs": 2862.4
+    }
+   ],
+   "photoShownLateMedianS": {
+    "median": 9.3,
+    "n": 6,
+    "worst": 10.3
+   },
+   "photoShownLateWorstS": {
+    "median": 9.3,
+    "n": 6,
+    "worst": 10.3
+   },
+   "photoShownSharpBeforeFirstCoverS": {
+    "median": 2.9,
+    "n": 6,
+    "worst": 3
+   },
+   "photosCoveredOrBlurredShare": {
+    "median": 1,
+    "n": 6,
+    "worst": 1
+   },
+   "standInTimeToCoverMs": {
+    "median": 2862.4,
+    "n": 6,
+    "worst": 3034.8
+   }
+  }
+ },
+ "chip": "Apple M1 Max",
+ "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+ "frameCopy": {
+  "frame": "2880x1800",
+  "ms": {
+   "median": 4.4,
+   "n": 10,
+   "worst": 6.2
+  },
+  "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+ },
+ "grid": {
+  "finalPlanMs": {
+   "median": 460,
+   "n": 8,
+   "worst": 1069.6
+  },
+  "harmlessTilesCoveredOrBlurredInFinalPlan": 23,
+  "stages": {
+   "cacheHashMs": 0.5,
+   "cacheHits": 0,
+   "cacheMisses": 30,
+   "changeDetectionMs": 0,
+   "coverDrawMs": 0,
+   "decisionMs": 0,
+   "finderMs": 5,
+   "judgeTotalMs": 460,
+   "judgements": 66,
+   "model.marqo-vit-tiny-384.inferenceMs": 245.9,
+   "model.marqo-vit-tiny-384.preprocessMs": 119.1,
+   "model.marqo-vit-tiny-384.tiles": 33,
+   "model.nsfwjs-mobilenet-v2.inferenceMs": 44.9,
+   "model.nsfwjs-mobilenet-v2.preprocessMs": 44,
+   "model.nsfwjs-mobilenet-v2.tiles": 33,
+   "overloaded": 0,
+   "planningMs": 0,
+   "processTotalMs": 460,
+   "translationMs": 0
+  },
+  "standInCovered": 8,
+  "tiles": 32,
+  "timeToCoverMs": {
+   "median": 460,
+   "n": 8,
+   "worst": 1069.6
+  },
+  "trials": 8
+ },
+ "label": "before speed work (part 1 baseline)",
+ "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+ "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+ "notes": [
+  "scroll and reappear were measured in a second run after a bench fix (scrolling now starts once the first plan is shown); single, grid and busy come from the first run of the same code",
+  "busy pages: the six 2880 x 1800 held-out composed pages with the most harmless photos (finder-bench-heldout synthetic-*), each with one 96 px stand-in",
+  "unlimited budget still keeps DETECTOR_CALL_CAP (400 judgements per call)"
+ ],
+ "os": "Version 26.3 (Build 25D125)",
+ "reappear": {
+  "reload": {
+   "firstShowMs": {
+    "median": 2906.6,
+    "n": 6,
+    "worst": 2965.6
+   },
+   "firstShowStages": {
+    "cacheHashMs": 38.3,
+    "cacheHits": 138,
+    "cacheMisses": 502,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0.7,
+    "decisionMs": 0,
+    "finderMs": 230.1,
+    "judgeTotalMs": 2905.7,
+    "judgements": 400,
+    "model.bumble-private-detector.inferenceMs": 0,
+    "model.bumble-private-detector.preprocessMs": 0,
+    "model.bumble-private-detector.tiles": 0,
+    "model.marqo-vit-tiny-384.inferenceMs": 1381.8,
+    "model.marqo-vit-tiny-384.preprocessMs": 693.9,
+    "model.marqo-vit-tiny-384.tiles": 200,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 289.9,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 245.2,
+    "model.nsfwjs-mobilenet-v2.tiles": 200,
+    "overloaded": 343,
+    "planningMs": 0.9,
+    "processTotalMs": 2906.6,
+    "translationMs": 0
+   },
+   "pages": 6,
+   "reloadMs": {
+    "median": 270,
+    "n": 6,
+    "worst": 353.8
+   },
+   "reloadStages": {
+    "cacheHashMs": 38.5,
+    "cacheHits": 622,
+    "cacheMisses": 0,
+    "changeDetectionMs": 0.1,
+    "coverDrawMs": 0.7,
+    "decisionMs": 0,
+    "finderMs": 223.4,
+    "judgeTotalMs": 266.7,
+    "judgements": 0,
+    "overloaded": 0,
+    "planningMs": 3.2,
+    "processTotalMs": 270,
+    "translationMs": 0
+   }
+  },
+  "scrollBack-otherOffsets": {
+   "backMs": {
+    "median": 1121.9,
+    "n": 9,
+    "worst": 1399.4
+   },
+   "backStages": {
+    "cacheHashMs": 38.3,
+    "cacheHits": 14,
+    "cacheMisses": 32,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 146.4,
+    "judgeTotalMs": 1121.8,
+    "judgements": 64,
+    "model.marqo-vit-tiny-384.inferenceMs": 348.8,
+    "model.marqo-vit-tiny-384.preprocessMs": 294.3,
+    "model.marqo-vit-tiny-384.tiles": 32,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 54.1,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 215.7,
+    "model.nsfwjs-mobilenet-v2.tiles": 32,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 1121.9,
+    "translationMs": 0
+   },
+   "downMs": {
+    "median": 1327.5,
+    "n": 7,
+    "worst": 1422
+   }
+  },
+  "scrollBack-sameOffsets": {
+   "backMs": {
+    "median": 186,
+    "n": 6,
+    "worst": 188.8
+   },
+   "backStages": {
+    "cacheHashMs": 38.4,
+    "cacheHits": 47,
+    "cacheMisses": 0,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 147.6,
+    "judgeTotalMs": 186,
+    "judgements": 0,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 186,
+    "translationMs": 0
+   },
+   "downMs": {
+    "median": 1328.2,
+    "n": 7,
+    "worst": 1404.3
+   }
+  },
+  "windowMove": {
+   "moveMs": {
+    "median": 1012.1,
+    "n": 6,
+    "worst": 1642.6
+   },
+   "pages": 6,
+   "stages": {
+    "cacheHashMs": 45.1,
+    "cacheHits": 911,
+    "cacheMisses": 25,
+    "changeDetectionMs": 0.1,
+    "coverDrawMs": 0.7,
+    "decisionMs": 0.1,
+    "finderMs": 248.8,
+    "judgeTotalMs": 1010.1,
+    "judgements": 50,
+    "model.marqo-vit-tiny-384.inferenceMs": 274.5,
+    "model.marqo-vit-tiny-384.preprocessMs": 245.7,
+    "model.marqo-vit-tiny-384.tiles": 25,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 41.4,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 173.4,
+    "model.nsfwjs-mobilenet-v2.tiles": 25,
+    "overloaded": 0,
+    "planningMs": 1,
+    "processTotalMs": 1012.1,
+    "translationMs": 0
+   }
+  }
+ },
+ "rule": "balanced",
+ "scroll": {
+  "32px-register": {
+   "coveredDisplayShare": {
+    "median": 0.013999999999999999,
+    "worst": 0.013999999999999999
+   },
+   "framesJudged": 4,
+   "perFrameMs": {
+    "median": 1180.1,
+    "n": 4,
+    "worst": 1487.1
+   },
+   "scrollingS": 1.875,
+   "simulatedS": 3.2600000000000002,
+   "speed": "32 px per frame at 60 Hz (960 points per second)",
+   "stages": {
+    "cacheHashMs": 38.7,
+    "cacheHits": 38,
+    "cacheMisses": 34,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 146.9,
+    "judgeTotalMs": 1180.1,
+    "judgements": 72,
+    "model.marqo-vit-tiny-384.inferenceMs": 390.1,
+    "model.marqo-vit-tiny-384.preprocessMs": 315.4,
+    "model.marqo-vit-tiny-384.tiles": 36,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 60.2,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 225.1,
+    "model.nsfwjs-mobilenet-v2.tiles": 36,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 1180.1,
+    "translationMs": 0
+   },
+   "standInInView": {
+    "coveredAfterVisibleS": 0,
+    "exposedS": 0.45,
+    "firstVisibleS": 0,
+    "maxShareExposed": 1
+   },
+   "standInScrollingIn": {
+    "coveredAfterVisibleS": 0.564,
+    "exposedS": 1.02,
+    "firstVisibleS": 0.47600000000000003,
+    "maxShareExposed": 1
+   }
+  },
+  "32px-unlimited": {
+   "coveredDisplayShare": {
+    "median": 0.013999999999999999,
+    "worst": 0.013999999999999999
+   },
+   "framesJudged": 3,
+   "perFrameMs": {
+    "median": 1196.2,
+    "n": 3,
+    "worst": 1575.1
+   },
+   "scrollingS": 1.875,
+   "simulatedS": 2.96,
+   "speed": "32 px per frame at 60 Hz (960 points per second)",
+   "stages": {
+    "cacheHashMs": 39.3,
+    "cacheHits": 11,
+    "cacheMisses": 33,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 149.9,
+    "judgeTotalMs": 1196.1,
+    "judgements": 82,
+    "model.marqo-vit-tiny-384.inferenceMs": 404.9,
+    "model.marqo-vit-tiny-384.preprocessMs": 324.8,
+    "model.marqo-vit-tiny-384.tiles": 41,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 56.5,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 224.4,
+    "model.nsfwjs-mobilenet-v2.tiles": 41,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 1196.2,
+    "translationMs": 0
+   },
+   "standInInView": {
+    "coveredAfterVisibleS": 0,
+    "exposedS": 0.45,
+    "firstVisibleS": 0,
+    "maxShareExposed": 1
+   },
+   "standInScrollingIn": {
+    "coveredAfterVisibleS": 0.564,
+    "exposedS": 1.02,
+    "firstVisibleS": 0.47600000000000003,
+    "maxShareExposed": 1
+   }
+  },
+  "8px-register": {
+   "coveredDisplayShare": {
+    "median": 0.021,
+    "worst": 0.028999999999999998
+   },
+   "framesJudged": 6,
+   "perFrameMs": {
+    "median": 1332,
+    "n": 6,
+    "worst": 1538.7
+   },
+   "scrollingS": 5,
+   "simulatedS": 7.01,
+   "speed": "8 px per frame at 60 Hz (240 points per second)",
+   "stages": {
+    "cacheHashMs": 38.5,
+    "cacheHits": 8,
+    "cacheMisses": 40,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 148.4,
+    "judgeTotalMs": 1332,
+    "judgements": 82,
+    "model.marqo-vit-tiny-384.inferenceMs": 437,
+    "model.marqo-vit-tiny-384.preprocessMs": 360.7,
+    "model.marqo-vit-tiny-384.tiles": 41,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 66.3,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 264.4,
+    "model.nsfwjs-mobilenet-v2.tiles": 41,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 1332,
+    "translationMs": 0
+   },
+   "standInInView": {
+    "coveredAfterVisibleS": 0,
+    "exposedS": 1.8199999999999998,
+    "firstVisibleS": 0,
+    "maxShareExposed": 1
+   },
+   "standInScrollingIn": {
+    "coveredAfterVisibleS": 2.256,
+    "exposedS": 4.89,
+    "firstVisibleS": 1.896,
+    "maxShareExposed": 1
+   }
+  },
+  "8px-unlimited": {
+   "coveredDisplayShare": {
+    "median": 0.021,
+    "worst": 0.028999999999999998
+   },
+   "framesJudged": 6,
+   "perFrameMs": {
+    "median": 1403.7,
+    "n": 6,
+    "worst": 1433.5
+   },
+   "scrollingS": 5,
+   "simulatedS": 7.08,
+   "speed": "8 px per frame at 60 Hz (240 points per second)",
+   "stages": {
+    "cacheHashMs": 38.5,
+    "cacheHits": 6,
+    "cacheMisses": 41,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 145.2,
+    "judgeTotalMs": 1403.7,
+    "judgements": 88,
+    "model.marqo-vit-tiny-384.inferenceMs": 451.8,
+    "model.marqo-vit-tiny-384.preprocessMs": 368.7,
+    "model.marqo-vit-tiny-384.tiles": 44,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 69.1,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 264.3,
+    "model.nsfwjs-mobilenet-v2.tiles": 44,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 1403.7,
+    "translationMs": 0
+   },
+   "standInInView": {
+    "coveredAfterVisibleS": 0,
+    "exposedS": 1.8199999999999998,
+    "firstVisibleS": 0,
+    "maxShareExposed": 1
+   },
+   "standInScrollingIn": {
+    "coveredAfterVisibleS": 2.256,
+    "exposedS": 4.970000000000001,
+    "firstVisibleS": 1.896,
+    "maxShareExposed": 1
+   }
+  },
+  "96px-register": {
+   "coveredDisplayShare": {
+    "median": 0.013999999999999999,
+    "worst": 0.013999999999999999
+   },
+   "framesJudged": 2,
+   "perFrameMs": {
+    "median": 1498.2,
+    "n": 2,
+    "worst": 1498.2
+   },
+   "scrollingS": 0.625,
+   "simulatedS": 1.69,
+   "speed": "96 px per frame at 60 Hz (2880 points per second)",
+   "stages": {
+    "cacheHashMs": 38.4,
+    "cacheHits": 46,
+    "cacheMisses": 42,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 148.7,
+    "judgeTotalMs": 1498.2,
+    "judgements": 104,
+    "model.marqo-vit-tiny-384.inferenceMs": 530.8,
+    "model.marqo-vit-tiny-384.preprocessMs": 405.2,
+    "model.marqo-vit-tiny-384.tiles": 52,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 73.9,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 280.7,
+    "model.nsfwjs-mobilenet-v2.tiles": 52,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 1498.2,
+    "translationMs": 0
+   },
+   "standInInView": {
+    "coveredAfterVisibleS": 0,
+    "exposedS": 0.15,
+    "firstVisibleS": 0,
+    "maxShareExposed": 1
+   },
+   "standInScrollingIn": {
+    "coveredAfterVisibleS": 0.188,
+    "exposedS": 0.33999999999999997,
+    "firstVisibleS": 0.16,
+    "maxShareExposed": 1
+   }
+  },
+  "96px-unlimited": {
+   "coveredDisplayShare": {
+    "median": 0.013999999999999999,
+    "worst": 0.013999999999999999
+   },
+   "framesJudged": 2,
+   "perFrameMs": {
+    "median": 1478.8,
+    "n": 2,
+    "worst": 1478.8
+   },
+   "scrollingS": 0.625,
+   "simulatedS": 1.67,
+   "speed": "96 px per frame at 60 Hz (2880 points per second)",
+   "stages": {
+    "cacheHashMs": 38.2,
+    "cacheHits": 46,
+    "cacheMisses": 42,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 148.4,
+    "judgeTotalMs": 1478.8,
+    "judgements": 102,
+    "model.marqo-vit-tiny-384.inferenceMs": 517.4,
+    "model.marqo-vit-tiny-384.preprocessMs": 398.9,
+    "model.marqo-vit-tiny-384.tiles": 51,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 77.7,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 275.7,
+    "model.nsfwjs-mobilenet-v2.tiles": 51,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 1478.8,
+    "translationMs": 0
+   },
+   "standInInView": {
+    "coveredAfterVisibleS": 0,
+    "exposedS": 0.15,
+    "firstVisibleS": 0,
+    "maxShareExposed": 1
+   },
+   "standInScrollingIn": {
+    "coveredAfterVisibleS": 0.188,
+    "exposedS": 0.33999999999999997,
+    "firstVisibleS": 0.16,
+    "maxShareExposed": 1
+   }
+  }
+ },
+ "single": {
+  "128+": {
+   "covered": 16,
+   "finalPlanMs": {
+    "median": 51.4,
+    "n": 16,
+    "worst": 67.4
+   },
+   "stages": {
+    "cacheHashMs": 0.3,
+    "cacheHits": 0,
+    "cacheMisses": 3,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 2.9,
+    "judgeTotalMs": 51.3,
+    "judgements": 6,
+    "model.marqo-vit-tiny-384.inferenceMs": 20.1,
+    "model.marqo-vit-tiny-384.preprocessMs": 15.6,
+    "model.marqo-vit-tiny-384.tiles": 3,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 4.2,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 6.5,
+    "model.nsfwjs-mobilenet-v2.tiles": 3,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 51.3,
+    "translationMs": 0
+   },
+   "timeToCoverMs": {
+    "median": 51.4,
+    "n": 16,
+    "worst": 67.4
+   },
+   "trials": 16
+  },
+  "16-31": {
+   "covered": 16,
+   "finalPlanMs": {
+    "median": 58.5,
+    "n": 16,
+    "worst": 77.6
+   },
+   "stages": {
+    "cacheHashMs": 0,
+    "cacheHits": 0,
+    "cacheMisses": 3,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 0.2,
+    "judgeTotalMs": 58.5,
+    "judgements": 10,
+    "model.marqo-vit-tiny-384.inferenceMs": 29.3,
+    "model.marqo-vit-tiny-384.preprocessMs": 17.3,
+    "model.marqo-vit-tiny-384.tiles": 5,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 5,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 6.1,
+    "model.nsfwjs-mobilenet-v2.tiles": 5,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 58.5,
+    "translationMs": 0
+   },
+   "timeToCoverMs": {
+    "median": 58.5,
+    "n": 16,
+    "worst": 77.6
+   },
+   "trials": 16
+  },
+  "32-63": {
+   "covered": 16,
+   "finalPlanMs": {
+    "median": 46.8,
+    "n": 16,
+    "worst": 53
+   },
+   "stages": {
+    "cacheHashMs": 0,
+    "cacheHits": 0,
+    "cacheMisses": 3,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 0.2,
+    "judgeTotalMs": 46.8,
+    "judgements": 8,
+    "model.marqo-vit-tiny-384.inferenceMs": 23.2,
+    "model.marqo-vit-tiny-384.preprocessMs": 14,
+    "model.marqo-vit-tiny-384.tiles": 4,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 3.5,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 5.1,
+    "model.nsfwjs-mobilenet-v2.tiles": 4,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 46.8,
+    "translationMs": 0
+   },
+   "timeToCoverMs": {
+    "median": 46.8,
+    "n": 16,
+    "worst": 53
+   },
+   "trials": 16
+  },
+  "64-127": {
+   "covered": 16,
+   "finalPlanMs": {
+    "median": 50.7,
+    "n": 16,
+    "worst": 58.1
+   },
+   "stages": {
+    "cacheHashMs": 0.1,
+    "cacheHits": 0,
+    "cacheMisses": 3,
+    "changeDetectionMs": 0,
+    "coverDrawMs": 0,
+    "decisionMs": 0,
+    "finderMs": 0.5,
+    "judgeTotalMs": 50.7,
+    "judgements": 8,
+    "model.marqo-vit-tiny-384.inferenceMs": 23.7,
+    "model.marqo-vit-tiny-384.preprocessMs": 14.7,
+    "model.marqo-vit-tiny-384.tiles": 4,
+    "model.nsfwjs-mobilenet-v2.inferenceMs": 5.3,
+    "model.nsfwjs-mobilenet-v2.preprocessMs": 5.4,
+    "model.nsfwjs-mobilenet-v2.tiles": 4,
+    "overloaded": 0,
+    "planningMs": 0,
+    "processTotalMs": 50.7,
+    "translationMs": 0
+   },
+   "timeToCoverMs": {
+    "median": 50.7,
+    "n": 16,
+    "worst": 58.1
+   },
+   "trials": 16
+  }
+ }
+}
