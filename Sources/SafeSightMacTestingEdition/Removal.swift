@@ -5,7 +5,8 @@
 // What it keeps, all inside its sandbox container (…/Library/Containers/<id>/Data): its settings (only the detector
 // mode, in Library/Preferences/<bundle id>.plist), the compiled models in tmp, the caches Core ML makes for them in
 // Library/Caches, and any saved window state. The removal empties those folders and the settings, and nothing else:
-// - only when the home folder is a sandbox container's Data folder; otherwise it removes the settings alone;
+// - only when the home folder is this app's own sandbox container's Data folder (the container is named after the
+//   bundle identifier); otherwise it removes the settings alone;
 // - the folders themselves stay (macOS made them, and makes them again at the next start);
 // - a symbolic link is never followed (a container holds links to the person's own folders): a link directly in
 //   a cleared folder is left alone, and one inside a removed folder goes as a link, never what it points to.
@@ -29,7 +30,7 @@ public enum Removal {
         public var removed: [String] = []
         /// Entries left alone: symbolic links, and anything that could not be removed.
         public var leftAlone: [String] = []
-        /// True when the home folder was not a sandbox container, so only the settings were removed.
+        /// True when the home folder was not this app's sandbox container, so only the settings were removed.
         public var onlySettings = false
     }
 
@@ -40,7 +41,7 @@ public enum Removal {
         var report = Report()
         settings.removePersistentDomain(forName: bundleID)
         (settings as? UserDefaults)?.synchronize()
-        guard Sandbox.containerID(ofHome: home) != nil else {
+        guard Sandbox.containerID(ofHome: home) == bundleID else {
             report.onlySettings = true
             return report
         }

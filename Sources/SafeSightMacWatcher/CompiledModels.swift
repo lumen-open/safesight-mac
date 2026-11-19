@@ -16,6 +16,9 @@ public final class CompiledModelFolder: @unchecked Sendable {
     /// Every folder made here starts with this.
     public static let prefix = "safesightmac-compiled-"
     static let lockName = ".in-use"
+    /// A folder with no lock file is left alone this long (seconds): another process may have just made it and not yet
+    /// taken its lock.
+    static let unlockedGrace: TimeInterval = 3600
 
     public let url: URL
     private var lockFD: Int32 = -1
@@ -58,6 +61,10 @@ public final class CompiledModelFolder: @unchecked Sendable {
                 let free = flock(fd, LOCK_EX | LOCK_NB) == 0
                 close(fd)
                 guard free else { continue }   // its process is still running
+            } else {
+                // No lock file: removed only once it is old, never while its maker may still be starting.
+                let made = (try? FileManager.default.attributesOfItem(atPath: dir.path)[.modificationDate]) as? Date
+                guard let made, Date().timeIntervalSince(made) > unlockedGrace else { continue }
             }
             if (try? FileManager.default.removeItem(at: dir)) != nil { removed.append(dir) }
         }

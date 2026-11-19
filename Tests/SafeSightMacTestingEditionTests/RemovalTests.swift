@@ -110,6 +110,19 @@ final class FakeSettings: SettingsDomains {
         #expect(settings.removed == [id])
     }
 
+    @Test func anotherAppsContainerIsNeverEmptied() throws {
+        // A home that is a sandbox container, but not this app's: nothing in it is removed.
+        let root = fm.temporaryDirectory.appendingPathComponent("safesightmac-removal-other-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        let other = root.appendingPathComponent("Library/Containers/com.example.someone-else/Data")
+        try file(other.appendingPathComponent("Library/Caches/their-cache.db"))
+        try file(other.appendingPathComponent("tmp/their-work.txt"))
+        let report = Removal.run(bundleID: id, home: other.path, settings: FakeSettings())
+        #expect(report.onlySettings)
+        #expect(exists(other.appendingPathComponent("Library/Caches/their-cache.db")))
+        #expect(exists(other.appendingPathComponent("tmp/their-work.txt")))
+    }
+
     @Test func aRealHomeFolderOutsideAContainerIsNeverEmptied() throws {
         // A made-up home with the same layout, but not a container: nothing in it is removed.
         let root = fm.temporaryDirectory.appendingPathComponent("safesightmac-removal-home-\(UUID().uuidString)")

@@ -36,14 +36,19 @@ import Testing
         let stale = p.appendingPathComponent(CompiledModelFolder.prefix + "stale")
         try fm.createDirectory(at: stale.appendingPathComponent("model.mlmodelc"), withIntermediateDirectories: true)
         try Data().write(to: stale.appendingPathComponent(CompiledModelFolder.lockName))
-        // Or with no lock file at all.
+        // Or with no lock file at all, made long ago.
         let bare = p.appendingPathComponent(CompiledModelFolder.prefix + "bare")
         try fm.createDirectory(at: bare, withIntermediateDirectories: true)
+        try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -2 * CompiledModelFolder.unlockedGrace)], ofItemAtPath: bare.path)
+        // A folder with no lock file yet, just made: its maker may be about to take its lock.
+        let fresh = p.appendingPathComponent(CompiledModelFolder.prefix + "fresh")
+        try fm.createDirectory(at: fresh, withIntermediateDirectories: true)
         let live = try CompiledModelFolder(parent: p)
         defer { live.remove() }
         let removed = Set(CompiledModelFolder.sweep(parent: p).map(\.lastPathComponent))
         #expect(removed == [stale.lastPathComponent, bare.lastPathComponent])
         #expect(fm.fileExists(atPath: live.url.path))
+        #expect(fm.fileExists(atPath: fresh.path))
     }
 
     @Test func nothingWithoutThePrefixAndNoLinkIsEverTouched() throws {
