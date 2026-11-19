@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# Weekly update pull requests for the actions the workflows use and for the keeper's Rust crates, one grouped pull
+# request per kind. The workflows pin each action to a full commit SHA with its version in a comment; Dependabot
+# keeps that form when it updates them. An update is an ordinary pull request: the checks run and a person reads
+# it, and a change to the keeper's crates needs a second reader like any keeper change.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: cargo
+    directory: /keeper
+    schedule:
+      interval: weekly
+    groups:
+      crates:
+        patterns: ['*']
