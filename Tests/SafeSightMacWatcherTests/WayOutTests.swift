@@ -102,6 +102,41 @@ extension CoverPlan {
         #expect(plan.covers(display.bounds, kind: .plain))
     }
 
+    @Test func theLargestPieceOfAWholeWindowCoverCarriesTheWayOutLine() {
+        // A front window hides the covered window's right part: the whole cover comes in pieces, and only the
+        // largest carries the line. A picture cover never does.
+        let flagWhole = ScriptedJudge { area in
+            FrameVerdict(regions: [RegionVerdict(rect: PixelRect(x: 200, y: 400, w: 100, h: 100), display: .cover, reason: .bothFamilies, pass: .region)],
+                         coverWindow: true, strike: false, hot: false, judgements: 1, overloaded: 0)
+        }
+        let snap = WindowSnapshot(windows: [
+            WindowInfo(number: 2, ownerPID: 600, layer: 3, bounds: CGRect(x: 400, y: 200, width: 200, height: 100)),
+            WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: windowBounds),
+        ], time: 0)
+        let p = DisplayPipeline(display: display, judger: flagWhole, budgetShare: 40, ignoredPIDs: [])
+        let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0), snapshot: snap, now: 0)
+        let marked = plan.items.filter(\.wayOut)
+        #expect(marked.count == 1, "one line for the window; the floating window (layer 3) and the desktop carry none")
+        let windowPieces = plan.items.filter { windowBounds.contains($0.rect) && $0.rect.height > 100 }
+        #expect(marked.first.map { m in windowPieces.allSatisfy { $0.rect.width * $0.rect.height <= m.rect.width * m.rect.height } } == true)
+        #expect(!plan.items.contains { $0.wayOut && $0.rect.width <= 50 }, "the picture cover is wordless")
+    }
+
+    @Test func aFullScreenWindowCoveredWholeStillCarriesTheLine() {
+        let p = DisplayPipeline(display: display, judger: ScriptedJudge { _ in
+            FrameVerdict(regions: [], coverWindow: true, strike: false, hot: false, judgements: 1, overloaded: 0)
+        }, budgetShare: 40, ignoredPIDs: [])
+        let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0),
+                             snapshot: Fixtures.oneWindow(display.bounds), now: 0)
+        #expect(plan.items.filter(\.wayOut).count == 1)
+        #expect(CoverLayout.layerPieces(plan).filter { $0.wayOut == .centre }.count == 1)
+    }
+
+    @Test func aWholeDisplayCoverPlacesTheLineBelowTheCard() {
+        let pieces = CoverLayout.layerPieces(.covered(display, because: .notYetJudged))
+        #expect(pieces.count == 1 && pieces[0].wayOut == .belowCard)
+    }
+
     @Test func aWindowCoveredWholeForSlownessKeepsItsBandAndItsUnjudgedPicturesCovered() {
         // Unjudged for longer than TIME_TO_COVER: the window is covered whole, apart from its band; the band's
         // unjudged entries stay covered or blurred on their own.

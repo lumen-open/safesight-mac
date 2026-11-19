@@ -60,6 +60,37 @@ public enum AppText {
         "This cover-only build has no lock. You can pause or quit it at any time. The lock, with a wait you choose in advance, comes in a later version.",
     ]
 
+    // MARK: The way out (owner, 18 November 2026)
+
+    /// Drawn on every whole-window and whole-display cover, and repeated on the repair card. Covers never take
+    /// the keyboard, so these shortcuts reach the app underneath.
+    public static let wayOutLine = "Press ⌘W to close this tab, or ⌘[ to go back."
+    /// The shortcuts in `wayOutLine`, drawn as key caps.
+    public static let wayOutKeys = ["⌘W", "⌘["]
+
+    /// `wayOutLine` cut into plain words and shortcuts, in order. Joined, the pieces give the line exactly.
+    public static var wayOutPieces: [(text: String, isKey: Bool)] {
+        var out: [(text: String, isKey: Bool)] = []
+        var rest = Substring(wayOutLine)
+        while !rest.isEmpty {
+            let next = wayOutKeys.compactMap { k in rest.firstRange(of: k).map { (k, $0) } }.min { $0.1.lowerBound < $1.1.lowerBound }
+            guard let found = next else { out.append((String(rest), false)); break }
+            let (key, r) = found
+            if r.lowerBound > rest.startIndex { out.append((String(rest[..<r.lowerBound]), false)) }
+            out.append((key, true))
+            rest = rest[r.upperBound...]
+        }
+        return out
+    }
+
+    // MARK: The repair card
+
+    public static let repairHeading = "SafeSight Mac is covering a display."
+    public static let repairDetail = "While it is covered you cannot see other apps on it. Nothing is locked, and nobody is told."
+    public static let repairTryAgain = "Try again"
+    public static let repairPause = "Pause"
+    public static let repairQuit = "Quit"
+
     /// Phrases the project never uses (README).
     public static let forbiddenPhrases = ["can't be bypassed", "cannot be bypassed", "100%", "blocks all", "treats addiction", "nobody can ever unlock it"]
 
@@ -67,7 +98,8 @@ public enum AppText {
     public static var all: [String] {
         [honestPromise, practiceTitle, practiceDetail, notPracticeTitle, keeperFoundDetail, practiceUnknownDetail, statusOn,
          statusNeedsPermission, needsPermissionDetail, grantPermission, statusPaused, statusStarting, statusFault, statusModelsMissing,
-         modeHeader, modeBalanced, modeEither, modeSentence, strictCoverMode, pauseFor15, pauseFor60, resume, howItWorks, quit]
+         modeHeader, modeBalanced, modeEither, modeSentence, strictCoverMode, pauseFor15, pauseFor60, resume, howItWorks, quit,
+         wayOutLine, repairHeading, repairDetail, repairTryAgain, repairPause, repairQuit]
             + howItWorksBody
     }
 }

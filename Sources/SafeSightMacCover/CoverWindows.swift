@@ -3,8 +3,10 @@
 // - the cover canvas (default): one transparent, click-through, always-on-top panel per display that
 //   holds every cover on it, all changed in one transaction;
 // - per-window overlays (the written pivot of ST-032): one click-through panel per cover.
-// Covers are plain and wordless: no text, no logo, no product name. They never take the keyboard,
-// never become key or main, stay out of window cycling and are hidden from assistive tools.
+// Covers are plain: no logo, no product name, no word about what is under them. Whole-window and
+// whole-display covers carry one line, the way out (WayOutArt.swift). Covers never take the keyboard or a
+// click, never become key or main, stay out of window cycling and are hidden from assistive tools, so
+// ⌘W, ⌘[ and clicks always reach the app underneath.
 import AppKit
 import SafeSightMacWatcher
 import QuartzCore
@@ -15,8 +17,6 @@ public enum CoverLevels {
     public static let canvas = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
     /// The app's own windows and the repair card sit one level above the canvas (SD-229).
     public static let appAbove = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)) + 1)
-    /// The plain cover colour. Not specified in the register (5.22, row 5); a neutral grey.
-    public static let coverColor = CGColor(srgbRed: 0.40, green: 0.41, blue: 0.43, alpha: 1)
 }
 
 public enum CoverForm: String, Sendable {
@@ -64,26 +64,38 @@ final class CoverPanel: NSPanel {
 }
 
 /// The canvas's layers for one plan, built without any window. The canvas form uses it, and the lab
-/// harness's bench times it on a detached layer (no window, nothing drawn on a screen).
+/// harness's bench times it on a detached layer (no window, nothing drawn on a screen); the harness also
+/// renders it into its frames.
 public enum CoverDrawing {
-    public static func layers(for plan: CoverPlan) -> [CALayer] {
-        CoverLayout.layerFrames(plan).map { LayerFactory.layer($0.0, $0.1) }
+    public static func layers(for plan: CoverPlan, theme: CoverTheme = .light, scale: CGFloat = 2) -> [CALayer] {
+        layers(for: CoverLayout.layerPieces(plan), theme: theme, scale: scale)
+    }
+
+    /// Every cover, then every way-out line on top (each line lies inside its own cover, with room to spare).
+    public static func layers(for pieces: [CoverPiece], theme: CoverTheme, scale: CGFloat) -> [CALayer] {
+        let covers: [CALayer] = pieces.map { LayerFactory.layer($0.frame, $0.kind, theme) }
+        let lines: [CALayer] = pieces.compactMap { p in
+            p.wayOut.flatMap { WayOutArt.layer(on: p.frame, placement: $0, theme: theme, scale: scale) }
+        }
+        return covers + lines
     }
 
     /// Replaces a root layer's covers with this plan's, in one transaction with no animation.
-    public static func apply(_ plan: CoverPlan, to root: CALayer) {
+    public static func apply(_ plan: CoverPlan, to root: CALayer, theme: CoverTheme = .light, scale: CGFloat = 2) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        root.sublayers = layers(for: plan)
+        root.sublayers = layers(for: plan, theme: theme, scale: scale)
         CATransaction.commit()
     }
 }
 
 enum LayerFactory {
-    static func layer(_ frame: CGRect, _ kind: CoverKind) -> CALayer {
+    /// A plain cover is one opaque, flat, neutral fill: calm, and seamless where covers meet.
+    static func layer(_ frame: CGRect, _ kind: CoverKind, _ theme: CoverTheme) -> CALayer {
         let l = CALayer()
         l.frame = frame
-        l.backgroundColor = CoverLevels.coverColor
+        l.isOpaque = true
+        l.backgroundColor = theme.cover.cg()
         if case let .blur(tile) = kind, let img = image(tile) {
             l.contents = img
             l.contentsGravity = .resize
@@ -111,9 +123,15 @@ public final class CoverCanvas: CoverPresenter {
 
     static var primaryHeight: CGFloat { CGDisplayBounds(CGMainDisplayID()).height }
 
+    /// The screen showing a display, by its identifier.
+    static func screen(_ id: UInt32) -> NSScreen? {
+        NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id }
+    }
+
     public func apply(_ plans: [CoverPlan]) {
         let ids = Set(plans.map(\.display.id))
         for (id, p) in panels where !ids.contains(id) { p.orderOut(nil); panels[id] = nil }
+        let theme = CoverTheme.current
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for plan in plans {
@@ -123,7 +141,8 @@ public final class CoverCanvas: CoverPresenter {
             if panel.frame != frame { panel.setFrame(frame, display: false) }
             let root = panel.contentView!.layer!
             root.frame = CGRect(origin: .zero, size: frame.size)
-            root.sublayers = CoverDrawing.layers(for: plan)
+            let scale = Self.screen(plan.display.id)?.backingScaleFactor ?? 2
+            root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale)
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()
@@ -142,17 +161,22 @@ public final class OverlayCovers: CoverPresenter {
     public init() {}
 
     public func apply(_ plans: [CoverPlan]) {
-        let frames = plans.flatMap { CoverLayout.overlayFrames($0, primaryHeight: CoverCanvas.primaryHeight) }
+        let frames = plans.flatMap { plan in
+            let scale = CoverCanvas.screen(plan.display.id)?.backingScaleFactor ?? 2
+            return CoverLayout.overlayPieces(plan, primaryHeight: CoverCanvas.primaryHeight).map { ($0, scale) }
+        }
+        let theme = CoverTheme.current
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         while pool.count < frames.count { pool.append(CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1))) }
         for (i, panel) in pool.enumerated() {
             guard i < frames.count else { panel.orderOut(nil); continue }
-            let (frame, kind) = frames[i]
-            panel.setFrame(frame, display: false)
+            var (piece, scale) = frames[i]
+            panel.setFrame(piece.frame, display: false)
             let root = panel.contentView!.layer!
-            root.frame = CGRect(origin: .zero, size: frame.size)
-            root.sublayers = [LayerFactory.layer(CGRect(origin: .zero, size: frame.size), kind)]
+            root.frame = CGRect(origin: .zero, size: piece.frame.size)
+            piece.frame.origin = .zero
+            root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale)
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()

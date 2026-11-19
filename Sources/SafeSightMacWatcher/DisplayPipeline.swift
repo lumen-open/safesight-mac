@@ -288,13 +288,19 @@ public final class DisplayPipeline {
             guard let vis = visible[h.target] else { continue }
             let o = origin(of: h.target, snapshot)
             var rects: [CGRect]
+            let w = h.whole ? snapshot.info(of: h.target) : nil
             if h.whole {
                 rects = vis
-                if let w = snapshot.info(of: h.target), let band = WayOut.controlBand(of: w, display: d) { rects = rects.subtracting(band) }
+                if let w, let band = WayOut.controlBand(of: w, display: d) { rects = rects.subtracting(band) }
             } else {
                 rects = vis.clipped(to: h.rel.offsetBy(dx: o.x, dy: o.y))
             }
-            items += rects.map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: h.kind) }
+            var its = rects.map { CoverItem(rect: CoordinateSpace.snapOutward($0, pointsPerPixel: map.pointsPerPixel), kind: h.kind) }
+            // The way-out line goes on the largest visible piece of a whole-window cover.
+            if let w, WayOut.carriesLine(w), let i = its.indices.max(by: { its[$0].rect.width * its[$0].rect.height < its[$1].rect.width * its[$1].rect.height }) {
+                its[i].wayOut = true
+            }
+            items += its
         }
         for (t, old, _) in moved {
             for h in held where h.target == t {
