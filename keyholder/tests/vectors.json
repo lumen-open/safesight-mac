@@ -1,0 +1,153 @@
+{
+  "SPDX-License-Identifier": "Apache-2.0",
+  "about": "Keyholder codes, format version 1. Byte fields are hex. Text is RFC 4648 base32, upper case, no padding. See keyholder/README.md.",
+  "origin": "https://keyholder.example",
+  "rpId": "keyholder.example",
+  "request": [
+    {
+      "name": "exit",
+      "kind": 1,
+      "requestId": "00070e151c232a31383f464d545b6269",
+      "challenge": "2e9e2f408bced81ef8453fa55c999d494b76cfce10bcd1c60b1d5618daf74588",
+      "label": "Sam's Mac",
+      "items": [],
+      "clientDataPrefix": "{\"type\":\"webauthn.get\",\"challenge\":\"Lp4vQIvO2B74RT-lXJmdSUt2z84QvNHGCx1WGNr3RYg\",\"origin\":\"https://keyholder.example\"",
+      "text": "KNGQEAIAHQAQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDACFMZPBD"
+    },
+    {
+      "name": "test",
+      "kind": 0,
+      "requestId": "10171e252c333a41484f565d646b7279",
+      "challenge": "03036a9e5705df9c3f3d12aa53e06b2f2a1ca5823973d7ce6e802d4ec18087c0",
+      "label": "Test Mac",
+      "items": [],
+      "clientDataPrefix": "{\"type\":\"webauthn.get\",\"challenge\":\"AwNqnlcF35w_PRKqU-BrLyocpYI5c9fOboAtTsGAh8A\",\"origin\":\"https://keyholder.example\"",
+      "text": "KNGQEAIAHMABAFY6EUWDGOSBJBHVMXLENNZHSAYDNKPFOBO7TQ7T2EVKKPQGWLZKDSSYEOLT27HG5ABNJ3AYBB6ABBKGK43UEBGWCYYARBY3TNI"
+    },
+    {
+      "name": "lower-wait",
+      "kind": 2,
+      "requestId": "20272e353c434a51585f666d747b8289",
+      "challenge": "17da373c79f98b279cc5a5bc844e916dedd1f8a366070fae5163bf574787b445",
+      "label": "Mac de Zoé",
+      "items": [],
+      "clientDataPrefix": "{\"type\":\"webauthn.get\",\"challenge\":\"F9o3PHn5iyecxaW8hE6Rbe3R-KNmBw-uUWO_V0eHtEU\",\"origin\":\"https://keyholder.example\"",
+      "text": "KNGQEAIAHYBCAJZOGU6EGSSRLBPWM3LUPOBISF62G46HT6MLE6OMLJN4QRHJC3PN2H4KGZQHB6XFCY57K5DYPNCFBNGWCYZAMRSSAWTPYOUQBLLZ5UTQ"
+    },
+    {
+      "name": "loosen-setting",
+      "kind": 3,
+      "requestId": "30373e454c535a61686f767d848b9299",
+      "challenge": "869d6bc77e58a77255d115ea09855ee7a5947ca47c474ca381733b375b74580e",
+      "label": "東京のMac",
+      "items": [],
+      "clientDataPrefix": "{\"type\":\"webauthn.get\",\"challenge\":\"hp1rx35Yp3JV0RXqCYVe56WUfKR8R0yjgXM7N1t0WA4\",\"origin\":\"https://keyholder.example\"",
+      "text": "KNGQEAIAH4BTANZ6IVGFGWTBNBXXM7MEROJJTBU5NPDX4WFHOJK5CFPKBGCV5Z5FSR6KI7CHJSRYC4Z3G5NXIWAOBTTJ3MPEXKWOHANOJVQWGADIEXOFK"
+    },
+    {
+      "name": "admin-batch",
+      "kind": 4,
+      "requestId": "40474e555c636a71787f868d949ba2a9",
+      "challenge": "2aa1e589e386d371143e45d182a9f994f6fd5f8e05287ad112e2c39f57369a58",
+      "label": "Studio",
+      "items": [
+        "acadda60a86d56e836b3df33c0bd3205d7e0f0ffb12733b44866917582286cde",
+        "7f5f00f1199c45329d4e101bb8160f5c2d47998e87ec2520f7a8146250375a3d"
+      ],
+      "clientDataPrefix": "{\"type\":\"webauthn.get\",\"challenge\":\"KqHlieOG03EUPkXRgqn5lPb9X44FKHrREuLDn1c2mlg\",\"origin\":\"https://keyholder.example\"",
+      "text": "KNGQEAIAPECEAR2OKVOGG2TRPB7YNDMUTORKSKVB4WE6HBWTOEKD4RORQKU7TFHW7VPY4BJIPLIRFYWDT5LTNGSYAZJXI5LENFXQFLFN3JQKQ3KW5A3LHXZTYC6TEBOX4DYP7MJHGO2EQZUROWBCQ3G6P5PQB4IZTRCTFHKOCAN3QFQPLQWUPGMOQ7WCKIHXVAKGEUBXLI6336H26I"
+    }
+  ],
+  "enrolment": [
+    {
+      "name": "enrolment",
+      "credentialId": "55abc53eb041207690f292821d74b3b216c696eb",
+      "publicKey": "040ab55e1b277952e71237fc92ff92082fc83a1266122872b97b7991c5bca24b7fe19a0bdd44989283262d422966096c3e6369b936cf5f76aea32d06f7caacc983",
+      "text": "KNGQCAIAKYKFLK6FH2YECIDWSDZJFAQ5OSZ3EFWGS3VQICVVLYNSO6KS44JDP7ES76JAQL6IHIJGMERIOK4XW6MRYW6KES374GNAXXKETCJIGJRNIIUWMCLMHZRWTOJWZ5PXNLVDFUDPPSVMZGB33Q6JV4"
+    }
+  ],
+  "approval": [
+    {
+      "name": "exit-approval",
+      "request": "exit",
+      "requestId": "00070e151c232a31383f464d545b6269",
+      "authenticatorData": "8c25f2569aeb3c55414835a1a18a5f1ce114e455a36845f3d72f604314a31ffd0500000000",
+      "clientData": "{\"type\":\"webauthn.get\",\"challenge\":\"Lp4vQIvO2B74RT-lXJmdSUt2z84QvNHGCx1WGNr3RYg\",\"origin\":\"https://keyholder.example\",\"crossOrigin\":false}",
+      "signature": "3044022045f04f4c56412c88e2eb2c663d05d814a39cdd1a209de1850115e5ca8f49f4190220132b2f4222442243becd05523ba41f03085caf0a7fb5599f1e830068d6f229d6",
+      "signatureRaw": "45f04f4c56412c88e2eb2c663d05d814a39cdd1a209de1850115e5ca8f49f419132b2f4222442243becd05523ba41f03085caf0a7fb5599f1e830068d6f229d6",
+      "text": "KNGQGAIBBAAAODQVDQRSUMJYH5DE2VC3MJUYYJPSK2NOWPCVIFEDLINBRJPRZYIU4RK2G2CF6PLS6YCDCSRR77IFAAAAAAAARJ5SE5DZOBSSEORCO5SWEYLVORUG4LTHMV2CELBCMNUGC3DMMVXGOZJCHIREY4BUOZIUS5SPGJBDONCSKQWWYWCKNVSFGVLUGJ5DQNCROZHEQR2DPAYVOR2OOIZVEWLHEIWCE33SNFTWS3RCHIRGQ5DUOBZTULZPNNSXS2DPNRSGK4ROMV4GC3LQNRSSELBCMNZG643TJ5ZGSZ3JNYRDUZTBNRZWK7KGGBCAEICF6BHUYVSBFSEOF2ZMMY6QLWAUUOON2GRATXQYKAIV4XFI6SPUDEBCAEZLF5BCERBCIO7M2BKSHOSB6AYILSXQU75VLGPR5AYANDLPEKOWHOFHNLY"
+    },
+    {
+      "name": "test-approval-with-extra-member",
+      "request": "test",
+      "requestId": "10171e252c333a41484f565d646b7279",
+      "authenticatorData": "8c25f2569aeb3c55414835a1a18a5f1ce114e455a36845f3d72f604314a31ffd0500000000",
+      "clientData": "{\"type\":\"webauthn.get\",\"challenge\":\"AwNqnlcF35w_PRKqU-BrLyocpYI5c9fOboAtTsGAh8A\",\"origin\":\"https://keyholder.example\",\"crossOrigin\":false,\"other_keys_can_be_added_here\":\"do not compare clientDataJSON against a template. See the WebAuthn spec\"}",
+      "signature": "304502205e9c59b706a3ae553bbeedbce03af7515338e04c9ffde8ddb7f00d6743074a3e02210093505fbd12fb440447e90432f0ef0cde1bce31cf0e376e30907e938582fb98c4",
+      "signatureRaw": "5e9c59b706a3ae553bbeedbce03af7515338e04c9ffde8ddb7f00d6743074a3e93505fbd12fb440447e90432f0ef0cde1bce31cf0e376e30907e938582fb98c4",
+      "text": "KNGQGAIBOIIBOHRFFQZTUQKIJ5LF2ZDLOJ4YYJPSK2NOWPCVIFEDLINBRJPRZYIU4RK2G2CF6PLS6YCDCSRR77IFAAAAAAAA6N5SE5DZOBSSEORCO5SWEYLVORUG4LTHMV2CELBCMNUGC3DMMVXGOZJCHIREC52OOFXGYY2GGM2XOX2QKJFXCVJNIJZEY6LPMNYFSSJVMM4WMT3CN5AXIVDTI5AWQOCBEIWCE33SNFTWS3RCHIRGQ5DUOBZTULZPNNSXS2DPNRSGK4ROMV4GC3LQNRSSELBCMNZG643TJ5ZGSZ3JNYRDUZTBNRZWKLBCN52GQZLSL5VWK6LTL5RWC3S7MJSV6YLEMRSWIX3IMVZGKIR2EJSG6IDON52CAY3PNVYGC4TFEBRWY2LFNZ2EIYLUMFFFGT2OEBQWOYLJNZZXIIDBEB2GK3LQNRQXIZJOEBJWKZJAORUGKICXMVREC5LUNBXCA43QMVRSE7KHGBCQEIC6TRM3OBVDVZKTXPXNXTQDV52RKM4OATE77XUN3N7QBVTUGB2KHYBCCAETKBP32EX3IQCEP2IEGLYO6DG6DPHDDTYOG5XDBED6SOCYF64YYTARE5Q5"
+    }
+  ],
+  "invalid": [
+    {
+      "decoder": "request",
+      "reason": "version",
+      "note": "format version 2",
+      "text": "KNGQEAQAHQAQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDAB5RSA2H"
+    },
+    {
+      "decoder": "request",
+      "reason": "version",
+      "note": "format version 0",
+      "text": "KNGQEAAAHQAQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDADNH7VX7"
+    },
+    {
+      "decoder": "request",
+      "reason": "wrong-type",
+      "note": "an enrolment record given as a request",
+      "text": "KNGQCAIAKYKFLK6FH2YECIDWSDZJFAQ5OSZ3EFWGS3VQICVVLYNSO6KS44JDP7ES76JAQL6IHIJGMERIOK4XW6MRYW6KES374GNAXXKETCJIGJRNIIUWMCLMHZRWTOJWZ5PXNLVDFUDPPSVMZGB33Q6JV4"
+    },
+    {
+      "decoder": "request",
+      "reason": "damaged",
+      "note": "magic changed",
+      "text": "KNHAEAIAHQAQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDADIIGTKI"
+    },
+    {
+      "decoder": "request",
+      "reason": "malformed",
+      "note": "unknown kind 5",
+      "text": "KNGQEAIAHQCQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDAALWBCU5"
+    },
+    {
+      "decoder": "request",
+      "reason": "malformed",
+      "note": "one extra byte at the end",
+      "text": "KNGQEAIAHUAQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDAAAMN5FSGM"
+    },
+    {
+      "decoder": "request",
+      "reason": "damaged",
+      "note": "length field larger than the record",
+      "text": "KNGQEAIAHUAQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDAD3QD4I4"
+    },
+    {
+      "decoder": "request",
+      "reason": "characters",
+      "note": "a character outside the alphabet",
+      "text": "KNGQEAIAHQAQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDACFMZPB0"
+    },
+    {
+      "decoder": "approval",
+      "reason": "wrong-type",
+      "note": "a request code given as an approval",
+      "text": "KNGQEAIAHQAQABYOCUOCGKRRHA7UMTKULNRGSLU6F5AIXTWYD34EKP5FLSMZ2SKLO3H44EF42HDAWHKWDDNPORMIBFJWC3JHOMQE2YLDACFMZPBD"
+    },
+    {
+      "decoder": "enrolment",
+      "reason": "malformed",
+      "note": "public key not on the curve",
+      "text": "KNGQCAIAIMAQSBABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCB4AMRTA"
+    }
+  ]
+}
