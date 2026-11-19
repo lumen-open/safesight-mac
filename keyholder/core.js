@@ -354,7 +354,7 @@ const KeyholderCore = (() => {
     const s = bytesOf(spki, 'public key');
     if (s.length !== SPKI_P256_HEAD.length + 65) fail('passkey', 'public key is not P-256');
     for (let i = 0; i < SPKI_P256_HEAD.length; i++) if (s[i] !== SPKI_P256_HEAD[i]) fail('passkey', 'public key is not P-256');
-    return checkPublicKey(s.slice(SPKI_P256_HEAD.length));
+    return passkeyKey(s.slice(SPKI_P256_HEAD.length));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -459,7 +459,16 @@ const KeyholderCore = (() => {
     const x = cose.get(-2);
     const y = cose.get(-3);
     if (!(x instanceof Uint8Array) || !(y instanceof Uint8Array) || x.length !== 32 || y.length !== 32) fail('passkey', 'public key coordinates');
-    return checkPublicKey(concat([new Uint8Array([0x04]), x, y]));
+    return passkeyKey(concat([new Uint8Array([0x04]), x, y]));
+  }
+
+  // A key that came from the passkey: a fault in it is the phone's, reported as such.
+  function passkeyKey(raw) {
+    try {
+      return checkPublicKey(raw);
+    } catch (e) {
+      return fail('passkey', e.detail || e.message);
+    }
   }
 
   // ---------------------------------------------------------------------------------------------
