@@ -24,6 +24,18 @@ public enum FrameStatus: String, Sendable {
     case blank, suspended, stopped
     /// The stream has just started; no content yet. The display stays covered whole until judged.
     case started
+
+    /// How much a status protects, for merging frames that wait: one that says "nothing new" (idle, started) never
+    /// replaces pixels waiting to be judged, and nothing but a complete frame with pixels replaces one that covers the
+    /// display (blank, suspended, stopped).
+    var protectiveRank: Int {
+        switch self {
+        case .idle: return 0
+        case .started: return 1
+        case .complete: return 2
+        case .blank, .suspended, .stopped: return 3
+        }
+    }
 }
 
 /// One frame from one display stream.
@@ -102,8 +114,10 @@ public struct FrameMailbox: Sendable {
         } else {
             dirty = nil  // sizes differ or one says "everything": judge the whole frame
         }
-        // The newest status wins, except that an idle frame never replaces pixels still waiting to be judged.
-        if f.status != .idle || old.status != .complete {
+        // The newest status wins only if it protects at least as much as the waiting one, or it is a complete frame
+        // with pixels: an idle or started frame never replaces pixels still waiting to be judged, and only new pixels
+        // replace a frame that covers the display (blank, suspended, stopped).
+        if (f.status == .complete && f.image != nil) || f.status.protectiveRank >= old.status.protectiveRank {
             old.status = f.status
             old.image = f.image
             old.map = f.map

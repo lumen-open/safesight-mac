@@ -182,6 +182,31 @@ let displayCases: [DisplayCase] = [
         #expect(f.status == .complete && f.image != nil)
     }
 
+    @Test(arguments: [FrameStatus.blank, .suspended, .stopped])
+    func onlyNewPixelsReplaceAFrameThatCoversTheDisplay(_ s: FrameStatus) throws {
+        for later in [FrameStatus.idle, .started] {
+            var box = FrameMailbox()
+            box.offer(frame(s, dirty: [], t: 1))
+            box.offer(frame(later, dirty: [], t: 2))
+            #expect(box.take()?.status == s, "\(later) after \(s)")
+        }
+        var box = FrameMailbox()
+        box.offer(frame(s, dirty: [], t: 1))
+        box.offer(frame(.complete, dirty: nil, t: 2))
+        let taken = box.take()
+        let f = try #require(taken)
+        #expect(f.status == .complete && f.image != nil)
+    }
+
+    @Test func aStartedFrameNeverReplacesPixelsWaitingToBeJudged() throws {
+        var box = FrameMailbox()
+        box.offer(frame(.complete, dirty: nil, t: 1))
+        box.offer(frame(.started, dirty: [], t: 2))
+        let taken = box.take()
+        let f = try #require(taken)
+        #expect(f.status == .complete && f.image != nil)
+    }
+
     @Test func aBlankFrameAfterAContentFrameWins() throws {
         var box = FrameMailbox()
         box.offer(frame(.complete, dirty: nil, t: 1))
