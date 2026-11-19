@@ -63,18 +63,31 @@ final class CacheTests: XCTestCase {
     }
 
     func testAFlaggedPictureNeverInheritsACleanVerdict() {
-        // A harmless picture is judged clean and cached; a flagged picture drawn in its place, same size and
-        // place, is covered.
+        // The safety rule: a harmless picture is judged clean and cached; a flagged picture drawn in its place,
+        // same size and place, is judged afresh, and nothing over it comes from the cache.
+        // Whether it is then covered is the models' call, not the cache's. So the cut-offs here (0.3) sit far
+        // below the flagged picture's score for each family (0.47 to 0.5 over 2,000 jitter draws). At a
+        // cut-off of 0.5, jitter put both families just under it about one run in 30.
         var img = canvas(400, 300)
         let r = PixelRect(x: 60, y: 60, w: 120, h: 120)
         paint(&img, r, channel: nil, seed: 6)
-        let (d, _, _) = detector()
-        XCTAssertFalse(d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)).regions.contains { $0.display == .cover })
+        let (d, _, _) = detector(cover: 0.3)
+        let ctx = JudgeContext(windowID: 1, startsCovered: false)
+        let first = d.judge(img, context: ctx)
+        XCTAssertGreaterThan(first.judgements, 0)
+        XCTAssertFalse(first.regions.contains { $0.display != .clear }, "the harmless picture is judged clean")
+        XCTAssertEqual(d.judge(img, context: ctx).judgements, 0, "and its clean verdict is cached")
         var flagged = img
         paint(&flagged, PixelRect(x: r.x, y: r.y, w: 60, h: 120), channel: 0, seed: 7)
         paint(&flagged, PixelRect(x: r.x + 60, y: r.y, w: 60, h: 120), channel: 2, seed: 8)
-        let v = d.judge(flagged, context: JudgeContext(windowID: 1, startsCovered: false))
-        XCTAssertTrue(v.regions.contains { $0.display == .cover && $0.rect.intersects(r) })
+        d.resetTimings()
+        let v = d.judge(flagged, context: ctx)
+        XCTAssertGreaterThan(v.judgements, 0, "the changed picture is judged afresh")
+        XCTAssertEqual(d.timings.cacheHits, 0, "no entry of the changed frame comes from the cache")
+        XCTAssertEqual(v.overloaded, 0, "every entry was judged")
+        XCTAssertFalse(v.regions.contains { $0.rect.intersects(r) && $0.reason == .cached && $0.display == .clear },
+                       "no region over it carries a cached clean verdict")
+        XCTAssertTrue(v.regions.contains { $0.display == .cover && $0.rect.intersects(r) }, "far above the cut-offs, it is covered")
     }
 
     func testAMovedPictureIsNotJudgedAgain() {
