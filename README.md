@@ -12,7 +12,7 @@ What makes it different is that it stays on. There's no off switch for a bad nig
 
 ## Why it exists
 
-Pornography is the most patient thing ever built. It's free, it never closes, it never runs out, and every inch of it was designed by people who get paid when you stay. It doesn't have to win the argument. It only has to wait until you're tired, until it's late, until the house is quiet and the part of you that knows better has gone to sleep. Then it takes a little more of the person you were trying to become.
+Pornography is built to wait you out. It's free, it never closes, it never runs out, and every inch of it was designed by people who get paid when you stay. It doesn't have to win the argument. It only has to be there when you're tired, when it's late, when the house is quiet and the part of you that knows better has gone to sleep. Then it takes a little more of the person you were trying to become.
 
 Willpower alone rarely beats that, because willpower is the first thing to leave at two in the morning. So SafeSight Mac moves the decision. You make it in daylight, clear-eyed, knowing what you want your life to look like, and it keeps that promise on the nights you can't. The person you are on your best day gets the final word. The worst hour of your week doesn't get a vote.
 
