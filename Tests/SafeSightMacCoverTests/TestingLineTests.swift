@@ -163,3 +163,38 @@ import Testing
         }
     }
 }
+
+@Suite struct TestingLineOnManyCoversTests {
+    let display = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 1280, height: 800))
+    let testing = CoverNotice.testing(shortcut: true)
+
+    func plan(_ rects: [CGRect]) -> CoverPlan { CoverPlan(display: display, items: rects.map { CoverItem(rect: $0, kind: .plain) }) }
+    func lines(_ p: CoverPlan, _ n: CoverNotice?) -> [TestingLineLayer] {
+        CoverDrawing.layers(for: p, theme: .light, scale: 2, notice: n).compactMap { $0 as? TestingLineLayer }
+    }
+
+    @Test func smallerCoversThatTogetherHideHalfTheDisplayCarryOneLine() throws {
+        // Three picture covers, each under half the display, together about 60% of it.
+        let rects = [CGRect(x: 0, y: 0, width: 640, height: 400), CGRect(x: 640, y: 0, width: 640, height: 300),
+                     CGRect(x: 0, y: 400, width: 500, height: 400)]
+        let found = lines(plan(rects), testing)
+        #expect(found.count == 1, "one line, not one per cover")
+        let line = try #require(found.first)
+        let largest = CoordinateSpace.toCanvasLayer(rects[0], display: display.bounds)
+        #expect(largest.contains(line.frame), "on the largest cover with room")
+        #expect(lines(plan(rects), nil).isEmpty, "the release edition stays wordless")
+    }
+
+    @Test func coversHidingLessThanHalfStayWordless() {
+        let rects = [CGRect(x: 0, y: 0, width: 400, height: 400), CGRect(x: 640, y: 0, width: 400, height: 400)]
+        #expect(lines(plan(rects), testing).isEmpty)
+    }
+
+    @Test func theOverlayFormChoosesTheSameCover() throws {
+        let rects = [CGRect(x: 0, y: 0, width: 640, height: 400), CGRect(x: 640, y: 0, width: 640, height: 300),
+                     CGRect(x: 0, y: 400, width: 500, height: 400)]
+        let pieces = CoverLayout.overlayPieces(plan(rects), primaryHeight: 800)
+        let hosts = CoverDrawing.testingLineHosts(pieces, notice: testing, displayArea: 1280 * 800, theme: .light, scale: 2)
+        #expect(hosts == [0])
+    }
+}

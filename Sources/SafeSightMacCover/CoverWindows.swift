@@ -28,8 +28,9 @@ public enum CoverForm: String, Sendable {
 }
 
 /// What the Testing edition adds to covers: its line (AppText.testingLine), on every cover that carries the way
-/// out and on any cover that hides at least half of its display, so that no cover big enough to be in the way
-/// is ever up without saying how to quit. The release edition adds nothing: its picture covers stay wordless.
+/// out, on any cover that hides at least half of its display, and, when smaller covers together hide half of it,
+/// on the largest of them that has room, so that covers big enough to be in the way never stand without saying
+/// how to quit. The release edition adds nothing: its picture covers stay wordless.
 public enum CoverNotice: Equatable, Sendable {
     /// `shortcut`: whether ⌃⌥⌘Q is this copy's; without it the line says to quit from the menu bar icon.
     case testing(shortcut: Bool)
@@ -98,21 +99,40 @@ public enum CoverDrawing {
     /// on whole-window and whole-display covers, and with a `notice`, the Testing line under it, and on any cover
     /// that hides at least `CoverNotice.bigShare` of `displayArea`.
     public static func layers(for pieces: [CoverPiece], theme: CoverTheme, scale: CGFloat, notice: CoverNotice? = nil,
-                              displayArea: CGFloat? = nil) -> [CALayer] {
+                              displayArea: CGFloat? = nil, testingLineOn: Set<Int>? = nil) -> [CALayer] {
         let covers: [CALayer] = pieces.map { LayerFactory.layer($0.frame, $0.kind, theme) }
+        let hosts = testingLineOn ?? testingLineHosts(pieces, notice: notice, displayArea: displayArea, theme: theme, scale: scale)
         var lines: [CALayer] = []
-        for p in pieces {
+        for (i, p) in pieces.enumerated() {
             let way = p.wayOut.flatMap { WayOutArt.layer(on: p.frame, placement: $0, theme: theme, scale: scale) }
             if let way { lines.append(way) }
-            guard case let .testing(shortcut)? = notice else { continue }
-            let big = displayArea.map { $0 > 0 && p.frame.width * p.frame.height >= CoverNotice.bigShare * $0 } ?? false
-            guard p.wayOut != nil || big else { continue }
+            guard case let .testing(shortcut)? = notice, hosts.contains(i) else { continue }
             if let t = WayOutArt.testingLayer(on: p.frame, placement: p.wayOut ?? .centre, under: way, shortcut: shortcut,
                                               theme: theme, scale: scale) {
                 lines.append(t)
             }
         }
         return covers + lines
+    }
+
+    /// Which of a display's cover pieces carry the Testing line (see `CoverNotice`): those with the way out, those
+    /// hiding `CoverNotice.bigShare` of the display, and, when none of those has room for it but the pieces
+    /// together hide that much, the largest piece that has room. None without a notice.
+    public static func testingLineHosts(_ pieces: [CoverPiece], notice: CoverNotice?, displayArea: CGFloat?,
+                                        theme: CoverTheme, scale: CGFloat) -> Set<Int> {
+        guard case let .testing(shortcut)? = notice else { return [] }
+        let areas = pieces.map { $0.frame.width * $0.frame.height }
+        let big = displayArea.map { $0 > 0 ? CoverNotice.bigShare * $0 : .infinity } ?? .infinity
+        var hosts = Set(pieces.indices.filter { pieces[$0].wayOut != nil || areas[$0] >= big })
+        let compact = WayOutArt.pillSize(.compact, theme, .testing(shortcut: shortcut))
+        func roomy(_ i: Int) -> Bool {
+            WayOutArt.testingPillFrame(in: pieces[i].frame, placement: .centre, under: nil, size: compact, scale: scale) != nil
+        }
+        if !hosts.contains(where: roomy), areas.reduce(0, +) >= big,
+           let largest = pieces.indices.filter(roomy).max(by: { areas[$0] < areas[$1] }) {
+            hosts.insert(largest)
+        }
+        return hosts
     }
 
     /// Replaces a root layer's covers with this plan's, in one transaction with no animation.
@@ -201,25 +221,28 @@ public final class OverlayCovers: CoverPresenter {
     public init(notice: CoverNotice? = nil) { self.notice = notice }
 
     public func apply(_ plans: [CoverPlan]) {
+        let theme = CoverTheme.current
         let frames = plans.flatMap { plan in
             let screen = CoverCanvas.screen(plan.display.id)
             let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
             let area = plan.display.bounds.width * plan.display.bounds.height
-            return CoverLayout.overlayPieces(plan, primaryHeight: CoverCanvas.primaryHeight, menuBar: menuBar)
-                .map { ($0, screen?.backingScaleFactor ?? 2, area) }
+            let scale = screen?.backingScaleFactor ?? 2
+            let pieces = CoverLayout.overlayPieces(plan, primaryHeight: CoverCanvas.primaryHeight, menuBar: menuBar)
+            // Chosen across the display's pieces, then drawn piece by piece, each in its own window.
+            let hosts = CoverDrawing.testingLineHosts(pieces, notice: notice, displayArea: area, theme: theme, scale: scale)
+            return pieces.enumerated().map { ($0.element, scale, hosts.contains($0.offset)) }
         }
-        let theme = CoverTheme.current
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         while pool.count < frames.count { pool.append(CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1))) }
         for (i, panel) in pool.enumerated() {
             guard i < frames.count else { panel.orderOut(nil); continue }
-            var (piece, scale, area) = frames[i]
+            var (piece, scale, lined) = frames[i]
             panel.setFrame(piece.frame, display: false)
             let root = panel.contentView!.layer!
             root.frame = CGRect(origin: .zero, size: piece.frame.size)
             piece.frame.origin = .zero
-            root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale, notice: notice, displayArea: area)
+            root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale, notice: notice, testingLineOn: lined ? [0] : [])
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()
