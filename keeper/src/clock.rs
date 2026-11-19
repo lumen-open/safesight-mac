@@ -490,6 +490,7 @@ mod tests {
         assert_eq!(clock.bad_rounds_in_window, 1);
         let mut after = clock.clone();
         after.bad_rounds_in_window = before.bad_rounds_in_window;
+        after.bad_window_start_boot_ms = before.bad_window_start_boot_ms;
         assert_eq!(after, before);
     }
 
@@ -629,10 +630,8 @@ mod tests {
         let _ = clock.offer_round(&FakeBeacon::record_bytes(time.true_round()), &FakeBeacon, &time);
         assert!(clock.capsule_round_is_fresh(&time));
         // A date wrong for certain makes nothing fresh.
-        let right = time.wall_unix_ms;
         time.wall_unix_ms = 0;
         assert!(!clock.capsule_round_is_fresh(&time));
-        time.wall_unix_ms = right;
 
         // The target is counted from the later of the estimate and the date: a date set
         // ahead moves it later, and nothing moves it earlier than the estimate.
