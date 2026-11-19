@@ -226,7 +226,8 @@ function checkBasics(page, html) {
   if (!/<meta\s+name="viewport"/i.test(html)) fail(page, 'needs a viewport meta tag');
   const h1s = (html.match(/<h1\b/gi) || []).length;
   if (h1s !== 1) fail(page, `needs exactly one <h1> (found ${h1s})`);
-  if (/<meta\b[^>]*\bhttp-equiv\s*=\s*["']?\s*refresh\b/i.test(html.replace(/<!--[\s\S]*?-->/g, ''))) {
+  // Matched on the raw page, comments included: stricter, and nothing is stripped first.
+  if (/<meta\b[^>]*\bhttp-equiv\s*=\s*["']?\s*refresh\b/i.test(html)) {
     fail(page, 'a <meta http-equiv="refresh"> is not allowed (it reloads or sends the visitor elsewhere)');
   }
 }
