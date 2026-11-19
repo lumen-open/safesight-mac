@@ -29,6 +29,7 @@
 //! them at start-up; the admin-task slot (SM-06); the release hold (SM-12); the private
 //! check timer; "busy, try again" while another journaled operation is open (SD-226).
 
+use crate::approval::{derive_challenge, ChallengeFields, ChallengeKind, MacLabel};
 use crate::boundary::{CheckedApproval, OwnerProof, RandomSource, RoundVerifier, TimeSource};
 use crate::clock::{Clock, RoundOutcome};
 use crate::constants::{
@@ -52,6 +53,17 @@ pub enum LoosenableSetting {
     DetectorRuleBalanced,
 }
 
+impl LoosenableSetting {
+    /// The setting's code in the keyholder challenge and on the keyholder page.
+    pub fn code(self) -> u16 {
+        match self {
+            LoosenableSetting::BrowserProfile => 1,
+            LoosenableSetting::StrictCoverModeOff => 2,
+            LoosenableSetting::DetectorRuleBalanced => 3,
+        }
+    }
+}
+
 /// What an exit-class request does when it is Committed (chapter 03 section 5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitClassKind {
@@ -71,6 +83,15 @@ impl ExitClassKind {
             ExitClassKind::LoosenSetting(_) => RequestKind::LoosenSetting,
         }
     }
+
+    /// What the keyholder is shown, and what the challenge binds.
+    fn challenge_kind(self) -> ChallengeKind {
+        match self {
+            ExitClassKind::Exit => ChallengeKind::Exit,
+            ExitClassKind::LowerWait { new_wait_days } => ChallengeKind::LowerWait { new_wait_days },
+            ExitClassKind::LoosenSetting(setting) => ChallengeKind::LoosenSetting { setting_code: setting.code() },
+        }
+    }
 }
 
 /// Where an open request is in SM-02.
@@ -87,7 +108,7 @@ pub enum Shortcut {
     NotUsed,
     /// An approval was accepted; the next round that passes SD-039 decides the target.
     AwaitingStartRound,
-    /// The target is the shortcut target. A later raise of the wait does not move it.
+    /// The target is the shortcut target. A raise of the wait voids it (`apply_raise`).
     Applied,
     /// The approval is used up and changed nothing, or was withdrawn by the owner.
     Spent,
@@ -108,6 +129,9 @@ pub struct Request {
     pub start_round: Option<u64>,
     pub target_round: Option<u64>,
     pub shortcut: Shortcut,
+    /// The keeper's 32 random bytes for this request's keyholder challenge (SD-306). Drawn
+    /// when the request is journaled and journaled with it.
+    pub nonce: [u8; 32],
 }
 
 impl Request {
@@ -127,6 +151,7 @@ impl Request {
             matured_round,
             claim_deadline,
             approval_used: self.shortcut != Shortcut::NotUsed,
+            challenge_nonce: self.nonce,
         }
     }
 }
@@ -166,6 +191,8 @@ pub struct LockFacts {
     pub instant_leave_window: bool,
     /// True if a keyholder was enrolled before Lock: power from Lock (SD-054).
     pub keyholder_enrolled_before_lock: bool,
+    /// The owner's label for this Mac, as the keyholder sees it (SD-196, SD-306).
+    pub mac_label: MacLabel,
 }
 
 /// Why a message was refused. A refusal changes nothing.
@@ -200,6 +227,12 @@ pub enum Refusal {
     KeyholderAlreadyPinned,
     /// "That approval does not match this request." One answer for every reason (SM-04).
     ApprovalRefused,
+    /// The system random generator gave nothing. Nothing was journaled; try again.
+    RandomUnavailable,
+    /// The Mac's date is before the chain began, or behind the keeper's estimate (verified
+    /// rounds plus the boot counter), so it cannot be trusted to say a deadline has not
+    /// passed. The app shows the "set the date and time" card. Nothing is written.
+    DateUntrusted,
 }
 
 /// What an accepted message did.
@@ -239,6 +272,10 @@ pub struct WaitMachine {
     instant_leave_closed: bool,
     slot: Slot,
     keyholder: Option<Keyholder>,
+    mac_label: MacLabel,
+    /// Set by every raise that takes effect: the wait the next capsule must be sealed for.
+    /// Cleared only when the rotation reports that the old admin secret is retired.
+    reseal_owed: Option<u16>,
     journal: Vec<JournalEntry>,
 }
 
@@ -273,6 +310,8 @@ impl WaitMachine {
             instant_leave_closed: false,
             slot: Slot::Free,
             keyholder,
+            mac_label: facts.mac_label,
+            reseal_owed: None,
             journal: Vec::new(),
         })
     }
@@ -301,6 +340,31 @@ impl WaitMachine {
 
     pub fn lock_round(&self) -> u64 {
         self.lock_round
+    }
+
+    /// The wait a raise has put in force and that no capsule yet carries (SD-057, SD-058).
+    /// While this is set, the newest capsule still opens one old wait after its
+    /// generation's end, so the raise does not hold yet: the rotation must seal a new
+    /// capsule for this wait at once, on a fresh round, and retire the old admin secret
+    /// (steps 2 to 6 of SD-061). `old_secret_retired` clears it.
+    // OPEN: SD-058 / SM-05 - the rotation is not written. SD-058 starts a new generation
+    // on a raise "when a fresh round is at hand"; the register does not say what the app
+    // shows until then. The more protective reading is recorded here: a raise is in force
+    // for every request at once, and holds against the Recovery Key route only once the
+    // old secret is retired. Until the rotation exists, nothing clears this.
+    pub fn reseal_owed(&self) -> Option<u16> {
+        self.reseal_owed
+    }
+
+    /// The rotation reports that a capsule for `sealed_for_wait_days` was saved and read
+    /// back and that the old admin secret is retired (SD-061 step 6). Clears the owed
+    /// re-seal only if that wait is at least the one owed.
+    pub fn old_secret_retired(&mut self, sealed_for_wait_days: u16) {
+        if let Some(owed) = self.reseal_owed {
+            if sealed_for_wait_days >= owed {
+                self.reseal_owed = None;
+            }
+        }
     }
 
     /// True once the instant-leave window is closed for good, or if there never was one.
@@ -546,9 +610,23 @@ impl WaitMachine {
         }
     }
 
-    fn new_request(&mut self, id: RequestId, kind: ExitClassKind, time: &dyn TimeSource) -> Request {
+    /// A new request's random ID and challenge nonce. Drawn before anything changes, so a
+    /// random generator that fails changes nothing.
+    fn draw_request(random: &mut dyn RandomSource) -> Result<(RequestId, [u8; 32]), Refusal> {
+        let id = match random.request_id() {
+            Ok(id) => id,
+            Err(_) => return Err(Refusal::RandomUnavailable),
+        };
+        let mut nonce = [0u8; 32];
+        if random.fill(&mut nonce).is_err() {
+            return Err(Refusal::RandomUnavailable);
+        }
+        Ok((id, nonce))
+    }
+
+    fn new_request(&mut self, drawn: (RequestId, [u8; 32]), kind: ExitClassKind, time: &dyn TimeSource) -> Request {
         Request {
-            id,
+            id: drawn.0,
             kind,
             phase: Phase::Pending,
             wait_rounds: wait_rounds(self.applied_wait_days),
@@ -556,15 +634,21 @@ impl WaitMachine {
             start_round: None,
             target_round: None,
             shortcut: Shortcut::NotUsed,
+            nonce: drawn.1,
         }
     }
 
-    fn open_request(&mut self, kind: ExitClassKind, random: &mut dyn RandomSource, time: &dyn TimeSource) -> Reply {
-        let id = random.request_id();
-        let request = self.new_request(id, kind, time);
+    fn open_request(
+        &mut self,
+        kind: ExitClassKind,
+        random: &mut dyn RandomSource,
+        time: &dyn TimeSource,
+    ) -> Result<Reply, Refusal> {
+        let drawn = WaitMachine::draw_request(random)?;
+        let request = self.new_request(drawn, kind, time);
         self.journal.push(request.journal_entry(RequestState::Pending));
         self.slot = Slot::Open(request);
-        Reply::Pending { id }
+        Ok(Reply::Pending { id: request.id })
     }
 
     // ----- SM-02: the exit request -----
@@ -590,20 +674,28 @@ impl WaitMachine {
                 // A marker that cannot be read means no window, for good.
                 self.instant_leave_closed = true;
             } else {
+                // Tighten-time can only say the cap has not passed if the date can be
+                // trusted: a date before the chain began, or behind the keeper's estimate,
+                // would let a lagging estimate stand for the present (after time powered
+                // off). Refuse, and write nothing; a right date, or the window's own proofs
+                // (`advance`), settle it. The ordinary Leave is never touched.
+                if self.clock.date_untrusted(time) {
+                    return Err(Refusal::DateUntrusted);
+                }
                 let tighten = self.clock.tighten_round(time);
                 if tighten >= self.instant_leave_cap_round() {
                     // `advance` closes the window on proof. Here only the date says the
                     // cap has passed: refuse, and write nothing final (R1-lock-02).
                     return Err(Refusal::DeadlinePassedByDateOnly);
                 }
-                let id = random.request_id();
-                let request = self.new_request(id, ExitClassKind::Exit, time);
+                let drawn = WaitMachine::draw_request(random)?;
+                let request = self.new_request(drawn, ExitClassKind::Exit, time);
                 self.journal.push(request.journal_entry(RequestState::Committed));
-                self.slot = Slot::ExitCommitted(id);
-                return Ok(Reply::ExitCommitted { id });
+                self.slot = Slot::ExitCommitted(request.id);
+                return Ok(Reply::ExitCommitted { id: request.id });
             }
         }
-        Ok(self.open_request(ExitClassKind::Exit, random, time))
+        self.open_request(ExitClassKind::Exit, random, time)
     }
 
     /// `stay`: no password, no request ID, one fixed reply. Discards whatever exit-class
@@ -654,7 +746,11 @@ impl WaitMachine {
             }
             ExitClassKind::LowerWait { new_wait_days } => {
                 self.slot = Slot::Free;
-                if new_wait_days < self.applied_wait_days {
+                // A raise discards any open lowering (`apply_raise`), so a lowering that
+                // reaches its claim waited out the wait in force now. It is checked again
+                // here: a lowering never undoes a wait it did not wait out.
+                let waited_out = request.wait_rounds >= wait_rounds(self.applied_wait_days);
+                if waited_out && new_wait_days < self.applied_wait_days {
                     self.applied_wait_days = new_wait_days;
                 }
                 Ok(Reply::WaitLowered { id: request.id, applied_wait_days: self.applied_wait_days })
@@ -684,7 +780,7 @@ impl WaitMachine {
         if new_wait_days >= self.applied_wait_days {
             return Err(Refusal::NotALowering);
         }
-        Ok(self.open_request(ExitClassKind::LowerWait { new_wait_days }, random, time))
+        self.open_request(ExitClassKind::LowerWait { new_wait_days }, random, time)
     }
 
     /// `loosen_setting`, with the typed password: an exit-class request for one setting
@@ -699,35 +795,75 @@ impl WaitMachine {
         self.advance(time);
         self.require_owner(proof)?;
         self.require_slot_free()?;
-        Ok(self.open_request(ExitClassKind::LoosenSetting(setting), random, time))
+        self.open_request(ExitClassKind::LoosenSetting(setting), random, time)
     }
 
     // ----- SM-03: the wait change -----
 
-    /// A raise takes effect: the applied wait rises, and an open Pending request
-    /// retargets later, never earlier. A shortcut target already set stands (I03-6).
-    /// A Matured request is unchanged: it matured under the wait that was in force.
-    fn apply_raise(&mut self, new_wait_days: u16) {
+    /// A raise takes effect (SM-03; the founder's ruling on SD-054, 20 November 2026):
+    ///
+    /// - The applied wait rises, and an open Pending request waits the new wait from its
+    ///   start round: its target moves later, never earlier.
+    /// - Every keyholder waits again, as a keyholder newly enrolled: the wait now in
+    ///   force, counted from this raise on the boot counter, or from the first round after
+    ///   it that passes SD-039 (SD-365). For one that had power, it loses it; for one still
+    ///   waiting, its date of power moves to the later of the two. A lowering never gives
+    ///   power back.
+    /// - A shortcut that an approval gave the open request, and that has not yet matured
+    ///   it (awaiting its start round, or applied), is void: the target goes back to the
+    ///   start round plus the new wait, and the approval stays used. This is the stricter
+    ///   reading the ruling asked for. A request that has already matured, by either
+    ///   route, is unchanged: a Matured entry is left only by a claim, Stay or expiry
+    ///   (R1-lock-19), and it matured under the rules then in force.
+    /// - An open lowering, Pending or Matured, is discarded: claimed after the raise, it
+    ///   would undo the raise.
+    /// - The raise is owed to the capsule (`reseal_owed`).
+    ///
+    /// None of this touches the full-wait route: a request still matures on its own
+    /// public route or counter route, with or without a keyholder.
+    fn apply_raise(&mut self, new_wait_days: u16, time: &dyn TimeSource) {
+        let boot_now = self.clock.boot_now_ms(time);
         self.applied_wait_days = new_wait_days;
         let new_rounds = wait_rounds(new_wait_days);
+        if let Some(ref mut keyholder) = self.keyholder {
+            // With power or still waiting, the keyholder now waits the new wait from this
+            // raise (SD-365). For one still waiting this is always a later date than the
+            // one it had, since the new wait is no shorter and the raise is no earlier than
+            // its enrolment: it can only tighten.
+            keyholder.power = Power::Waiting { wait_rounds: new_rounds, boot_ms_at_enrolment: boot_now, start_round: None };
+        }
+        self.reseal_owed = match self.reseal_owed {
+            Some(owed) if owed >= new_wait_days => Some(owed),
+            _ => Some(new_wait_days),
+        };
         let mut entry: Option<JournalEntry> = None;
+        let mut free = false;
         if let Slot::Open(ref mut request) = self.slot {
-            if request.phase == Phase::Pending && new_rounds > request.wait_rounds {
-                request.wait_rounds = new_rounds;
-                if let Some(start) = request.start_round {
-                    if request.shortcut != Shortcut::Applied {
-                        let wait_target = start.saturating_add(new_rounds);
-                        let later = match request.target_round {
-                            Some(target) => wait_target > target,
-                            None => true,
-                        };
-                        if later {
-                            request.target_round = Some(wait_target);
-                        }
-                    }
+            if let ExitClassKind::LowerWait { .. } = request.kind {
+                entry = Some(request.journal_entry(RequestState::Discarded));
+                free = true;
+            } else if request.phase == Phase::Pending {
+                let mut changed = false;
+                if new_rounds > request.wait_rounds {
+                    request.wait_rounds = new_rounds;
+                    changed = true;
                 }
-                entry = Some(request.journal_entry(RequestState::Pending));
+                if request.shortcut == Shortcut::AwaitingStartRound || request.shortcut == Shortcut::Applied {
+                    request.shortcut = Shortcut::Spent;
+                    changed = true;
+                }
+                if changed {
+                    if let Some(start) = request.start_round {
+                        // Never earlier than before: the wait only rose, and a voided
+                        // shortcut target was earlier than this one.
+                        request.target_round = Some(start.saturating_add(request.wait_rounds));
+                    }
+                    entry = Some(request.journal_entry(RequestState::Pending));
+                }
             }
+        }
+        if free {
+            self.slot = Slot::Free;
         }
         if let Some(e) = entry {
             self.journal.push(e);
@@ -751,7 +887,7 @@ impl WaitMachine {
             return Err(Refusal::NotARaise);
         }
         if new_wait_days <= INSTANT_RAISE_MAX_DAYS {
-            self.apply_raise(new_wait_days);
+            self.apply_raise(new_wait_days, time);
             return Ok(Reply::RaiseApplied { applied_wait_days: new_wait_days });
         }
         if self.guarded_raise != GuardedRaise::None {
@@ -799,7 +935,7 @@ impl WaitMachine {
         self.guarded_raise = GuardedRaise::None;
         self.planned_wait_days = None;
         if terms.wait_days > self.applied_wait_days {
-            self.apply_raise(terms.wait_days);
+            self.apply_raise(terms.wait_days, time);
         }
         Ok(Reply::RaiseApplied { applied_wait_days: self.applied_wait_days })
     }
@@ -816,6 +952,31 @@ impl WaitMachine {
     }
 
     // ----- The keyholder (SD-053, SD-054; SM-04, keeper side) -----
+
+    fn challenge_of(&self, request: &Request) -> Option<[u8; 32]> {
+        derive_challenge(&ChallengeFields {
+            kind: request.kind.challenge_kind(),
+            request_id: request.id,
+            mac_label: &self.mac_label,
+            items: &[],
+            nonce: request.nonce,
+        })
+    }
+
+    /// The request code's challenge for the one open request, if it can take an approval
+    /// now: the request ID and the challenge the keyholder's passkey must sign (SD-306).
+    /// The hands layer hands it to the approval check (`boundary::ApprovalVerifier`).
+    pub fn approval_challenge(&self) -> Option<(RequestId, [u8; 32])> {
+        match self.slot {
+            Slot::Open(request) => {
+                if request.phase != Phase::Pending || request.shortcut != Shortcut::NotUsed {
+                    return None;
+                }
+                self.challenge_of(&request).map(|challenge| (request.id, challenge))
+            }
+            _ => None,
+        }
+    }
 
     fn waiting_power(&mut self, time: &dyn TimeSource) -> Power {
         Power::Waiting {
@@ -916,6 +1077,16 @@ impl WaitMachine {
         if !has_power || !approval.valid {
             return Err(Refusal::ApprovalRefused);
         }
+        // The challenge the check was made against must be this request's, recomputed here
+        // from the keeper's own record: its ID, its kind and detail, the Mac label and its
+        // nonce (SD-306). A test approval, or one for any other request, never matches.
+        let expected = match self.slot {
+            Slot::Open(request) => self.challenge_of(&request),
+            _ => None,
+        };
+        if expected != Some(approval.challenge) {
+            return Err(Refusal::ApprovalRefused);
+        }
         let mut entry: Option<JournalEntry> = None;
         if let Slot::Open(ref mut request) = self.slot {
             if request.id == approval.request_id
@@ -941,8 +1112,8 @@ impl WaitMachine {
 mod tests {
     use super::*;
     use crate::clock::DropReason;
-    use crate::constants::{MS_PER_ROUND, ROUNDS_PER_DAY};
-    use crate::fakes::{FakeBeacon, FakeRandom, FakeTime};
+    use crate::constants::{BEACON_GENESIS_UNIX_SECONDS, BEACON_PERIOD_SECONDS, MS_PER_ROUND, ROUNDS_PER_DAY};
+    use crate::fakes::{BrokenRandom, FakeBeacon, FakeRandom, FakeTime};
 
     const LOCK_ROUND: u64 = 1_000_000;
     const DAY: u64 = ROUNDS_PER_DAY;
@@ -957,6 +1128,15 @@ mod tests {
         m: WaitMachine,
     }
 
+    fn label() -> MacLabel {
+        MacLabel::new("Test Mac").unwrap()
+    }
+
+    /// The date and time, in milliseconds, at which the beacon publishes `round`.
+    fn unix_ms_of_round(round: u64) -> u64 {
+        (BEACON_GENESIS_UNIX_SECONDS + BEACON_PERIOD_SECONDS * (round - 1)) * 1_000
+    }
+
     fn world_with(applied: u16, planned: Option<u16>, window: bool, keyholder: bool) -> World {
         let time = FakeTime::at_round(LOCK_ROUND);
         let clock = Clock::at_lock(&FakeBeacon::record_bytes(LOCK_ROUND), &FakeBeacon, &time).unwrap();
@@ -965,6 +1145,7 @@ mod tests {
             planned_wait_days: planned,
             instant_leave_window: window,
             keyholder_enrolled_before_lock: keyholder,
+            mac_label: label(),
         };
         let m = WaitMachine::at_lock(facts, clock, &time).unwrap();
         World { time, random: FakeRandom::new(), m }
@@ -1037,8 +1218,25 @@ mod tests {
             self.m.claim(OWNER, id, &self.time)
         }
 
+        /// What the keyholder's page would have had the passkey sign for request `id`:
+        /// computed from the open request when it is that one, made up otherwise.
+        fn challenge_for(&self, id: RequestId) -> [u8; 32] {
+            match self.m.slot() {
+                Slot::Open(r) if r.id == id => derive_challenge(&ChallengeFields {
+                    kind: r.kind.challenge_kind(),
+                    request_id: id,
+                    mac_label: &label(),
+                    items: &[],
+                    nonce: r.nonce,
+                })
+                .unwrap(),
+                _ => [0x5E; 32],
+            }
+        }
+
         fn approve(&mut self, id: RequestId) -> Result<Reply, Refusal> {
-            self.m.approval(CheckedApproval { request_id: id, valid: true }, &self.time)
+            let challenge = self.challenge_for(id);
+            self.m.approval(CheckedApproval { request_id: id, challenge, valid: true }, &self.time)
         }
 
         fn raise_to(&mut self, days: u16) -> Result<Reply, Refusal> {
@@ -1078,6 +1276,7 @@ mod tests {
             planned_wait_days: Some(365),
             instant_leave_window: true,
             keyholder_enrolled_before_lock: false,
+            mac_label: label(),
         };
         let m = WaitMachine::at_lock(good, clock.clone(), &time).unwrap();
         assert_eq!(m.applied_wait_days(), 30);
@@ -1361,10 +1560,22 @@ mod tests {
     }
 
     // Invariant I2: a request never matures while real elapsed time since it was
-    // journaled is less than its wait, whatever mix of awake, asleep, off and rounds.
+    // journaled is less than its wait (to within `ANCHOR_CLOCK_TOLERANCE`, as SD-039 is
+    // written: see the status document), whatever mix of awake, asleep, off and rounds; of
+    // a date set ahead, set right, reset to before the chain began (and reset again at
+    // every power-off, as a clock with a dead battery does), or set back behind the
+    // keeper's estimate; and of old real rounds handed over again.
+    //
+    // Not in the mix: a date that is behind now and yet not behind the keeper's estimate.
+    // That happens when a date set back is then carried past the estimate by time powered
+    // off, or set there directly. Rule (b) then passes an old round, and nothing the
+    // keeper holds tells it from a fresh one after time powered off. So a date set back
+    // here is put right at the next power-off. Changing the date needs an administrator
+    // on macOS; the status document lists the case as open.
     #[test]
     fn no_mix_of_sleep_power_and_rounds_matures_a_request_early() {
         let waits: [u16; 2] = [7, 30];
+        let tolerance_ms = rounds_to_ms(crate::constants::ANCHOR_CLOCK_TOLERANCE_ROUNDS);
         for wait in waits.iter() {
             let mut seed: u64 = 0x0DDB_A11 + (*wait as u64);
             let mut run = 0;
@@ -1374,28 +1585,59 @@ mod tests {
                 w.pending_id();
                 let journaled_at_ms = w.time.true_unix_ms;
                 let wait_ms = rounds_to_ms(wait_rounds(*wait));
+                // 0: the date as the steps left it; 1: reset to before the chain began;
+                // 2: set back behind the estimate.
+                let mut date_mode = 0;
                 let mut step = 0;
                 while step < 400 && w.m.slot() != Slot::Free {
                     seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
-                    let choice = (seed >> 33) % 6;
+                    let choice = (seed >> 33) % 10;
                     let amount = (seed >> 40) % (DAY_MS / 2);
                     if choice == 0 {
                         w.time.pass_awake_ms(amount);
                     } else if choice == 1 {
                         w.time.pass_asleep_ms(amount);
-                    } else if choice == 2 {
-                        w.time.pass_powered_off_ms(amount);
+                    } else if choice == 2 || choice == 6 {
+                        // Powered off, for hours or for days at a time.
+                        let off = if choice == 2 { amount } else { amount * 40 };
+                        w.time.pass_powered_off_ms(off);
+                        if date_mode == 1 {
+                            w.time.wall_unix_ms = amount % 1_000_000;
+                        } else if date_mode == 2 {
+                            w.time.wall_unix_ms = w.time.true_unix_ms;
+                            date_mode = 0;
+                        }
                     } else if choice == 3 {
                         w.deliver_latest();
                     } else if choice == 4 {
-                        w.time.wall_unix_ms += amount * 100;
-                    } else {
+                        w.time.wall_unix_ms = w.time.true_unix_ms + amount * 100;
+                        date_mode = 0;
+                    } else if choice == 5 {
                         w.time.wall_unix_ms = w.time.true_unix_ms;
+                        date_mode = 0;
+                    } else if choice == 7 {
+                        if amount % 2 == 0 {
+                            w.time.wall_unix_ms = (amount % (BEACON_GENESIS_UNIX_SECONDS * 1_000)) / 2;
+                            date_mode = 1;
+                        } else {
+                            let behind = 205 + (amount / 1_000) % (60 * DAY);
+                            let estimate = w.m.estimate(&w.time);
+                            let round = if estimate > behind + 1 { estimate - behind } else { 1 };
+                            w.time.wall_unix_ms = unix_ms_of_round(round);
+                            date_mode = 2;
+                        }
+                    } else {
+                        // An old real round, from up to 60 days back, handed over again.
+                        let back = (amount / 1_000) % (60 * DAY);
+                        let old = w.time.true_round().saturating_sub(back);
+                        if old >= 1 {
+                            let _ = w.deliver(old);
+                        }
                     }
                     w.tick();
                     if w.m.slot() != Slot::Free && w.is_matured() {
                         let real_elapsed = w.time.true_unix_ms - journaled_at_ms;
-                        assert!(real_elapsed >= wait_ms, "matured early: run {} step {}", run, step);
+                        assert!(real_elapsed + tolerance_ms >= wait_ms, "matured early: run {} step {}", run, step);
                     }
                     step += 1;
                 }
@@ -1701,8 +1943,11 @@ mod tests {
         assert_eq!(w.request().shortcut, Shortcut::Spent);
     }
 
+    // The founder's ruling on SD-054 (20 Nov 2026), the stricter reading: a raise voids a
+    // shortcut that has not yet matured the request. The approval stays used, and the
+    // request waits the new wait from its start round.
     #[test]
-    fn a_shortcut_target_already_set_stands_when_the_wait_is_raised() {
+    fn a_raise_voids_a_shortcut_target_already_set() {
         let mut w = world_with(7, None, false, true);
         w.awake_rounds(10);
         let id = w.pending_id();
@@ -1710,18 +1955,39 @@ mod tests {
         assert_eq!(w.approve(id), Ok(Reply::Done));
         w.awake_rounds(1);
         let shortcut_start = w.deliver_latest();
-        let shortcut_target = shortcut_start + KEYHOLDER_SHORTCUT_ROUNDS;
-        assert_eq!(w.request().target_round, Some(shortcut_target));
+        assert_eq!(w.request().target_round, Some(shortcut_start + KEYHOLDER_SHORTCUT_ROUNDS));
         assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
         let request = w.request();
-        assert_eq!(request.target_round, Some(shortcut_target));
+        assert_eq!(request.target_round, Some(start + 30 * DAY));
         assert_eq!(request.wait_rounds, 30 * DAY);
         assert_eq!(request.start_round, Some(start));
-        assert_eq!(request.shortcut, Shortcut::Applied);
+        assert_eq!(request.shortcut, Shortcut::Spent);
+        // What a replay would read: the last entry holds the voided state whole (the full
+        // target, the approval used), and the record format takes it back unchanged.
+        let last = w.m.journal()[w.m.journal().len() - 1];
+        assert_eq!(last.state, RequestState::Pending);
+        assert_eq!(last.target_round, Some(start + 30 * DAY));
+        assert!(last.approval_used);
+        assert_eq!(JournalEntry::decode(&last.encode().unwrap()), Ok(last));
+        // A day later, nothing has matured; nor a day before the full wait.
+        w.off_rounds(KEYHOLDER_SHORTCUT_ROUNDS);
+        w.deliver_latest();
+        assert!(w.is_pending());
+        w.off_rounds(30 * DAY - KEYHOLDER_SHORTCUT_ROUNDS - 2);
+        assert_eq!(w.deliver_latest(), start + 30 * DAY - 1);
+        assert!(w.is_pending());
+        // The keyholder is waiting again, and the used approval cannot be given twice.
+        assert!(!has_power(&w));
+        refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.approve(id));
+        // The full wait still matures it, with no keyholder involved.
+        w.off_rounds(1);
+        w.deliver_latest();
+        assert!(w.is_matured());
+        assert_eq!(w.claim(id), Ok(Reply::ExitCommitted { id }));
     }
 
     #[test]
-    fn a_raise_while_an_approval_awaits_its_start_round_moves_only_the_wait_target() {
+    fn a_raise_voids_an_approval_still_awaiting_its_start_round() {
         let mut w = world_with(7, None, false, true);
         w.awake_rounds(10);
         let id = w.pending_id();
@@ -1729,10 +1995,36 @@ mod tests {
         assert_eq!(w.approve(id), Ok(Reply::Done));
         assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
         assert_eq!(w.request().target_round, Some(start + 30 * DAY));
-        assert_eq!(w.request().shortcut, Shortcut::AwaitingStartRound);
+        assert_eq!(w.request().shortcut, Shortcut::Spent);
+        // The next round sets no shortcut target.
         w.awake_rounds(1);
-        let shortcut_start = w.deliver_latest();
-        assert_eq!(w.request().target_round, Some(shortcut_start + KEYHOLDER_SHORTCUT_ROUNDS));
+        w.deliver_latest();
+        assert_eq!(w.request().target_round, Some(start + 30 * DAY));
+        assert_eq!(w.request().shortcut, Shortcut::Spent);
+        let last = w.m.journal()[w.m.journal().len() - 1];
+        assert!(last.approval_used);
+        assert_eq!(last.target_round, Some(start + 30 * DAY));
+    }
+
+    // A request the shortcut has already matured is left as it matured: Matured is left
+    // only by a claim, Stay or expiry (R1-lock-19). The raise still resets the keyholder.
+    #[test]
+    fn a_raise_leaves_a_request_the_shortcut_has_already_matured() {
+        let mut w = world_with(7, None, false, true);
+        w.awake_rounds(10);
+        let id = w.pending_id();
+        w.deliver_latest();
+        assert_eq!(w.approve(id), Ok(Reply::Done));
+        w.awake_rounds(1);
+        w.deliver_latest();
+        w.off_rounds(KEYHOLDER_SHORTCUT_ROUNDS);
+        w.deliver_latest();
+        let matured = w.request();
+        assert!(w.is_matured());
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        assert_eq!(w.m.slot(), Slot::Open(matured));
+        assert!(!has_power(&w));
+        assert_eq!(w.claim(id), Ok(Reply::ExitCommitted { id }));
     }
 
     #[test]
@@ -1756,7 +2048,8 @@ mod tests {
         refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.approve([0x77; 16]));
         // A signature, origin or challenge that did not check out.
         refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| {
-            w.m.approval(CheckedApproval { request_id: id, valid: false }, &w.time)
+            let challenge = w.challenge_for(id);
+            w.m.approval(CheckedApproval { request_id: id, challenge, valid: false }, &w.time)
         });
         // A matured request.
         w.sleep_through_the_wait();
@@ -1855,16 +2148,392 @@ mod tests {
         assert_eq!(w.m.keyholder().unwrap().power, Power::Has);
     }
 
+    fn has_power(w: &World) -> bool {
+        w.m.keyholder().unwrap().power == Power::Has
+    }
+
+    // A keyholder still waiting for power waits whatever wait a later raise puts in force,
+    // counted from its enrolment, as an open request's wait is pushed out. Without this, a
+    // key enrolled under 7 days and a raise to a long wait would leave every exit at about
+    // a day from day 7 on.
     #[test]
-    fn later_changes_of_the_wait_do_not_move_a_keyholders_date_of_power() {
+    fn a_raise_pushes_a_waiting_keyholders_date_of_power_out() {
+        // The counter route: enrolled under 7 days, raised to 30 at once.
         let mut w = world(7);
         assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
         assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        match w.m.keyholder().unwrap().power {
+            Power::Waiting { wait_rounds, .. } => assert_eq!(wait_rounds, 30 * DAY),
+            other => panic!("not waiting: {:?}", other),
+        }
         w.time.pass_asleep_ms(7 * DAY_MS);
         w.tick();
-        assert_eq!(w.m.keyholder().unwrap().power, Power::Has);
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(23 * DAY_MS - 1);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(1);
+        w.tick();
+        assert!(has_power(&w));
 
-        // A keyholder enrolled under 30 days waits 30 days, whatever date is set.
+        // A raise counts the new wait from the raise (SD-365), not from the enrolment.
+        let mut w = world(7);
+        assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
+        w.time.pass_asleep_ms(6 * DAY_MS);
+        w.tick();
+        let boot_at_raise = w.time.boot_ms;
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        assert_eq!(
+            w.m.keyholder().unwrap().power,
+            Power::Waiting { wait_rounds: 30 * DAY, boot_ms_at_enrolment: boot_at_raise, start_round: None }
+        );
+        // Thirty days from the enrolment: not yet. Thirty from the raise: power.
+        w.time.pass_asleep_ms(24 * DAY_MS);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(6 * DAY_MS - 1);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(1);
+        w.tick();
+        assert!(has_power(&w));
+
+        // The public route: the keyholder's start round is set again by the first round
+        // after the raise that passes SD-039, and its date counts from there.
+        let mut w = world(7);
+        w.awake_rounds(10);
+        assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
+        w.awake_rounds(1);
+        let start = w.deliver_latest();
+        w.off_rounds(5 * DAY);
+        w.deliver_latest();
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        match w.m.keyholder().unwrap().power {
+            Power::Waiting { start_round, .. } => assert_eq!(start_round, None),
+            other => panic!("not waiting: {:?}", other),
+        }
+        w.off_rounds(1);
+        let restart = w.deliver_latest();
+        assert_eq!(restart, start + 5 * DAY + 1);
+        // The enrolment's start round plus 30 days is not enough any more.
+        w.off_rounds(25 * DAY - 1);
+        assert_eq!(w.deliver_latest(), start + 30 * DAY);
+        assert!(!has_power(&w));
+        w.off_rounds(5 * DAY);
+        assert_eq!(w.deliver_latest(), restart + 30 * DAY - 1);
+        assert!(!has_power(&w));
+        w.off_rounds(1);
+        w.deliver_latest();
+        assert!(has_power(&w));
+
+        // Enrolled under 7 days, raised to 30, then to 365 through the guard and the
+        // private yes: no power, and so no one-day exit, before 365 days from the yes.
+        let mut w = world(7);
+        assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        w.awake_rounds(7 * DAY);
+        match w.raise_to(365) {
+            Ok(Reply::RaiseGuarded { .. }) => {}
+            other => panic!("not guarded: {:?}", other),
+        }
+        w.awake_rounds(DAY);
+        assert_eq!(w.m.long_wait_answer(OWNER, true, &w.time), Ok(Reply::RaiseApplied { applied_wait_days: 365 }));
+        w.time.pass_asleep_ms(30 * DAY_MS);
+        w.tick();
+        assert!(!has_power(&w));
+        let id = w.pending_id();
+        w.awake_rounds(1);
+        w.deliver_latest();
+        refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.approve(id));
+        assert_eq!(w.m.stay(&w.time), StayReply);
+        // 365 days from the enrolment: not yet.
+        w.time.pass_asleep_ms(365 * DAY_MS - 38 * DAY_MS - 3 * 1_000);
+        w.tick();
+        assert!(!has_power(&w));
+        // 365 days from the yes, eight days later.
+        w.time.pass_asleep_ms(8 * DAY_MS - 1);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(1);
+        w.tick();
+        assert!(has_power(&w));
+
+        // A lowering, once claimed, never shortens a waiting keyholder's wait.
+        let mut w = world(30);
+        let id = match w.lower_to(7) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        w.sleep_through_the_wait();
+        assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
+        assert_eq!(w.claim(id), Ok(Reply::WaitLowered { id, applied_wait_days: 7 }));
+        w.time.pass_asleep_ms(7 * DAY_MS);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(23 * DAY_MS);
+        w.tick();
+        assert!(has_power(&w));
+    }
+
+    // The founder's ruling on SD-054 (20 Nov 2026): a raise makes a keyholder that has
+    // power wait again, the wait now in force, counted from the raise, as a keyholder
+    // newly enrolled.
+    #[test]
+    fn a_raise_makes_a_keyholder_with_power_wait_again() {
+        // The counter route.
+        let mut w = world_with(7, None, false, true);
+        w.awake_rounds(10);
+        assert!(has_power(&w));
+        let boot_at_raise = w.time.boot_ms;
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        assert_eq!(
+            w.m.keyholder(),
+            Some(Keyholder {
+                shortcut_on: true,
+                power: Power::Waiting { wait_rounds: 30 * DAY, boot_ms_at_enrolment: boot_at_raise, start_round: None },
+            })
+        );
+        let id = w.pending_id();
+        w.awake_rounds(1);
+        w.deliver_latest();
+        refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.approve(id));
+        assert_eq!(w.m.stay(&w.time), StayReply);
+        w.time.pass_asleep_ms(30 * DAY_MS - 3_000 - 1);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(1);
+        w.tick();
+        assert!(has_power(&w));
+        let id = w.pending_id();
+        w.awake_rounds(1);
+        w.deliver_latest();
+        assert_eq!(w.approve(id), Ok(Reply::Done));
+
+        // The public route: from the first round after the raise that passes SD-039.
+        let mut w = world_with(7, None, false, true);
+        w.awake_rounds(10);
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        w.awake_rounds(1);
+        let start = w.deliver_latest();
+        w.off_rounds(30 * DAY - 1);
+        w.deliver_latest();
+        assert!(!has_power(&w));
+        w.off_rounds(1);
+        assert_eq!(w.deliver_latest(), start + 30 * DAY);
+        assert!(has_power(&w));
+
+        // A second raise while it waits counts the new wait from that raise (SD-365).
+        let mut w = world_with(7, None, false, true);
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        w.awake_rounds(7 * DAY);
+        assert!(w.raise_to(90).is_ok());
+        w.awake_rounds(DAY);
+        assert_eq!(w.m.long_wait_answer(OWNER, true, &w.time), Ok(Reply::RaiseApplied { applied_wait_days: 90 }));
+        w.time.pass_asleep_ms(82 * DAY_MS);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(8 * DAY_MS - 1);
+        w.tick();
+        assert!(!has_power(&w));
+        w.time.pass_asleep_ms(1);
+        w.tick();
+        assert!(has_power(&w));
+
+        // A raise while the shortcut is off resets the power too; switching it back on
+        // starts a new wait, never an earlier one.
+        let mut w = world_with(7, None, false, true);
+        assert_eq!(w.m.shortcut_switch(OWNER, false, &w.time), Ok(Reply::Done));
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        assert!(!has_power(&w));
+        assert_eq!(w.m.shortcut_switch(OWNER, true, &w.time), Ok(Reply::Done));
+        assert!(!has_power(&w));
+
+        // A lowering never gives the power back early: claimed, it leaves the wait as it is.
+        let mut w = world_with(30, None, false, true);
+        let lowering = match w.lower_to(7) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        w.sleep_through_the_wait();
+        assert!(w.raise_to(90).is_ok());
+        assert!(w.is_matured());
+        // The guarded raise is not in force yet; the lowering is claimed first, then the
+        // yes resets the keyholder; the claim had changed nothing about the keyholder.
+        assert_eq!(w.claim(lowering), Ok(Reply::WaitLowered { id: lowering, applied_wait_days: 7 }));
+        assert!(has_power(&w));
+        w.awake_rounds(DAY);
+        assert!(w.m.long_wait_answer(OWNER, true, &w.time).is_ok());
+        let waiting = w.m.keyholder().unwrap().power;
+        let lowering = match w.lower_to(7) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        w.sleep_through_the_wait();
+        assert_eq!(w.claim(lowering), Ok(Reply::WaitLowered { id: lowering, applied_wait_days: 7 }));
+        match (waiting, w.m.keyholder().unwrap().power) {
+            (Power::Waiting { wait_rounds: before, .. }, Power::Has) => assert_eq!(before, 90 * DAY),
+            (before, after) => assert_eq!(before, after),
+        }
+    }
+
+    // An exit request open when the wait is raised keeps the full wait unless and until
+    // the keyholder has power again and approves; the full wait never needs the keyholder.
+    #[test]
+    fn a_raise_during_an_open_request_the_keyholder_had_not_approved() {
+        let mut w = world_with(7, None, false, true);
+        w.awake_rounds(10);
+        let id = w.pending_id();
+        let start = w.deliver_latest();
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        assert_eq!(w.request().target_round, Some(start + 30 * DAY));
+        assert_eq!(w.request().shortcut, Shortcut::NotUsed);
+        w.awake_rounds(1);
+        w.deliver_latest();
+        refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.approve(id));
+        w.off_rounds(30 * DAY - 2);
+        w.deliver_latest();
+        refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.approve(id));
+        assert!(w.is_pending());
+        w.off_rounds(1);
+        w.deliver_latest();
+        assert!(w.is_matured());
+        assert!(!has_power(&w));
+        assert_eq!(w.claim(id), Ok(Reply::ExitCommitted { id }));
+
+        // A request opened after the raise: once the keyholder has its power back, an
+        // approval shortens that request as before.
+        let mut w = world_with(7, None, false, true);
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        w.awake_rounds(5 * DAY);
+        let id = w.pending_id();
+        let start = w.deliver_latest();
+        w.time.pass_asleep_ms(25 * DAY_MS);
+        w.tick();
+        assert!(has_power(&w));
+        assert_eq!(w.approve(id), Ok(Reply::Done));
+        w.awake_rounds(1);
+        let shortcut_start = w.deliver_latest();
+        assert_eq!(w.request().target_round, Some(shortcut_start + KEYHOLDER_SHORTCUT_ROUNDS));
+        assert!(shortcut_start + KEYHOLDER_SHORTCUT_ROUNDS < start + 30 * DAY);
+    }
+
+    // Raises, approvals, Leave and Stay, sleep, power-offs and rounds in a random mix, with
+    // a keyholder that had power from Lock. Whenever a request matures, it has waited its
+    // full wait (as raised), or 24 hours since an approval no raise has voided; whenever an
+    // approval is taken after a raise, the wait then in force has passed since the last
+    // raise (SD-365), whether the keyholder had power at it or was still waiting. Each to within `ANCHOR_CLOCK_TOLERANCE`, as SD-039 is.
+    #[test]
+    fn no_mix_of_raises_and_approvals_matures_a_request_before_the_rules_allow() {
+        let tolerance_ms = rounds_to_ms(crate::constants::ANCHOR_CLOCK_TOLERANCE_ROUNDS);
+        let shortcut_ms = rounds_to_ms(KEYHOLDER_SHORTCUT_ROUNDS);
+        let mut seed: u64 = 0x5EED_0026;
+        let mut matured_by_shortcut = 0;
+        let mut approvals_after_reset = 0;
+        let mut run = 0;
+        while run < 40 {
+            let mut w = world_with(7, None, false, true);
+            let mut journaled_at: Option<u64> = None;
+            let mut approved_at: Option<u64> = None;
+            let mut reset_at: Option<u64> = None;
+            let mut step = 0;
+            while step < 600 {
+                seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+                let choice = (seed >> 33) % 10;
+                let amount = (seed >> 40) % (DAY_MS / 2);
+                let now = w.time.true_unix_ms;
+                let mut raised = false;
+                if choice == 0 {
+                    w.time.pass_awake_ms(amount);
+                } else if choice == 1 {
+                    w.time.pass_asleep_ms(amount * 4);
+                } else if choice == 2 {
+                    w.time.pass_powered_off_ms(amount * 20);
+                } else if choice == 3 || choice == 4 {
+                    w.deliver_latest();
+                } else if choice == 5 {
+                    if w.m.slot() == Slot::Free {
+                        if let Ok(Reply::Pending { .. }) = w.leave() {
+                            journaled_at = Some(now);
+                            approved_at = None;
+                        }
+                    }
+                } else if choice == 6 {
+                    if amount % 4 == 0 {
+                        assert_eq!(w.m.stay(&w.time), StayReply);
+                        journaled_at = None;
+                        approved_at = None;
+                    }
+                } else if choice == 7 {
+                    if let Slot::Open(request) = w.m.slot() {
+                        if w.approve(request.id).is_ok() {
+                            if let Some(reset) = reset_at {
+                                let wait_ms = rounds_to_ms(wait_rounds(w.m.applied_wait_days()));
+                                assert!(now - reset + tolerance_ms >= wait_ms, "approved early: run {} step {}", run, step);
+                                approvals_after_reset += 1;
+                            }
+                            approved_at = Some(now);
+                        }
+                    }
+                } else if choice == 8 {
+                    // The private yes to a guarded raise, whenever one awaits it.
+                    if let Ok(Reply::RaiseApplied { .. }) = w.m.long_wait_answer(OWNER, true, &w.time) {
+                        raised = true;
+                    }
+                } else if amount % 3 == 0 {
+                    let next = match w.m.applied_wait_days() {
+                        7 => 30,
+                        30 => 90,
+                        90 => 182,
+                        182 => 365,
+                        _ => 0,
+                    };
+                    if next > 0 {
+                        if let Ok(Reply::RaiseApplied { .. }) = w.raise_to(next) {
+                            raised = true;
+                        }
+                    }
+                }
+                if raised {
+                    // Every raise sets the keyholder's wait going again from now (SD-365).
+                    reset_at = Some(now);
+                    if let Slot::Open(request) = w.m.slot() {
+                        if request.phase == Phase::Pending {
+                            approved_at = None;
+                        }
+                    }
+                }
+                w.tick();
+                if let Slot::Open(request) = w.m.slot() {
+                    if let Phase::Matured { .. } = request.phase {
+                        let now = w.time.true_unix_ms;
+                        let full = match journaled_at {
+                            Some(at) => now - at + tolerance_ms >= rounds_to_ms(request.wait_rounds),
+                            None => false,
+                        };
+                        let short = match approved_at {
+                            Some(at) => now - at + tolerance_ms >= shortcut_ms,
+                            None => false,
+                        };
+                        assert!(full || short, "matured early: run {} step {}", run, step);
+                        if !full {
+                            matured_by_shortcut += 1;
+                        }
+                        assert_eq!(w.m.stay(&w.time), StayReply);
+                        journaled_at = None;
+                        approved_at = None;
+                    }
+                }
+                step += 1;
+            }
+            run += 1;
+        }
+        // The mix did reach the cases it is about.
+        assert!(matured_by_shortcut > 0);
+        assert!(approvals_after_reset > 0);
+    }
+
+    #[test]
+    fn a_keyholder_enrolled_under_30_days_waits_30_days_whatever_the_date() {
         let mut w = world(30);
         assert_eq!(w.m.keyholder_enrol(OWNER, &w.time), Ok(Reply::Done));
         w.time.wall_unix_ms += 400 * DAY_MS;
@@ -2393,6 +3062,299 @@ mod tests {
         }
     }
 
+    // A raise discards an open lowering: claimed after the raise, it would undo it.
+    #[test]
+    fn a_raise_discards_a_lowering_that_has_matured() {
+        let mut w = world(30);
+        let id = match w.lower_to(7) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        w.sleep_through_the_wait();
+        // Day 30: the day-8 gate is open. Raise to 90, through the guard and the yes.
+        match w.raise_to(90) {
+            Ok(Reply::RaiseGuarded { .. }) => {}
+            other => panic!("not guarded: {:?}", other),
+        }
+        // Not in force yet: the lowering still stands while the raise is only guarded.
+        assert!(w.is_matured());
+        w.awake_rounds(DAY);
+        assert_eq!(w.m.long_wait_answer(OWNER, true, &w.time), Ok(Reply::RaiseApplied { applied_wait_days: 90 }));
+        assert_eq!(w.m.slot(), Slot::Free);
+        assert_eq!(w.last_state(), RequestState::Discarded);
+        assert_eq!(w.m.journal()[w.m.journal().len() - 1].request_id, id);
+        refused(&mut w, Refusal::NoSuchRequest, &|w: &mut World| w.claim(id));
+        assert_eq!(w.m.applied_wait_days(), 90);
+        // A new lowering waits the 90 days now in force.
+        assert!(w.lower_to(7).is_ok());
+        assert_eq!(w.request().wait_rounds, 90 * DAY);
+    }
+
+    #[test]
+    fn a_raise_discards_a_pending_lowering_too() {
+        let mut w = world(30);
+        w.awake_rounds(7 * DAY);
+        let id = match w.lower_to(7) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        w.deliver_latest();
+        match w.raise_to(182) {
+            Ok(Reply::RaiseGuarded { .. }) => {}
+            other => panic!("not guarded: {:?}", other),
+        }
+        w.awake_rounds(DAY);
+        assert_eq!(w.m.long_wait_answer(OWNER, true, &w.time), Ok(Reply::RaiseApplied { applied_wait_days: 182 }));
+        assert_eq!(w.m.slot(), Slot::Free);
+        // Waiting out the old lowering's wait, or the new one, gives nothing to claim.
+        w.time.pass_asleep_ms(182 * DAY_MS);
+        w.tick();
+        refused(&mut w, Refusal::NoSuchRequest, &|w: &mut World| w.claim(id));
+        assert_eq!(w.m.applied_wait_days(), 182);
+    }
+
+    // Lower, mature, raise, claim, in every order the slot allows: the applied wait after
+    // the claim is never below the highest wait in force since the lowering matured.
+    #[test]
+    fn no_order_of_lower_mature_raise_and_claim_undoes_a_raise() {
+        let mut w = world(30);
+        let id = match w.lower_to(7) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        w.sleep_through_the_wait();
+        // Claimed before any raise: the lowering applies, as it waited out 30 days.
+        assert_eq!(w.claim(id), Ok(Reply::WaitLowered { id, applied_wait_days: 7 }));
+        // Raised again at once, then lowered again.
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        let second = match w.lower_to(7) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        w.sleep_through_the_wait();
+        // The guarded raise is answered after the lowering is claimed: the claim lowers to
+        // 7, and the yes then raises to 90. The raise stands.
+        match w.raise_to(90) {
+            Ok(Reply::RaiseGuarded { .. }) => {}
+            other => panic!("not guarded: {:?}", other),
+        }
+        assert_eq!(w.claim(second), Ok(Reply::WaitLowered { id: second, applied_wait_days: 7 }));
+        w.awake_rounds(DAY);
+        assert_eq!(w.m.long_wait_answer(OWNER, true, &w.time), Ok(Reply::RaiseApplied { applied_wait_days: 90 }));
+        assert_eq!(w.m.applied_wait_days(), 90);
+    }
+
+    #[test]
+    fn every_raise_is_owed_to_the_capsule_until_the_old_secret_is_retired() {
+        let mut w = world(7);
+        assert_eq!(w.m.reseal_owed(), None);
+        assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
+        assert_eq!(w.m.reseal_owed(), Some(30));
+        // A capsule sealed for a shorter wait does not settle it.
+        w.m.old_secret_retired(7);
+        assert_eq!(w.m.reseal_owed(), Some(30));
+        w.m.old_secret_retired(30);
+        assert_eq!(w.m.reseal_owed(), None);
+        // A guarded raise is owed only once it is in force, and the higher one is kept.
+        w.awake_rounds(7 * DAY);
+        assert!(w.raise_to(90).is_ok());
+        assert_eq!(w.m.reseal_owed(), None);
+        w.awake_rounds(DAY);
+        assert!(w.m.long_wait_answer(OWNER, true, &w.time).is_ok());
+        assert_eq!(w.m.reseal_owed(), Some(90));
+        w.m.old_secret_retired(90);
+        assert_eq!(w.m.reseal_owed(), None);
+        // A lowering owes nothing (SD-058).
+        let mut w = world(30);
+        let id = match w.lower_to(7) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        w.sleep_through_the_wait();
+        assert!(w.claim(id).is_ok());
+        assert_eq!(w.m.reseal_owed(), None);
+    }
+
+    // ----- The date behind the verified rounds (SD-039, SD-052) -----
+
+    #[test]
+    fn instant_leave_is_refused_while_the_date_is_behind_the_verified_rounds() {
+        // Really powered off past the cap, then the date reset to before the chain began:
+        // the estimate lags, and only the date could say the cap has passed.
+        let mut w = world_with(7, None, true, false);
+        w.off_rounds(8 * DAY);
+        w.time.wall_unix_ms = 0;
+        refused(&mut w, Refusal::DateUntrusted, &|w: &mut World| w.leave());
+        // A date set back to before the Lock round: the same.
+        w.time.wall_unix_ms = unix_ms_of_round(LOCK_ROUND - 1_000);
+        refused(&mut w, Refusal::DateUntrusted, &|w: &mut World| w.leave());
+        assert!(!w.m.instant_leave_closed());
+        // The date put right: the cap has passed by the date; a round proves it.
+        w.time.wall_unix_ms = w.time.true_unix_ms;
+        refused(&mut w, Refusal::DeadlinePassedByDateOnly, &|w: &mut World| w.leave());
+        w.deliver_latest();
+        assert!(w.m.instant_leave_closed());
+        w.pending_id();
+
+        // Inside the window, a wrong date refuses and closes nothing; the right date
+        // gives the instant exit back.
+        let mut w = world_with(7, None, true, false);
+        w.awake_rounds(10);
+        w.time.wall_unix_ms = 1_000;
+        refused(&mut w, Refusal::DateUntrusted, &|w: &mut World| w.leave());
+        w.time.wall_unix_ms = w.time.true_unix_ms;
+        match w.leave() {
+            Ok(Reply::ExitCommitted { .. }) => {}
+            other => panic!("not committed: {:?}", other),
+        }
+
+        // And with the date left wrong for good, the owner still leaves: the window
+        // closes on its own proofs and Leave becomes an ordinary request, which matures
+        // on the counter route.
+        let mut w = world_with(7, None, true, false);
+        w.time.wall_unix_ms = 0;
+        w.awake_rounds(3 * DAY);
+        let id = w.pending_id();
+        assert!(w.m.instant_leave_closed());
+        w.sleep_through_the_wait();
+        assert_eq!(w.claim(id), Ok(Reply::ExitCommitted { id }));
+    }
+
+    // An archived real round cannot become a start round while the date is behind the
+    // keeper's own verified rounds, so the newest round cannot then mature the request
+    // at once.
+    #[test]
+    fn an_archived_round_with_a_date_set_back_never_matures_a_request_at_once() {
+        let backs: [u64; 3] = [0, 1, 2];
+        for back in backs.iter() {
+            let mut w = world(7);
+            // Powered off for 30 days: the estimate is still at the Lock round.
+            w.off_rounds(30 * DAY);
+            w.time.wall_unix_ms = match *back {
+                0 => 0,
+                1 => unix_ms_of_round(LOCK_ROUND - 300),
+                _ => (BEACON_GENESIS_UNIX_SECONDS - 1) * 1_000,
+            };
+            let id = w.pending_id();
+            // An old real round, just above the estimate.
+            match w.deliver(LOCK_ROUND + 5) {
+                RoundOutcome::Accepted(a) => assert!(!a.may_start),
+                RoundOutcome::Dropped(reason) => panic!("dropped: {:?}", reason),
+            }
+            assert_eq!(w.request().start_round, None);
+            assert!(w.m.clock_refuses_rounds());
+            // Today's round: not a start round either, and nothing matures.
+            w.deliver_latest();
+            assert!(w.is_pending());
+            assert_eq!(w.request().start_round, None);
+            // The date put right: the next round is the start, and the full wait follows.
+            w.time.wall_unix_ms = w.time.true_unix_ms;
+            w.awake_rounds(1);
+            let start = w.deliver_latest();
+            assert!(!w.m.clock_refuses_rounds());
+            assert_eq!(w.request().target_round, Some(start + 7 * DAY));
+            w.off_rounds(7 * DAY - 1);
+            w.deliver_latest();
+            assert!(w.is_pending());
+            w.off_rounds(1);
+            w.deliver_latest();
+            assert!(w.is_matured());
+            assert_eq!(w.claim(id), Ok(Reply::ExitCommitted { id }));
+        }
+    }
+
+    // ----- The random generator -----
+
+    #[test]
+    fn a_random_generator_that_fails_journals_nothing() {
+        let mut w = world_with(30, None, true, false);
+        w.awake_rounds(10);
+        refused(&mut w, Refusal::RandomUnavailable, &|w: &mut World| {
+            w.m.leave(OWNER, true, &mut BrokenRandom, &w.time)
+        });
+        let mut w = world(30);
+        refused(&mut w, Refusal::RandomUnavailable, &|w: &mut World| {
+            w.m.leave(OWNER, true, &mut BrokenRandom, &w.time)
+        });
+        refused(&mut w, Refusal::RandomUnavailable, &|w: &mut World| {
+            w.m.lower_wait(OWNER, 7, &mut BrokenRandom, &w.time)
+        });
+        refused(&mut w, Refusal::RandomUnavailable, &|w: &mut World| {
+            w.m.loosen_setting(OWNER, LoosenableSetting::BrowserProfile, &mut BrokenRandom, &w.time)
+        });
+        assert!(w.m.journal().is_empty());
+        // It works again once the generator does.
+        w.pending_id();
+    }
+
+    // ----- The keyholder's challenge (SD-306) -----
+
+    #[test]
+    fn an_approval_must_carry_this_requests_own_challenge() {
+        let mut w = world_with(30, None, false, true);
+        w.awake_rounds(10);
+        let id = w.pending_id();
+        w.deliver_latest();
+        let request = w.request();
+        let (named, challenge) = w.m.approval_challenge().unwrap();
+        assert_eq!(named, id);
+        assert_eq!(challenge, w.challenge_for(id));
+        // Every journal entry of the request carries its nonce, so the challenge can be
+        // rebuilt after a restart.
+        for entry in w.m.journal().iter() {
+            assert_eq!(entry.challenge_nonce, request.nonce);
+        }
+        let other_label = MacLabel::new("Other Mac").unwrap();
+        let none: [[u8; 32]; 0] = [];
+        let wrong = [
+            // The test approval of enrolment, for the same request.
+            derive_challenge(&ChallengeFields { kind: ChallengeKind::Test, request_id: id, mac_label: &label(), items: &none[..], nonce: request.nonce }).unwrap(),
+            // Another kind: a lowering, shown to the keyholder as such.
+            derive_challenge(&ChallengeFields { kind: ChallengeKind::LowerWait { new_wait_days: 7 }, request_id: id, mac_label: &label(), items: &none[..], nonce: request.nonce }).unwrap(),
+            // Another Mac's label.
+            derive_challenge(&ChallengeFields { kind: ChallengeKind::Exit, request_id: id, mac_label: &other_label, items: &none[..], nonce: request.nonce }).unwrap(),
+            // Another nonce.
+            derive_challenge(&ChallengeFields { kind: ChallengeKind::Exit, request_id: id, mac_label: &label(), items: &none[..], nonce: [0; 32] }).unwrap(),
+        ];
+        for challenge in wrong.iter() {
+            let checked = CheckedApproval { request_id: id, challenge: *challenge, valid: true };
+            refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.m.approval(checked, &w.time));
+        }
+        // The right one is accepted once, and never again.
+        assert_eq!(w.approve(id), Ok(Reply::Done));
+        assert_eq!(w.m.approval_challenge(), None);
+        let checked = CheckedApproval { request_id: id, challenge, valid: true };
+        refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.m.approval(checked, &w.time));
+
+        // A lowering's challenge names the lowering and its new wait.
+        let mut w = world_with(30, None, false, true);
+        w.awake_rounds(10);
+        assert!(w.lower_to(7).is_ok());
+        let lowering = w.request();
+        let (_, challenge) = w.m.approval_challenge().unwrap();
+        assert_eq!(
+            Some(challenge),
+            derive_challenge(&ChallengeFields { kind: ChallengeKind::LowerWait { new_wait_days: 7 }, request_id: lowering.id, mac_label: &label(), items: &none[..], nonce: lowering.nonce })
+        );
+
+        // An approval kept from an earlier request is refused for the next one.
+        let mut w = world_with(7, None, false, true);
+        w.awake_rounds(10);
+        let first = w.pending_id();
+        w.deliver_latest();
+        let (_, old_challenge) = w.m.approval_challenge().unwrap();
+        assert_eq!(w.m.stay(&w.time), StayReply);
+        let second = w.pending_id();
+        w.awake_rounds(1);
+        w.deliver_latest();
+        assert!(first != second);
+        for named in [first, second].iter() {
+            let checked = CheckedApproval { request_id: *named, challenge: old_challenge, valid: true };
+            refused(&mut w, Refusal::ApprovalRefused, &|w: &mut World| w.m.approval(checked, &w.time));
+        }
+        assert_eq!(w.approve(second), Ok(Reply::Done));
+    }
+
     // ----- The journal -----
 
     #[test]
@@ -2404,8 +3366,9 @@ mod tests {
         assert_eq!(w.approve(id), Ok(Reply::Done));
         w.awake_rounds(1);
         w.deliver_latest();
+        // The raise voids the shortcut: the request waits out the 30 days.
         assert_eq!(w.raise_to(30), Ok(Reply::RaiseApplied { applied_wait_days: 30 }));
-        w.off_rounds(KEYHOLDER_SHORTCUT_ROUNDS);
+        w.off_rounds(30 * DAY);
         w.deliver_latest();
         assert_eq!(w.claim(id), Ok(Reply::ExitCommitted { id }));
 

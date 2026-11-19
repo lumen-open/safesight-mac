@@ -172,6 +172,8 @@ pub const ROTATION_INTERVAL_CAP_DAYS: u64 = 30;
 /// `CAPSULE_FRESH_MAX`: hours of boot-counter time since a round was verified, inside which
 /// a capsule may be sealed on it (SD-059). A proposal (ST-006).
 pub const CAPSULE_FRESH_MAX_HOURS: u64 = 24;
+/// `CAPSULE_FRESH_MAX` in milliseconds of the boot counter.
+pub const CAPSULE_FRESH_MAX_MS: u64 = CAPSULE_FRESH_MAX_HOURS * 3_600_000;
 
 /// `CAPSULE_OPEN_WARNING`: days before a capsule's target at which the app warns (SD-064).
 pub const CAPSULE_OPEN_WARNING_DAYS: u64 = 7;
@@ -214,6 +216,17 @@ pub const COUNTER_SAVE_SECONDS: u64 = 60;
 
 /// `BEACON_MIRRORS`: at least this many mirrors, run by different operators (SD-038).
 pub const BEACON_MIRRORS_MIN: usize = 2;
+
+/// Round signatures that fail, per `BAD_ROUND_WINDOW`, before further rounds are dropped
+/// without the pairing check. Not a register value: a bound on the work a flood of false
+/// rounds can cause. It can only delay a good round to the next window, and the app
+/// offers one every `BEACON_READ`.
+// OPEN: register 5a has no such value. Working value.
+pub const BAD_ROUND_BUDGET: u32 = 16;
+
+/// The window of `BAD_ROUND_BUDGET`, in milliseconds of the boot counter.
+// OPEN: register 5a has no such value. Working value: one minute.
+pub const BAD_ROUND_WINDOW_MS: u64 = 60_000;
 
 // ----- Small helpers that only apply the numbers above -----
 

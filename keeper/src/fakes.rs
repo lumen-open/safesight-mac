@@ -109,9 +109,9 @@ impl FakeRandom {
 }
 
 impl RandomSource for FakeRandom {
-    fn request_id(&mut self) -> [u8; 16] {
+    fn request_id(&mut self) -> Result<[u8; 16], RandomUnavailable> {
         self.next = self.next.wrapping_add(1);
-        [self.next; 16]
+        Ok([self.next; 16])
     }
 
     fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable> {
@@ -141,10 +141,10 @@ impl SeededRandom {
 }
 
 impl RandomSource for SeededRandom {
-    fn request_id(&mut self) -> [u8; 16] {
+    fn request_id(&mut self) -> Result<[u8; 16], RandomUnavailable> {
         let mut out = [0u8; 16];
-        let _ = self.fill(&mut out);
-        out
+        self.fill(&mut out)?;
+        Ok(out)
     }
 
     fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable> {
@@ -173,8 +173,8 @@ impl RandomSource for SeededRandom {
 pub struct BrokenRandom;
 
 impl RandomSource for BrokenRandom {
-    fn request_id(&mut self) -> [u8; 16] {
-        [0u8; 16]
+    fn request_id(&mut self) -> Result<[u8; 16], RandomUnavailable> {
+        Err(RandomUnavailable)
     }
 
     fn fill(&mut self, _out: &mut [u8]) -> Result<(), RandomUnavailable> {
@@ -195,7 +195,10 @@ impl TestDir {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let number = NEXT.fetch_add(1, Ordering::SeqCst);
-        let path = std::env::temp_dir().join(format!(
+        // The real path, with no link in it (on macOS the temporary folder is under /var,
+        // a link to /private/var), so that the store's checks of every parent folder run.
+        let base = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+        let path = base.join(format!(
             "safesightmac-keeper-test-{}-{}-{}",
             std::process::id(),
             number,

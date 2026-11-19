@@ -12,6 +12,7 @@
 #![forbid(unsafe_code)]
 
 pub mod age;
+pub mod approval;
 pub mod beacon;
 pub mod boundary;
 pub mod capsule;

@@ -3,21 +3,32 @@
 //! register 8b), and the local capsule folder.
 //!
 //! One folder, passed in. The hands layer makes it root-owned with mode 0700 and excludes
-//! it from backups; this module refuses a folder that is a link or that anyone but its
-//! owner could write to. Three ways of writing:
+//! it from backups. This module refuses a folder, or any folder above it, that is a link,
+//! that is not owned by root, or that anyone but its owner could write to (SD-307). Every
+//! file is opened without following a link, and must be a plain file. Three ways of
+//! writing:
 //!
 //! - **Two copies** (`<name>.a`, `<name>.b`) for the wait record now, and later the
 //!   keyholder pin and the sealed admin secret: each copy is written to a temporary name,
 //!   flushed to storage, renamed over the copy, and the folder is flushed; copy A first,
 //!   then copy B. On reading, the valid copy with the higher sequence number wins and the
-//!   other is rewritten from it.
+//!   other is rewritten from it. A copy that cannot be read at all (an I/O error, not a
+//!   damaged record) is a fault: nothing is rewritten, so a passing error can never roll a
+//!   record back to the older copy.
 //! - **Two slots** (`clock.a`, `clock.b`) for the clock record: fixed-size reserved files
 //!   written in place. A write goes over the older or damaged slot only; the newer slot is
 //!   not touched, so a stop at any moment leaves one valid slot. No field of a new record
 //!   may move back (`ClockRecord::may_follow`).
-//! - **The request journal** (`journal.a`, `journal.b`): fixed-size reserved files of
-//!   entry slots, appended in place, copy A then copy B, each flushed before the step it
-//!   describes may run.
+//! - **The request journal**: two pairs of fixed-size reserved files (`journal.a` and
+//!   `journal.b`, `journal.c` and `journal.d`), each file a header slot and then entry
+//!   slots. Entries are appended in place to the current pair, copy A then copy B, each
+//!   flushed before the step it describes may run. When the current pair is full, the
+//!   journal is compacted into the other pair: only the newest entry, which holds the
+//!   whole state of the newest request, is written there, in both copies, and only then
+//!   the other pair's header, with the next epoch, in copy A and then copy B. The header
+//!   is the commit: until it is written, the old pair stands whole; after, the new one
+//!   does. So every entry is in two copies at every step, and a stop at any step leaves
+//!   the journal as it was before the compaction or as it is after it.
 //!
 //! The local capsule folder (register 8b: root-owned, world-readable) has two reserved
 //! slots of its own (`capsule.a`, `capsule.b`).
@@ -34,12 +45,12 @@
 //! (their sizes are not specified), and the sealed admin secret.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{ErrorKind, Write};
-use std::os::unix::fs::{FileExt, OpenOptionsExt, PermissionsExt};
-use std::path::{Path, PathBuf};
+use std::io::{ErrorKind, Read, Write};
+use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
+use std::path::{Component, Path, PathBuf};
 
 use crate::frame::RecordError;
-use crate::records::{Capsule, ClockRecord, JournalEntry, WaitRecord};
+use crate::records::{Capsule, ClockRecord, JournalEntry, JournalHeader, WaitRecord};
 
 /// Which record a store result is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,9 +64,10 @@ pub enum RecordName {
 /// Why the store did not do what was asked. A refused write leaves what was there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StoreError {
-    /// The folder is missing, is not a folder, is a link, or others can write to it.
+    /// The folder, or a folder above it, is missing, is not a folder, is a link, is not
+    /// owned by root, or others can write to it. Or the path is not absolute and plain.
     FolderNotPrivate,
-    /// A file operation failed.
+    /// A file operation failed, or a file is not a plain file. Nothing was rewritten.
     Io(ErrorKind),
     /// Neither copy has ever been written. Only Lock writes a first copy. After Lock the
     /// caller treats this exactly as `BothUnreadable` (SD-227).
@@ -75,7 +87,8 @@ pub enum StoreError {
     ReadBack(RecordName),
     /// A reserved file is missing or is not its fixed size.
     NotReserved(RecordName),
-    /// The journal has no free slot.
+    /// The journal has no free slot even after compaction. Cannot happen with two or
+    /// more entry slots; kept so that it is a refusal and never a panic.
     JournalFull,
     /// An entry before the journal's last one is damaged in both copies.
     JournalHole,
@@ -85,12 +98,11 @@ fn io(error: std::io::Error) -> StoreError {
     StoreError::Io(error.kind())
 }
 
-/// The number of entry slots in each copy of the request journal.
+/// The number of entry slots in each copy of the request journal. Each file has one more
+/// slot in front, for the header.
 // OPEN: SD-225 / C02-18 - the size of the reserved journal file is not specified, and
-// neither is what happens when it is full (a compaction or a second file). Working value:
-// 2,048 entries, about 178 KB a copy. A full journal refuses the append; the core must
-// keep room for the entry that closes an open request, which is part of replay and not
-// written yet.
+// neither is what happens when it is full. Working value: 2,048 entries, about 244 KB a
+// file, four files. A full pair is compacted into the other (see the module comment).
 pub const JOURNAL_SLOTS: usize = 2_048;
 
 /// What a load did besides reading.
@@ -136,38 +148,136 @@ impl TwoCopyRecord for WaitRecord {
     }
 }
 
-/// True if `dir` is a real folder, not a link, that only its owner can write to.
-fn folder_is_private(dir: &Path) -> bool {
+/// Whose folders the store accepts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Owner {
+    /// The real configuration: the folder and every folder above it owned by root.
+    Root,
+    /// Tests only: the folder's own owner, or root, so that the tests run as a normal
+    /// user in a scratch folder. This variant does not exist outside `cfg(test)`, so no
+    /// release build can reach it.
+    #[cfg(test)]
+    TestUser(u32),
+}
+
+impl Owner {
+    fn accepts(self, uid: u32) -> bool {
+        match self {
+            Owner::Root => uid == 0,
+            #[cfg(test)]
+            Owner::TestUser(user) => uid == user || uid == 0,
+        }
+    }
+
+    /// Whether a root-owned folder above, writable by all but with the sticky bit (as
+    /// `/private/tmp`), is accepted. Never in the real configuration.
+    fn allows_sticky_parent(self) -> bool {
+        match self {
+            Owner::Root => false,
+            #[cfg(test)]
+            Owner::TestUser(_) => true,
+        }
+    }
+}
+
+const WRITABLE_BY_OTHERS: u32 = 0o022;
+const STICKY: u32 = 0o1000;
+
+/// True if `dir` is an absolute, plain path to a real folder, not a link, owned as
+/// `owner` asks and writable by its owner only; and every folder above it is the same,
+/// so that nobody else can replace it or anything in it (SD-307).
+fn folder_is_private(dir: &Path, owner: Owner) -> bool {
+    if !dir.is_absolute() {
+        return false;
+    }
+    for part in dir.components() {
+        match part {
+            Component::RootDir | Component::Normal(_) => {}
+            _ => return false,
+        }
+    }
     let meta = match fs::symlink_metadata(dir) {
         Ok(m) => m,
         Err(_) => return false,
     };
-    if !meta.file_type().is_dir() || meta.file_type().is_symlink() {
+    if meta.file_type().is_symlink() || !meta.file_type().is_dir() {
         return false;
     }
-    meta.permissions().mode() & 0o022 == 0
+    if meta.mode() & WRITABLE_BY_OTHERS != 0 || !owner.accepts(meta.uid()) {
+        return false;
+    }
+    for above in dir.ancestors().skip(1) {
+        let m = match fs::symlink_metadata(above) {
+            Ok(m) => m,
+            Err(_) => return false,
+        };
+        if m.file_type().is_symlink() || !m.file_type().is_dir() || !owner.accepts(m.uid()) {
+            return false;
+        }
+        if m.mode() & WRITABLE_BY_OTHERS != 0 {
+            let sticky_root = m.mode() & STICKY != 0 && m.uid() == 0;
+            if !(sticky_root && owner.allows_sticky_parent()) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// The flags every store file is opened with: never through a link, and never waiting on
+/// something that is not a plain file.
+const OPEN_FLAGS: i32 = libc::O_NOFOLLOW | libc::O_NONBLOCK;
+
+fn not_a_plain_file() -> std::io::Error {
+    std::io::Error::new(ErrorKind::Other, "not a plain file")
+}
+
+fn plain(file: File) -> std::io::Result<File> {
+    if file.metadata()?.file_type().is_file() {
+        Ok(file)
+    } else {
+        Err(not_a_plain_file())
+    }
+}
+
+fn open_existing(path: &Path, write: bool) -> std::io::Result<File> {
+    let file = OpenOptions::new().read(true).write(write).custom_flags(OPEN_FLAGS).open(path)?;
+    plain(file)
+}
+
+fn read_file(path: &Path) -> std::io::Result<Vec<u8>> {
+    let mut file = open_existing(path, false)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+/// True if anything is at `path`, a link included.
+fn present(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok()
 }
 
 fn sync_folder(dir: &Path) -> Result<(), StoreError> {
-    let folder = File::open(dir).map_err(io)?;
+    let folder = OpenOptions::new().read(true).custom_flags(OPEN_FLAGS).open(dir).map_err(io)?;
     folder.sync_all().map_err(io)
 }
 
-/// One file as found: absent, or its bytes. A file that cannot be read counts as damaged
-/// bytes, so that the other copy is used.
+/// One file as found: absent, or its bytes.
 enum Found {
     Absent,
     Bytes(Vec<u8>),
 }
 
-fn read_found(path: &Path) -> Found {
-    match fs::read(path) {
-        Ok(bytes) => Found::Bytes(bytes),
+/// A missing file is absent. Any other failure to read it is a fault, never "damaged":
+/// the other copy is not taken and nothing is rewritten.
+fn read_found(path: &Path) -> Result<Found, StoreError> {
+    match read_file(path) {
+        Ok(bytes) => Ok(Found::Bytes(bytes)),
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
-                Found::Absent
+                Ok(Found::Absent)
             } else {
-                Found::Bytes(Vec::new())
+                Err(io(e))
             }
         }
     }
@@ -181,19 +291,21 @@ fn write_whole(dir: &Path, path: &Path, bytes: &[u8], mode: u32, name: RecordNam
     temporary.push(".new");
     let temporary = PathBuf::from(temporary);
     {
-        let mut file = OpenOptions::new()
+        let file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .mode(mode)
+            .custom_flags(OPEN_FLAGS)
             .open(&temporary)
             .map_err(io)?;
+        let mut file = plain(file).map_err(io)?;
         file.write_all(bytes).map_err(io)?;
         file.sync_all().map_err(io)?;
     }
     fs::rename(&temporary, path).map_err(io)?;
     sync_folder(dir)?;
-    match fs::read(path) {
+    match read_file(path) {
         Ok(back) => {
             if back == bytes {
                 Ok(())
@@ -215,7 +327,7 @@ fn write_in_place(path: &Path, size: usize, offset: usize, bytes: &[u8], name: R
     if end > size {
         return Err(StoreError::NotReserved(name));
     }
-    let file = match OpenOptions::new().read(true).write(true).open(path) {
+    let file = match open_existing(path, true) {
         Ok(f) => f,
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
@@ -240,7 +352,7 @@ fn write_in_place(path: &Path, size: usize, offset: usize, bytes: &[u8], name: R
 
 /// Reads a reserved file whole, refusing one that is missing or not its fixed size.
 fn read_reserved(path: &Path, size: usize, name: RecordName) -> Result<Vec<u8>, StoreError> {
-    match fs::read(path) {
+    match read_file(path) {
         Ok(bytes) => {
             if bytes.len() == size {
                 Ok(bytes)
@@ -260,7 +372,7 @@ fn read_reserved(path: &Path, size: usize, name: RecordName) -> Result<Vec<u8>, 
 
 /// Makes a reserved file of `size` zero bytes. Refuses if anything is there already.
 fn reserve_file(path: &Path, size: usize, mode: u32, name: RecordName) -> Result<(), StoreError> {
-    let mut file = match OpenOptions::new().write(true).create_new(true).mode(mode).open(path) {
+    let mut file = match OpenOptions::new().write(true).create_new(true).mode(mode).custom_flags(OPEN_FLAGS).open(path) {
         Ok(f) => f,
         Err(e) => {
             if e.kind() == ErrorKind::AlreadyExists {
@@ -293,6 +405,88 @@ enum Slot<R> {
     Damaged,
 }
 
+/// One of the journal's two pairs of files. Pair X only ever holds even epochs (its
+/// empty header is epoch 0), pair Y only odd ones, so the two never tie.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pair {
+    X,
+    Y,
+}
+
+impl Pair {
+    fn files(self) -> [&'static str; 2] {
+        match self {
+            Pair::X => ["journal.a", "journal.b"],
+            Pair::Y => ["journal.c", "journal.d"],
+        }
+    }
+
+    fn other(self) -> Pair {
+        match self {
+            Pair::X => Pair::Y,
+            Pair::Y => Pair::X,
+        }
+    }
+
+    fn of_epoch(epoch: u64) -> Pair {
+        if epoch % 2 == 0 {
+            Pair::X
+        } else {
+            Pair::Y
+        }
+    }
+}
+
+/// A header slot as found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HeaderSlot {
+    Empty,
+    Valid(u64),
+    Damaged,
+}
+
+fn header_slot(bytes: &[u8], pair: Pair) -> HeaderSlot {
+    if all_zero(bytes) {
+        return HeaderSlot::Empty;
+    }
+    if bytes.len() < JournalHeader::LEN || !all_zero(&bytes[JournalHeader::LEN..]) {
+        return HeaderSlot::Damaged;
+    }
+    match JournalHeader::decode(&bytes[..JournalHeader::LEN]) {
+        Ok(header) => {
+            if Pair::of_epoch(header.epoch) == pair {
+                HeaderSlot::Valid(header.epoch)
+            } else {
+                HeaderSlot::Damaged
+            }
+        }
+        Err(_) => HeaderSlot::Damaged,
+    }
+}
+
+fn header_slot_bytes(epoch: u64) -> Result<Vec<u8>, StoreError> {
+    let mut bytes = JournalHeader { epoch }.encode().map_err(StoreError::Record)?;
+    bytes.resize(JournalEntry::LEN, 0);
+    Ok(bytes)
+}
+
+/// One pair's two files and its epoch, as read.
+struct PairRead {
+    copies: [Vec<u8>; 2],
+    /// None: pair Y has never been committed to.
+    epoch: Option<u64>,
+    /// A copy whose header must be rewritten to the epoch above: 0 for copy A, 1 for B.
+    header_repair: Option<usize>,
+}
+
+/// One planned write of a compaction, so that the test can stop after any of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PlannedWrite {
+    file: &'static str,
+    offset: usize,
+    bytes: Vec<u8>,
+}
+
 /// The keeper store.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Store {
@@ -304,25 +498,39 @@ pub struct Store {
 /// journal (outside the store) and the "next" secret slot have no size yet.
 // OPEN: SD-225 / C02-18 - the sizes of the exit journal and of the "next" secret slot are
 // not specified, so neither is reserved here.
-pub fn reserved_files() -> [(&'static str, usize, RecordName); 4] {
+pub fn reserved_files() -> [(&'static str, usize, RecordName); 6] {
+    let journal = (JOURNAL_SLOTS + 1) * JournalEntry::LEN;
     [
         ("clock.a", ClockRecord::LEN, RecordName::ClockRecord),
         ("clock.b", ClockRecord::LEN, RecordName::ClockRecord),
-        ("journal.a", JOURNAL_SLOTS * JournalEntry::LEN, RecordName::Journal),
-        ("journal.b", JOURNAL_SLOTS * JournalEntry::LEN, RecordName::Journal),
+        ("journal.a", journal, RecordName::Journal),
+        ("journal.b", journal, RecordName::Journal),
+        ("journal.c", journal, RecordName::Journal),
+        ("journal.d", journal, RecordName::Journal),
     ]
 }
 
 const STORE_FILE_MODE: u32 = 0o600;
 
 impl Store {
-    /// The store in `dir`. Refuses a folder that is not private.
+    /// The store in `dir`, in the real configuration: `dir` and every folder above it
+    /// root-owned, real folders, writable by their owner only.
     pub fn open(dir: &Path) -> Result<Store, StoreError> {
-        Store::open_with_journal_slots(dir, JOURNAL_SLOTS)
+        Store::open_as(dir, Owner::Root, JOURNAL_SLOTS)
     }
 
-    fn open_with_journal_slots(dir: &Path, journal_slots: usize) -> Result<Store, StoreError> {
-        if !folder_is_private(dir) {
+    /// Tests only: the store in a scratch folder owned by the user running the tests.
+    #[cfg(test)]
+    pub(crate) fn open_for_tests(dir: &Path, journal_slots: usize) -> Result<Store, StoreError> {
+        let uid = fs::symlink_metadata(dir).map_err(io)?.uid();
+        Store::open_as(dir, Owner::TestUser(uid), journal_slots)
+    }
+
+    fn open_as(dir: &Path, owner: Owner, journal_slots: usize) -> Result<Store, StoreError> {
+        if journal_slots < 2 {
+            return Err(StoreError::JournalFull);
+        }
+        if !folder_is_private(dir, owner) {
             return Err(StoreError::FolderNotPrivate);
         }
         Ok(Store { dir: dir.to_path_buf(), journal_slots })
@@ -332,8 +540,9 @@ impl Store {
         self.dir.join(name)
     }
 
-    fn journal_size(&self) -> usize {
-        self.journal_slots * JournalEntry::LEN
+    /// The size of each journal file: the header slot and the entry slots.
+    fn journal_file_size(&self) -> usize {
+        (self.journal_slots + 1) * JournalEntry::LEN
     }
 
     /// At Lock: makes every reserved file at its fixed size, filled with zeros (SD-225).
@@ -343,7 +552,7 @@ impl Store {
         let files = reserved_files();
         while i < files.len() {
             let (name, _, record) = files[i];
-            if self.path(name).exists() {
+            if present(&self.path(name)) {
                 return Err(StoreError::AlreadyExists(record));
             }
             i += 1;
@@ -351,7 +560,7 @@ impl Store {
         i = 0;
         while i < files.len() {
             let (name, size, record) = files[i];
-            let size = if record == RecordName::Journal { self.journal_size() } else { size };
+            let size = if record == RecordName::Journal { self.journal_file_size() } else { size };
             reserve_file(&self.path(name), size, STORE_FILE_MODE, record)?;
             i += 1;
         }
@@ -369,7 +578,7 @@ impl Store {
     pub fn create<R: TwoCopyRecord>(&self, first: &R) -> Result<(), StoreError> {
         let bytes = first.encode_record().map_err(StoreError::Record)?;
         let (a, b) = self.copy_paths::<R>();
-        if a.exists() || b.exists() {
+        if present(&a) || present(&b) {
             return Err(StoreError::AlreadyExists(R::NAME));
         }
         write_whole(&self.dir, &a, &bytes, STORE_FILE_MODE, R::NAME)?;
@@ -377,11 +586,12 @@ impl Store {
     }
 
     /// Reads a two-copy record. The valid copy with the higher sequence number wins; the
-    /// other copy, if damaged, missing or older, is rewritten from it.
+    /// other copy, if damaged, missing or older, is rewritten from it. If either copy
+    /// cannot be read at all, that is a fault, and nothing is rewritten.
     pub fn load<R: TwoCopyRecord>(&self) -> Result<Loaded<R>, StoreError> {
         let (a, b) = self.copy_paths::<R>();
-        let found_a = read_found(&a);
-        let found_b = read_found(&b);
+        let found_a = read_found(&a)?;
+        let found_b = read_found(&b)?;
         let absent_a = matches!(found_a, Found::Absent);
         let absent_b = matches!(found_b, Found::Absent);
         let valid = |found: Found| -> Option<(R, Vec<u8>)> {
@@ -522,20 +732,68 @@ impl Store {
         }
     }
 
-    /// Reads the journal from both copies. An entry valid in one copy only is taken and
-    /// the other copy is repaired. A damaged last entry, in both copies, is a torn append:
-    /// it is ignored and the step it would have described is treated as not started
-    /// (chapter 02 section 8). A damaged entry before the last is a fault.
-    pub fn load_journal(&self) -> Result<JournalState, StoreError> {
-        let size = self.journal_size();
-        let a = read_reserved(&self.path("journal.a"), size, RecordName::Journal)?;
-        let b = read_reserved(&self.path("journal.b"), size, RecordName::Journal)?;
+    /// Reads one pair's files and works out its epoch. A header valid in one copy is
+    /// taken, as an entry is; two valid headers that differ are the trace of a stop between
+    /// the two header writes of a compaction, which writes every entry of both copies
+    /// before either header, so the higher is taken. A header damaged in one copy and empty
+    /// in the other is a header write that never finished: the pair was not committed to.
+    fn read_pair(&self, pair: Pair) -> Result<PairRead, StoreError> {
+        let size = self.journal_file_size();
+        let files = pair.files();
+        let a = read_reserved(&self.path(files[0]), size, RecordName::Journal)?;
+        let b = read_reserved(&self.path(files[1]), size, RecordName::Journal)?;
         let len = JournalEntry::LEN;
+        let ha = header_slot(&a[..len], pair);
+        let hb = header_slot(&b[..len], pair);
+        let never = match pair {
+            Pair::X => Some(0),
+            Pair::Y => None,
+        };
+        let (epoch, header_repair) = match (ha, hb) {
+            (HeaderSlot::Valid(ea), HeaderSlot::Valid(eb)) => {
+                if ea == eb {
+                    (Some(ea), None)
+                } else if ea > eb {
+                    (Some(ea), Some(1))
+                } else {
+                    (Some(eb), Some(0))
+                }
+            }
+            (HeaderSlot::Valid(ea), _) => (Some(ea), Some(1)),
+            (_, HeaderSlot::Valid(eb)) => (Some(eb), Some(0)),
+            (HeaderSlot::Damaged, HeaderSlot::Damaged) => return Err(StoreError::BothUnreadable(RecordName::Journal)),
+            _ => (never, None),
+        };
+        Ok(PairRead { copies: [a, b], epoch, header_repair })
+    }
+
+    /// Reads the journal from its current pair. An entry valid in one copy only is taken
+    /// and the other copy is repaired. A damaged last entry, in both copies, is a torn
+    /// append: it is ignored and the step it would have described is treated as not
+    /// started (chapter 02 section 8). A damaged entry before the last is a fault.
+    pub fn load_journal(&self) -> Result<JournalState, StoreError> {
+        let x = self.read_pair(Pair::X)?;
+        let y = self.read_pair(Pair::Y)?;
+        let x_epoch = match x.epoch {
+            Some(e) => e,
+            None => 0,
+        };
+        let y_epoch = y.epoch;
+        let (current, pair, epoch) = match y_epoch {
+            Some(ey) if ey > x_epoch => (y, Pair::Y, ey),
+            _ => (x, Pair::X, x_epoch),
+        };
+        let files = pair.files();
+        let size = self.journal_file_size();
+        let len = JournalEntry::LEN;
+        let a = &current.copies[0];
+        let b = &current.copies[1];
+        let slot_of = |copy: &Vec<u8>, i: usize| -> Vec<u8> { copy[(i + 1) * len..(i + 2) * len].to_vec() };
         // The last slot that is not empty in either copy.
         let mut used = 0;
         let mut i = 0;
         while i < self.journal_slots {
-            if !all_zero(&a[i * len..(i + 1) * len]) || !all_zero(&b[i * len..(i + 1) * len]) {
+            if !all_zero(&slot_of(a, i)) || !all_zero(&slot_of(b, i)) {
                 used = i + 1;
             }
             i += 1;
@@ -545,8 +803,8 @@ impl Store {
         let mut next_slot = used;
         i = 0;
         while i < used {
-            let slot_a = Store::journal_slot(&a[i * len..(i + 1) * len]);
-            let slot_b = Store::journal_slot(&b[i * len..(i + 1) * len]);
+            let slot_a = Store::journal_slot(&slot_of(a, i));
+            let slot_b = Store::journal_slot(&slot_of(b, i));
             match (slot_a, slot_b) {
                 (Slot::Valid(ea, ba), Slot::Valid(_, bb)) => {
                     if ba != bb {
@@ -556,11 +814,11 @@ impl Store {
                 }
                 (Slot::Valid(ea, ba), _) => {
                     entries.push(ea);
-                    repairs.push(("journal.b", i, ba));
+                    repairs.push((files[1], (i + 1) * len, ba));
                 }
                 (_, Slot::Valid(eb, bb)) => {
                     entries.push(eb);
-                    repairs.push(("journal.a", i, bb));
+                    repairs.push((files[0], (i + 1) * len, bb));
                 }
                 _ => {
                     if i + 1 == used {
@@ -572,9 +830,12 @@ impl Store {
             }
             i += 1;
         }
+        if let Some(copy) = current.header_repair {
+            repairs.push((files[copy], 0, header_slot_bytes(epoch)?));
+        }
         let mut repair = Repair::None;
-        for (name, index, bytes) in repairs.iter() {
-            match write_in_place(&self.path(name), size, index * len, bytes, RecordName::Journal) {
+        for (name, offset, bytes) in repairs.iter() {
+            match write_in_place(&self.path(name), size, *offset, bytes, RecordName::Journal) {
                 Ok(()) => {
                     if repair == Repair::None {
                         repair = Repair::Done;
@@ -584,31 +845,72 @@ impl Store {
                 Err(_) => repair = Repair::Failed(ErrorKind::Other),
             }
         }
-        Ok(JournalState { entries, next_slot, repair })
+        Ok(JournalState { entries, next_slot, epoch, repair })
     }
 
-    /// Appends one entry: written and flushed in copy A, then in copy B. When this returns
-    /// `Ok`, the step the entry describes may run.
+    /// The writes that compact a full journal into the other pair, in order: the entry
+    /// slots of copy A, then of copy B (the newest entry, then zeros), then the header of
+    /// copy A, then of copy B, with the next epoch. Each is flushed and read back.
+    fn compaction_plan(&self, state: &JournalState) -> Result<Vec<PlannedWrite>, StoreError> {
+        let target = Pair::of_epoch(state.epoch).other();
+        let epoch = match state.epoch.checked_add(1) {
+            Some(e) => e,
+            None => return Err(StoreError::JournalFull),
+        };
+        let len = JournalEntry::LEN;
+        let mut slots = vec![0u8; self.journal_slots * len];
+        if let Some(newest) = state.entries.last() {
+            let bytes = newest.encode().map_err(StoreError::Record)?;
+            slots[..len].copy_from_slice(&bytes);
+        }
+        let header = header_slot_bytes(epoch)?;
+        let files = target.files();
+        Ok(vec![
+            PlannedWrite { file: files[0], offset: len, bytes: slots.clone() },
+            PlannedWrite { file: files[1], offset: len, bytes: slots },
+            PlannedWrite { file: files[0], offset: 0, bytes: header.clone() },
+            PlannedWrite { file: files[1], offset: 0, bytes: header },
+        ])
+    }
+
+    fn compact_journal(&self, state: &JournalState) -> Result<(), StoreError> {
+        let size = self.journal_file_size();
+        for write in self.compaction_plan(state)?.iter() {
+            write_in_place(&self.path(write.file), size, write.offset, &write.bytes, RecordName::Journal)?;
+        }
+        Ok(())
+    }
+
+    /// Appends one entry: written and flushed in copy A, then in copy B, of the current
+    /// pair. If the pair is full, the journal is compacted into the other pair first.
+    /// When this returns `Ok`, the step the entry describes may run.
     pub fn append_journal(&self, entry: &JournalEntry) -> Result<(), StoreError> {
         let bytes = entry.encode().map_err(StoreError::Record)?;
-        let state = self.load_journal()?;
+        let mut state = self.load_journal()?;
         if state.next_slot >= self.journal_slots {
-            return Err(StoreError::JournalFull);
+            self.compact_journal(&state)?;
+            state = self.load_journal()?;
+            if state.next_slot >= self.journal_slots {
+                return Err(StoreError::JournalFull);
+            }
         }
-        let size = self.journal_size();
-        let offset = state.next_slot * JournalEntry::LEN;
-        write_in_place(&self.path("journal.a"), size, offset, &bytes, RecordName::Journal)?;
-        write_in_place(&self.path("journal.b"), size, offset, &bytes, RecordName::Journal)
+        let files = Pair::of_epoch(state.epoch).files();
+        let size = self.journal_file_size();
+        let offset = (state.next_slot + 1) * JournalEntry::LEN;
+        write_in_place(&self.path(files[0]), size, offset, &bytes, RecordName::Journal)?;
+        write_in_place(&self.path(files[1]), size, offset, &bytes, RecordName::Journal)
     }
 }
 
 /// The journal as read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JournalState {
-    /// Every entry, in the order written.
+    /// Every entry of the current pair, in the order written.
     pub entries: Vec<JournalEntry>,
     /// The slot the next entry goes to.
     pub next_slot: usize,
+    /// The current pair's epoch: 0 before the first compaction, one more at each.
+    pub epoch: u64,
     pub repair: Repair,
 }
 
@@ -630,10 +932,21 @@ pub struct CapsuleFolder {
 }
 
 impl CapsuleFolder {
-    /// The capsule folder in `dir`. Refuses a folder that is a link or that others can
-    /// write to. Others may read it.
+    /// The capsule folder in `dir`, in the real configuration: it and every folder above it
+    /// root-owned, real folders that others cannot write to. Others may read it.
     pub fn open(dir: &Path) -> Result<CapsuleFolder, StoreError> {
-        if !folder_is_private(dir) {
+        CapsuleFolder::open_as(dir, Owner::Root)
+    }
+
+    /// Tests only: the folder in a scratch folder owned by the user running the tests.
+    #[cfg(test)]
+    pub(crate) fn open_for_tests(dir: &Path) -> Result<CapsuleFolder, StoreError> {
+        let uid = fs::symlink_metadata(dir).map_err(io)?.uid();
+        CapsuleFolder::open_as(dir, Owner::TestUser(uid))
+    }
+
+    fn open_as(dir: &Path, owner: Owner) -> Result<CapsuleFolder, StoreError> {
+        if !folder_is_private(dir, owner) {
             return Err(StoreError::FolderNotPrivate);
         }
         Ok(CapsuleFolder { dir: dir.to_path_buf() })
@@ -643,7 +956,7 @@ impl CapsuleFolder {
     pub fn reserve(&self) -> Result<(), StoreError> {
         let a = self.dir.join("capsule.a");
         let b = self.dir.join("capsule.b");
-        if a.exists() || b.exists() {
+        if present(&a) || present(&b) {
             return Err(StoreError::AlreadyExists(RecordName::Capsule));
         }
         reserve_file(&a, Capsule::LEN, CAPSULE_FILE_MODE, RecordName::Capsule)?;
@@ -722,9 +1035,19 @@ impl CapsuleFolder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
     use crate::capsule::{seal, AdminSecret, RecoveryIdentity, RecoveryRecipients, SealError};
     use crate::fakes::{SeededRandom, TestDir};
     use crate::records::{GuardedRaise, RequestKind, RequestState};
+
+    fn test_store(dir: &TestDir) -> Store {
+        Store::open_for_tests(&dir.path, JOURNAL_SLOTS).unwrap()
+    }
+
+    /// The byte offset of entry slot `i` in a journal file: after the header slot.
+    fn at(i: usize) -> usize {
+        (i + 1) * JournalEntry::LEN
+    }
 
     fn wait(sequence: u64, applied: u16) -> WaitRecord {
         WaitRecord {
@@ -769,6 +1092,7 @@ mod tests {
             matured_round: None,
             claim_deadline: None,
             approval_used: false,
+            challenge_nonce: [n; 32],
         }
     }
 
@@ -792,11 +1116,11 @@ mod tests {
     #[test]
     fn a_folder_others_can_write_to_is_refused() {
         let dir = TestDir::new("folder");
-        assert!(Store::open(&dir.path).is_ok());
+        assert!(Store::open_for_tests(&dir.path, JOURNAL_SLOTS).is_ok());
         fs::set_permissions(&dir.path, fs::Permissions::from_mode(0o777)).unwrap();
-        assert_eq!(Store::open(&dir.path), Err(StoreError::FolderNotPrivate));
+        assert_eq!(Store::open_for_tests(&dir.path, JOURNAL_SLOTS), Err(StoreError::FolderNotPrivate));
         fs::set_permissions(&dir.path, fs::Permissions::from_mode(0o720)).unwrap();
-        assert_eq!(Store::open(&dir.path), Err(StoreError::FolderNotPrivate));
+        assert_eq!(Store::open_for_tests(&dir.path, JOURNAL_SLOTS), Err(StoreError::FolderNotPrivate));
         fs::set_permissions(&dir.path, fs::Permissions::from_mode(0o700)).unwrap();
 
         // A link to a private folder, a file, and nothing at all.
@@ -805,18 +1129,145 @@ mod tests {
         fs::create_dir(&inner).unwrap();
         fs::set_permissions(&inner, fs::Permissions::from_mode(0o700)).unwrap();
         std::os::unix::fs::symlink(&inner, &link).unwrap();
-        assert_eq!(Store::open(&link), Err(StoreError::FolderNotPrivate));
+        assert_eq!(Store::open_for_tests(&link, JOURNAL_SLOTS), Err(StoreError::FolderNotPrivate));
         let file = dir.path.join("file");
         fs::write(&file, b"x").unwrap();
-        assert_eq!(Store::open(&file), Err(StoreError::FolderNotPrivate));
-        assert_eq!(Store::open(&dir.path.join("missing")), Err(StoreError::FolderNotPrivate));
+        assert_eq!(Store::open_for_tests(&file, JOURNAL_SLOTS), Err(StoreError::FolderNotPrivate));
+        assert!(Store::open_for_tests(&dir.path.join("missing"), JOURNAL_SLOTS).is_err());
         assert_eq!(CapsuleFolder::open(&dir.path.join("missing")), Err(StoreError::FolderNotPrivate));
+        assert_eq!(Store::open(&dir.path.join("missing")), Err(StoreError::FolderNotPrivate));
+    }
+
+    // SD-307: in the real configuration the folder and every folder above it must be
+    // owned by root. The tests run as a normal user, so the real configuration refuses
+    // their scratch folder; only the test-only option, which no release build has,
+    // accepts it.
+    #[test]
+    fn the_real_configuration_takes_only_root_owned_folders() {
+        let dir = TestDir::new("root-only");
+        let uid = fs::metadata(&dir.path).unwrap().uid();
+        if uid != 0 {
+            assert_eq!(Store::open(&dir.path), Err(StoreError::FolderNotPrivate));
+            fs::set_permissions(&dir.path, fs::Permissions::from_mode(0o755)).unwrap();
+            assert_eq!(CapsuleFolder::open(&dir.path), Err(StoreError::FolderNotPrivate));
+        }
+        assert!(Store::open_for_tests(&dir.path, JOURNAL_SLOTS).is_ok());
+        // A path that is not absolute and plain is refused before anything is read.
+        assert_eq!(Store::open(Path::new("relative/store")), Err(StoreError::FolderNotPrivate));
+        let dotted = dir.path.join("..").join(dir.path.file_name().unwrap());
+        let uid = fs::metadata(&dir.path).unwrap().uid();
+        assert!(!folder_is_private(&dotted, Owner::TestUser(uid)));
+    }
+
+    // Every folder above the store is checked, not only the store's own.
+    #[test]
+    fn a_folder_above_that_is_a_link_or_writable_by_others_is_refused() {
+        let dir = TestDir::new("parents");
+        let uid = fs::metadata(&dir.path).unwrap().uid();
+        let middle = dir.path.join("middle");
+        let store_dir = middle.join("store");
+        fs::create_dir(&middle).unwrap();
+        fs::create_dir(&store_dir).unwrap();
+        fs::set_permissions(&middle, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&store_dir, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(folder_is_private(&store_dir, Owner::TestUser(uid)));
+        // A folder above that others can write to, with or without the sticky bit (which
+        // only a root-owned folder may have, and only in the test configuration).
+        fs::set_permissions(&middle, fs::Permissions::from_mode(0o777)).unwrap();
+        assert!(!folder_is_private(&store_dir, Owner::TestUser(uid)));
+        fs::set_permissions(&middle, fs::Permissions::from_mode(0o1777)).unwrap();
+        assert!(!folder_is_private(&store_dir, Owner::TestUser(uid)));
+        fs::set_permissions(&middle, fs::Permissions::from_mode(0o775)).unwrap();
+        assert!(!folder_is_private(&store_dir, Owner::TestUser(uid)));
+        fs::set_permissions(&middle, fs::Permissions::from_mode(0o755)).unwrap();
+        // A link above: the store reached through it is refused, though the folder it
+        // points to is fine.
+        let linked = dir.path.join("linked");
+        std::os::unix::fs::symlink(&middle, &linked).unwrap();
+        assert!(!folder_is_private(&linked.join("store"), Owner::TestUser(uid)));
+        assert!(folder_is_private(&store_dir, Owner::TestUser(uid)));
+        // A folder above owned by someone else (root is accepted) fails the real check.
+        assert!(!folder_is_private(&store_dir, Owner::Root) || uid == 0);
+    }
+
+    // No store file is ever read or written through a link.
+    #[test]
+    fn a_store_file_that_is_a_link_is_never_followed() {
+        let dir = TestDir::new("file-links");
+        let store = test_store(&dir);
+        store.create(&wait(3, 30)).unwrap();
+        let outside = TestDir::new("file-links-outside");
+        let target = outside.path.join("target");
+        fs::write(&target, wait(9, 90).encode().unwrap()).unwrap();
+        // A copy replaced by a link to a valid record elsewhere: a fault, not that record,
+        // and the file it points to is left as it was.
+        fs::remove_file(dir.path.join("wait.a")).unwrap();
+        std::os::unix::fs::symlink(&target, dir.path.join("wait.a")).unwrap();
+        assert!(matches!(store.load::<WaitRecord>(), Err(StoreError::Io(_))));
+        assert!(matches!(store.replace(&wait(4, 30)), Err(StoreError::Io(_))));
+        assert_eq!(fs::read(&target).unwrap(), wait(9, 90).encode().unwrap());
+        // A planted temporary name is not written through either.
+        fs::remove_file(dir.path.join("wait.a")).unwrap();
+        fs::write(dir.path.join("wait.a"), wait(3, 30).encode().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&target, dir.path.join("wait.b.new")).unwrap();
+        fs::write(dir.path.join("wait.b"), b"damaged").unwrap();
+        let loaded = store.load::<WaitRecord>().unwrap();
+        assert_eq!(loaded.record, wait(3, 30));
+        assert!(matches!(loaded.repair, Repair::Failed(_)));
+        assert_eq!(fs::read(&target).unwrap(), wait(9, 90).encode().unwrap());
+
+        // The reserved files too.
+        let dir = TestDir::new("journal-links");
+        let store = Store::open_for_tests(&dir.path, 4).unwrap();
+        store.reserve().unwrap();
+        let target = outside.path.join("journal");
+        fs::write(&target, vec![0u8; 5 * JournalEntry::LEN]).unwrap();
+        fs::remove_file(dir.path.join("journal.b")).unwrap();
+        std::os::unix::fs::symlink(&target, dir.path.join("journal.b")).unwrap();
+        assert!(matches!(store.load_journal(), Err(StoreError::Io(_))));
+        assert!(matches!(store.append_journal(&entry(1)), Err(StoreError::Io(_))));
+        assert!(all_zero(&fs::read(&target).unwrap()));
+        fs::remove_file(dir.path.join("clock.a")).unwrap();
+        std::os::unix::fs::symlink(&target, dir.path.join("clock.a")).unwrap();
+        assert!(matches!(store.load_clock(), Err(StoreError::Io(_))));
+    }
+
+    // A copy that cannot be read is a fault: the other copy is not taken, and nothing is
+    // rewritten. Before, a passing read error on the newer copy made the older one win and
+    // be written over it, so the record went back one step.
+    #[test]
+    fn a_copy_that_cannot_be_read_is_a_fault_and_rolls_nothing_back() {
+        let dir = TestDir::new("read-error");
+        let store = test_store(&dir);
+        store.create(&wait(3, 7)).unwrap();
+        // A stop between the two copies of a replace: A holds sequence 4, B still 3.
+        fs::write(dir.path.join("wait.a"), wait(4, 30).encode().unwrap()).unwrap();
+        // Copy A can then not be read for a moment.
+        fs::set_permissions(dir.path.join("wait.a"), fs::Permissions::from_mode(0o000)).unwrap();
+        let readable = fs::read(dir.path.join("wait.a")).is_ok();
+        if !readable {
+            assert_eq!(store.load::<WaitRecord>(), Err(StoreError::Io(ErrorKind::PermissionDenied)));
+            assert_eq!(store.replace(&wait(4, 7)), Err(StoreError::Io(ErrorKind::PermissionDenied)));
+            assert_eq!(store.replace(&wait(5, 7)), Err(StoreError::Io(ErrorKind::PermissionDenied)));
+        }
+        fs::set_permissions(dir.path.join("wait.a"), fs::Permissions::from_mode(0o600)).unwrap();
+        // Readable again: the newer record stands, and B is completed from it.
+        assert_eq!(store.load::<WaitRecord>().unwrap(), Loaded { record: wait(4, 30), repair: Repair::Done });
+        assert_eq!(fs::read(dir.path.join("wait.b")).unwrap(), wait(4, 30).encode().unwrap());
+
+        // Something that is not a plain file in place of a copy (here a folder) is the
+        // same fault, whoever runs the test.
+        fs::remove_file(dir.path.join("wait.b")).unwrap();
+        fs::create_dir(dir.path.join("wait.b")).unwrap();
+        assert!(matches!(store.load::<WaitRecord>(), Err(StoreError::Io(_))));
+        assert!(dir.path.join("wait.b").is_dir());
+        assert_eq!(fs::read(dir.path.join("wait.a")).unwrap(), wait(4, 30).encode().unwrap());
     }
 
     #[test]
     fn reserve_makes_each_file_once_at_its_fixed_size() {
         let dir = TestDir::new("reserve");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         store.reserve().unwrap();
         for (name, size, _) in reserved_files().iter() {
             let path = dir.path.join(name);
@@ -825,7 +1276,8 @@ mod tests {
             assert!(all_zero(&bytes));
             assert_eq!(mode_of(&path), 0o600);
         }
-        assert_eq!(reserved_files()[2].1, 2_048 * JournalEntry::LEN);
+        assert_eq!(reserved_files()[2].1, (2_048 + 1) * JournalEntry::LEN);
+        assert_eq!(reserved_files().len(), 6);
         assert_eq!(store.reserve(), Err(StoreError::AlreadyExists(RecordName::ClockRecord)));
     }
 
@@ -834,7 +1286,7 @@ mod tests {
     #[test]
     fn two_copies_write_read_back_and_replace() {
         let dir = TestDir::new("two-copies");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         assert_eq!(store.load::<WaitRecord>(), Err(StoreError::NoCopy(RecordName::WaitRecord)));
         store.create(&wait(1, 7)).unwrap();
         assert_eq!(store.load::<WaitRecord>().unwrap(), Loaded { record: wait(1, 7), repair: Repair::None });
@@ -851,7 +1303,7 @@ mod tests {
     #[test]
     fn a_record_that_does_not_follow_is_refused_and_changes_nothing() {
         let dir = TestDir::new("not-next");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         store.create(&wait(5, 7)).unwrap();
         assert_eq!(store.replace(&wait(5, 30)), Err(StoreError::NotNext(RecordName::WaitRecord)));
         assert_eq!(store.replace(&wait(7, 30)), Err(StoreError::NotNext(RecordName::WaitRecord)));
@@ -864,7 +1316,7 @@ mod tests {
     #[test]
     fn one_damaged_copy_is_repaired_from_the_other() {
         let dir = TestDir::new("repair");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         store.create(&wait(3, 30)).unwrap();
         let good = wait(3, 30).encode().unwrap();
         let a = dir.path.join("wait.a");
@@ -896,7 +1348,7 @@ mod tests {
     #[test]
     fn a_stop_between_the_two_copies_keeps_the_newer_record() {
         let dir = TestDir::new("stop-between");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         store.create(&wait(3, 7)).unwrap();
         // The stop came after copy A was renamed into place and before copy B.
         fs::write(dir.path.join("wait.a"), wait(4, 30).encode().unwrap()).unwrap();
@@ -912,7 +1364,7 @@ mod tests {
     #[test]
     fn both_copies_damaged_is_a_fault_and_never_a_default() {
         let dir = TestDir::new("both-damaged");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         store.create(&wait(3, 90)).unwrap();
         flip(&dir.path.join("wait.a"), 14);
         flip(&dir.path.join("wait.b"), 30);
@@ -933,7 +1385,7 @@ mod tests {
     #[test]
     fn two_valid_copies_that_disagree_are_a_fault() {
         let dir = TestDir::new("disagree");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         store.create(&wait(3, 7)).unwrap();
         fs::write(dir.path.join("wait.b"), wait(3, 30).encode().unwrap()).unwrap();
         assert_eq!(store.load::<WaitRecord>(), Err(StoreError::CopiesDisagree(RecordName::WaitRecord)));
@@ -945,7 +1397,7 @@ mod tests {
     #[test]
     fn the_clock_record_goes_to_the_older_slot_in_place() {
         let dir = TestDir::new("clock");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         assert_eq!(store.load_clock(), Err(StoreError::NotReserved(RecordName::ClockRecord)));
         store.reserve().unwrap();
         assert_eq!(store.load_clock(), Err(StoreError::NoCopy(RecordName::ClockRecord)));
@@ -971,7 +1423,7 @@ mod tests {
     #[test]
     fn a_clock_record_that_moves_back_is_refused() {
         let dir = TestDir::new("clock-back");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         store.reserve().unwrap();
         store.create_clock(&clock(1, 6_000_000)).unwrap();
         assert_eq!(store.write_clock(&clock(2, 5_999_999)), Err(StoreError::NotNext(RecordName::ClockRecord)));
@@ -987,7 +1439,7 @@ mod tests {
     #[test]
     fn a_torn_or_damaged_clock_slot_leaves_the_other() {
         let dir = TestDir::new("clock-torn");
-        let store = Store::open(&dir.path).unwrap();
+        let store = test_store(&dir);
         store.reserve().unwrap();
         store.create_clock(&clock(1, 6_000_000)).unwrap();
         store.write_clock(&clock(2, 6_060_000)).unwrap();
@@ -1015,7 +1467,7 @@ mod tests {
     // ----- The journal -----
 
     fn small_store(dir: &TestDir) -> Store {
-        let store = Store::open_with_journal_slots(&dir.path, 4).unwrap();
+        let store = Store::open_for_tests(&dir.path, 4).unwrap();
         store.reserve().unwrap();
         store
     }
@@ -1025,7 +1477,7 @@ mod tests {
         let dir = TestDir::new("journal");
         let store = small_store(&dir);
         let empty = store.load_journal().unwrap();
-        assert_eq!(empty, JournalState { entries: Vec::new(), next_slot: 0, repair: Repair::None });
+        assert_eq!(empty, JournalState { entries: Vec::new(), next_slot: 0, epoch: 0, repair: Repair::None });
         store.append_journal(&entry(1)).unwrap();
         store.append_journal(&entry(2)).unwrap();
         store.append_journal(&entry(3)).unwrap();
@@ -1034,12 +1486,19 @@ mod tests {
         assert_eq!(state.next_slot, 3);
         let a = fs::read(dir.path.join("journal.a")).unwrap();
         assert_eq!(a, fs::read(dir.path.join("journal.b")).unwrap());
-        assert_eq!(a.len(), 4 * JournalEntry::LEN);
-        assert_eq!(&a[JournalEntry::LEN..2 * JournalEntry::LEN], &entry(2).encode().unwrap()[..]);
+        assert_eq!(a.len(), 5 * JournalEntry::LEN);
+        assert!(all_zero(&a[..JournalEntry::LEN]));
+        assert_eq!(&a[at(1)..at(2)], &entry(2).encode().unwrap()[..]);
         store.append_journal(&entry(4)).unwrap();
-        assert_eq!(store.append_journal(&entry(5)), Err(StoreError::JournalFull));
-        assert_eq!(store.load_journal().unwrap().entries.len(), 4);
-        assert_eq!(fs::metadata(dir.path.join("journal.a")).unwrap().len(), (4 * JournalEntry::LEN) as u64);
+        // Full: the next append compacts into the other pair first.
+        store.append_journal(&entry(5)).unwrap();
+        let state = store.load_journal().unwrap();
+        assert_eq!(state.entries, vec![entry(4), entry(5)]);
+        assert_eq!(state.epoch, 1);
+        for name in ["journal.a", "journal.b", "journal.c", "journal.d"].iter() {
+            assert_eq!(fs::metadata(dir.path.join(name)).unwrap().len(), (5 * JournalEntry::LEN) as u64);
+        }
+        assert_eq!(fs::read(dir.path.join("journal.c")).unwrap(), fs::read(dir.path.join("journal.d")).unwrap());
     }
 
     #[test]
@@ -1049,8 +1508,8 @@ mod tests {
         store.append_journal(&entry(1)).unwrap();
         store.append_journal(&entry(2)).unwrap();
         store.append_journal(&entry(3)).unwrap();
-        flip(&dir.path.join("journal.a"), JournalEntry::LEN + 20);
-        flip(&dir.path.join("journal.b"), 2 * JournalEntry::LEN + 5);
+        flip(&dir.path.join("journal.a"), at(1) + 20);
+        flip(&dir.path.join("journal.b"), at(2) + 5);
         let state = store.load_journal().unwrap();
         assert_eq!(state.entries, vec![entry(1), entry(2), entry(3)]);
         assert_eq!(state.repair, Repair::Done);
@@ -1065,7 +1524,7 @@ mod tests {
         store.append_journal(&entry(1)).unwrap();
         // A stop half-way through the second append to copy A.
         let half = entry(2).encode().unwrap();
-        put_at(&dir.path.join("journal.a"), JournalEntry::LEN, &half[..40]);
+        put_at(&dir.path.join("journal.a"), at(1), &half[..40]);
         let state = store.load_journal().unwrap();
         assert_eq!(state.entries, vec![entry(1)]);
         assert_eq!(state.next_slot, 1);
@@ -1074,7 +1533,7 @@ mod tests {
 
         // A stop after copy A and before copy B: the entry was written once, so it stands,
         // and copy B is completed.
-        put_at(&dir.path.join("journal.a"), 2 * JournalEntry::LEN, &entry(3).encode().unwrap());
+        put_at(&dir.path.join("journal.a"), at(2), &entry(3).encode().unwrap());
         let state = store.load_journal().unwrap();
         assert_eq!(state.entries, vec![entry(1), entry(2), entry(3)]);
         assert_eq!(state.repair, Repair::Done);
@@ -1089,15 +1548,15 @@ mod tests {
         store.append_journal(&entry(2)).unwrap();
         store.append_journal(&entry(3)).unwrap();
         // Entry 2 damaged in both copies, with entry 3 after it.
-        flip(&dir.path.join("journal.a"), JournalEntry::LEN + 30);
-        flip(&dir.path.join("journal.b"), JournalEntry::LEN + 31);
+        flip(&dir.path.join("journal.a"), at(1) + 30);
+        flip(&dir.path.join("journal.b"), at(1) + 31);
         assert_eq!(store.load_journal(), Err(StoreError::JournalHole));
         assert_eq!(store.append_journal(&entry(4)), Err(StoreError::JournalHole));
 
         let dir = TestDir::new("journal-disagree");
         let store = small_store(&dir);
         store.append_journal(&entry(1)).unwrap();
-        put_at(&dir.path.join("journal.b"), 0, &entry(9).encode().unwrap());
+        put_at(&dir.path.join("journal.b"), at(0), &entry(9).encode().unwrap());
         assert_eq!(store.load_journal(), Err(StoreError::CopiesDisagree(RecordName::Journal)));
 
         // A journal file of the wrong size, or missing, is not the reserved file.
@@ -1107,6 +1566,198 @@ mod tests {
         assert_eq!(store.load_journal(), Err(StoreError::NotReserved(RecordName::Journal)));
         fs::remove_file(dir.path.join("journal.b")).unwrap();
         assert_eq!(store.append_journal(&entry(1)), Err(StoreError::NotReserved(RecordName::Journal)));
+    }
+
+    // ----- Compaction -----
+
+    /// A journal of 4 slots that has been compacted `compactions` times and is full again.
+    /// Returns the store and how many entries were appended (entries 1 to that number).
+    fn full_journal(dir: &TestDir, compactions: usize) -> (Store, u8) {
+        let store = small_store(dir);
+        let appended = 4 + 3 * compactions as u8;
+        let mut n = 1;
+        while n <= appended {
+            store.append_journal(&entry(n)).unwrap();
+            n += 1;
+        }
+        let state = store.load_journal().unwrap();
+        assert_eq!(state.epoch, compactions as u64);
+        assert_eq!(state.next_slot, 4);
+        (store, appended)
+    }
+
+    #[test]
+    fn compaction_keeps_the_newest_entry_and_alternates_the_pairs() {
+        let dir = TestDir::new("compaction");
+        let store = small_store(&dir);
+        let mut n: u8 = 1;
+        while n <= 40 {
+            store.append_journal(&entry(n)).unwrap();
+            let state = store.load_journal().unwrap();
+            assert_eq!(state.entries.last(), Some(&entry(n)));
+            assert_eq!(state.repair, Repair::None);
+            n += 1;
+        }
+        let state = store.load_journal().unwrap();
+        // 40 entries in 4 slots: the first compaction after entry 4, then one after every
+        // three more.
+        assert_eq!(state.epoch, 12);
+        assert_eq!(state.entries, vec![entry(37), entry(38), entry(39), entry(40)]);
+        // The current pair's two copies are the same bytes, and the files never grew.
+        assert_eq!(fs::read(dir.path.join("journal.a")).unwrap(), fs::read(dir.path.join("journal.b")).unwrap());
+        for name in ["journal.a", "journal.b", "journal.c", "journal.d"].iter() {
+            assert_eq!(fs::metadata(dir.path.join(name)).unwrap().len(), (5 * JournalEntry::LEN) as u64);
+        }
+    }
+
+    // A stop after every write of a compaction, and half-way through each one: the journal
+    // reads as it was before the compaction or as it is after it, never anything else, and
+    // the next append always works. In both directions (into pair Y and into pair X), and
+    // into a pair that holds an older compaction.
+    #[test]
+    fn compaction_survives_a_stop_at_every_step() {
+        let mut compactions = 0;
+        while compactions < 3 {
+            let mut done = 0;
+            while done <= 4 {
+                let mut torn = 0;
+                while torn < 2 {
+                    if done == 4 && torn == 1 {
+                        torn += 1;
+                        continue;
+                    }
+                    let dir = TestDir::new("compaction-stop");
+                    let (store, last) = full_journal(&dir, compactions);
+                    let before = store.load_journal().unwrap();
+                    let plan = store.compaction_plan(&before).unwrap();
+                    assert_eq!(plan.len(), 4);
+                    let mut w = 0;
+                    while w < done {
+                        put_at(&dir.path.join(plan[w].file), plan[w].offset, &plan[w].bytes);
+                        w += 1;
+                    }
+                    if torn == 1 {
+                        let cut = if plan[done].offset == 0 { JournalHeader::LEN / 2 } else { plan[done].bytes.len() / 2 };
+                        put_at(&dir.path.join(plan[done].file), plan[done].offset, &plan[done].bytes[..cut]);
+                    }
+                    let state = store.load_journal().unwrap();
+                    let committed = done >= 3;
+                    let case = format!("compactions {} writes {} torn {}", compactions, done, torn);
+                    if committed {
+                        assert_eq!(state.entries, vec![entry(last)], "{}", case);
+                        assert_eq!(state.epoch, compactions as u64 + 1, "{}", case);
+                    } else {
+                        assert_eq!(state.entries, vec![entry(last - 3), entry(last - 2), entry(last - 1), entry(last)], "{}", case);
+                        assert_eq!(state.epoch, compactions as u64, "{}", case);
+                    }
+                    // Any repair a load makes is made once.
+                    assert_eq!(store.load_journal().unwrap().repair, Repair::None, "{}", case);
+                    // The next append works, and leaves the same journal either way.
+                    store.append_journal(&entry(200)).unwrap();
+                    let after = store.load_journal().unwrap();
+                    assert_eq!(after.entries, vec![entry(last), entry(200)], "{}", case);
+                    assert_eq!(after.epoch, compactions as u64 + 1, "{}", case);
+                    torn += 1;
+                }
+                done += 1;
+            }
+            compactions += 1;
+        }
+    }
+
+    #[test]
+    fn a_journal_header_that_cannot_be_trusted_is_a_fault_or_is_not_a_commit() {
+        // Both copies of a header damaged: the pair's epoch cannot be known. A fault.
+        let dir = TestDir::new("header-damaged");
+        let (store, _) = full_journal(&dir, 1);
+        flip(&dir.path.join("journal.c"), 13);
+        flip(&dir.path.join("journal.d"), 14);
+        assert_eq!(store.load_journal(), Err(StoreError::BothUnreadable(RecordName::Journal)));
+        assert_eq!(store.append_journal(&entry(9)), Err(StoreError::BothUnreadable(RecordName::Journal)));
+        // One copy damaged: the other stands, and the damaged one is repaired.
+        let dir = TestDir::new("header-one");
+        let (store, last) = full_journal(&dir, 1);
+        flip(&dir.path.join("journal.c"), 13);
+        let state = store.load_journal().unwrap();
+        assert_eq!(state.epoch, 1);
+        assert_eq!(state.entries.last(), Some(&entry(last)));
+        assert_eq!(state.repair, Repair::Done);
+        assert_eq!(fs::read(dir.path.join("journal.c")).unwrap(), fs::read(dir.path.join("journal.d")).unwrap());
+        // A header of the wrong pair's parity, made valid, is damage, not a commit.
+        let dir = TestDir::new("header-parity");
+        let (store, last) = full_journal(&dir, 0);
+        let wrong = header_slot_bytes(2).unwrap();
+        put_at(&dir.path.join("journal.c"), 0, &wrong);
+        put_at(&dir.path.join("journal.d"), 0, &wrong);
+        assert_eq!(store.load_journal(), Err(StoreError::BothUnreadable(RecordName::Journal)));
+        put_at(&dir.path.join("journal.d"), 0, &vec![0u8; JournalEntry::LEN]);
+        let state = store.load_journal().unwrap();
+        assert_eq!(state.epoch, 0);
+        assert_eq!(state.entries.len(), 4);
+        assert_eq!(state.entries.last(), Some(&entry(last)));
+        // Bytes after the header in its slot are damage too.
+        let dir = TestDir::new("header-trailing");
+        let (store, _) = full_journal(&dir, 1);
+        put_at(&dir.path.join("journal.c"), JournalHeader::LEN + 3, &[1]);
+        let state = store.load_journal().unwrap();
+        assert_eq!(state.epoch, 1);
+        assert_eq!(state.repair, Repair::Done);
+    }
+
+    // The flaw this fixes: a journal of fixed size that only appends fills after about a
+    // thousand Leave and Stay pairs, and from then on no request could be journaled, so
+    // nobody could leave. Here: hundreds of Leave and Stay pairs through the real state
+    // machine, into a journal of 8 slots, and then an exit that runs to Committed.
+    #[test]
+    fn leave_and_stay_without_end_never_stop_an_exit() {
+        use crate::approval::MacLabel;
+        use crate::boundary::OwnerProof;
+        use crate::clock::Clock;
+        use crate::fakes::{FakeBeacon, FakeRandom, FakeTime};
+        use crate::waits::{LockFacts, Reply, WaitMachine};
+        let dir = TestDir::new("journal-cycles");
+        let store = Store::open_for_tests(&dir.path, 8).unwrap();
+        store.reserve().unwrap();
+        let mut time = FakeTime::at_round(1_000_000);
+        let clock = Clock::at_lock(&FakeBeacon::record_bytes(1_000_000), &FakeBeacon, &time).unwrap();
+        let facts = LockFacts {
+            applied_wait_days: 7,
+            planned_wait_days: None,
+            instant_leave_window: false,
+            keyholder_enrolled_before_lock: false,
+            mac_label: MacLabel::new("Test Mac").unwrap(),
+        };
+        let mut m = WaitMachine::at_lock(facts, clock, &time).unwrap();
+        let mut random = FakeRandom::new();
+        let owner = OwnerProof::TypedPasswordVerified;
+        let mut appended = 0;
+        let mut cycle = 0;
+        while cycle < 300 {
+            time.pass_awake_ms(1_000);
+            assert!(matches!(m.leave(owner, true, &mut random, &time), Ok(Reply::Pending { .. })));
+            m.stay(&time);
+            for e in m.take_journal().iter() {
+                store.append_journal(e).unwrap();
+                appended += 1;
+            }
+            cycle += 1;
+        }
+        assert_eq!(appended, 600);
+        let id = match m.leave(owner, true, &mut random, &time) {
+            Ok(Reply::Pending { id }) => id,
+            other => panic!("not pending: {:?}", other),
+        };
+        time.pass_asleep_ms(7 * 86_400_000);
+        m.tick(&time);
+        assert_eq!(m.claim(owner, id, &time), Ok(Reply::ExitCommitted { id }));
+        for e in m.take_journal().iter() {
+            store.append_journal(e).unwrap();
+        }
+        let state = store.load_journal().unwrap();
+        let newest = state.entries.last().unwrap();
+        assert_eq!(newest.request_id, id);
+        assert_eq!(newest.state, RequestState::Committed);
+        assert!(state.epoch > 50);
     }
 
     // ----- The capsule folder -----
@@ -1123,7 +1774,7 @@ mod tests {
     fn capsules_are_saved_read_back_and_kept_two_deep() {
         let dir = TestDir::new("capsules");
         fs::set_permissions(&dir.path, fs::Permissions::from_mode(0o755)).unwrap();
-        let folder = CapsuleFolder::open(&dir.path).unwrap();
+        let folder = CapsuleFolder::open_for_tests(&dir.path).unwrap();
         assert_eq!(folder.newest(), Err(StoreError::NotReserved(RecordName::Capsule)));
         folder.reserve().unwrap();
         assert_eq!(folder.reserve(), Err(StoreError::AlreadyExists(RecordName::Capsule)));
@@ -1158,7 +1809,7 @@ mod tests {
     fn a_damaged_capsule_slot_leaves_the_other() {
         let dir = TestDir::new("capsule-damage");
         fs::set_permissions(&dir.path, fs::Permissions::from_mode(0o755)).unwrap();
-        let folder = CapsuleFolder::open(&dir.path).unwrap();
+        let folder = CapsuleFolder::open_for_tests(&dir.path).unwrap();
         folder.reserve().unwrap();
         let g3 = test_capsule(3, 2_000_000, 1).unwrap();
         let g4 = test_capsule(4, 2_500_000, 2).unwrap();

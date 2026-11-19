@@ -5,8 +5,11 @@
 //! touches the real system (clocks, the beacon signature check, the password dialog, the
 //! random generator, the keyholder's signature, files) is behind one of the traits here.
 //! The fakes are in the test-only module `fakes`. The one real implementation so far is
-//! the round check, `beacon::QuicknetVerifier`; the others belong to the hands layer and
-//! are not written yet.
+//! the round check, `beacon::QuicknetVerifier`, and the approval check,
+//! `approval::Es256ApprovalVerifier`; the others belong to the hands layer and are not
+//! written yet.
+
+use crate::approval::ApprovalCode;
 
 /// The Mac's clocks, as the keeper reads them itself (SD-037). Never taken from a message.
 pub trait TimeSource {
@@ -58,7 +61,9 @@ pub struct RandomUnavailable;
 /// The system random generator: request IDs (chapter 03 section 3: random, 16 bytes), and
 /// the keys and nonces of a capsule (SD-035, SD-056).
 pub trait RandomSource {
-    fn request_id(&mut self) -> [u8; 16];
+    /// A fresh random request ID. A generator that fails gives nothing, and nothing is
+    /// journaled.
+    fn request_id(&mut self) -> Result<[u8; 16], RandomUnavailable>;
 
     /// Fills `out` with fresh random bytes.
     fn fill(&mut self, out: &mut [u8]) -> Result<(), RandomUnavailable>;
@@ -82,15 +87,19 @@ pub trait OwnerCheck {
 pub struct CheckedApproval {
     /// The request the approval code names.
     pub request_id: [u8; 16],
+    /// The challenge the check was made against. The state machine accepts the approval
+    /// only if this is the challenge it computes again from its own record of the request
+    /// (SD-306).
+    pub challenge: [u8; 32],
     /// True only if every cryptographic and fixed-prefix check passed against the pinned
-    /// key, the pinned origin and this request's challenge (steps 3 to 6).
+    /// key, the pinned origin and `challenge` (steps 3 to 6).
     pub valid: bool,
 }
 
-/// The fixed-offset checks and the ES256 signature check of an approval code (SD-196).
-/// None means the code's layout was refused.
+/// The ES256 signature check and the fixed-prefix checks of an approval code (SD-196),
+/// against one expected challenge. The real one is `approval::Es256ApprovalVerifier`.
 pub trait ApprovalVerifier {
-    fn check_approval(&self, approval_code: &[u8]) -> Option<CheckedApproval>;
+    fn check_approval(&self, approval: &ApprovalCode, expected_challenge: &[u8; 32]) -> bool;
 }
 
 /// The instant-leave marker file outside the keeper store (SD-052).
