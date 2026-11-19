@@ -272,13 +272,20 @@ public final class DisplayPipeline {
         // playing video included: a cover over it lifts once it has been still for four clean judgements.) Elsewhere, an
         // entry judged before a change that touched it no longer counts towards any cover's next clean judgement.
         let changedAreas: [CGRect] = dirty.map { DirtyRegions.prepare($0, width: img.width, height: img.height).map(map.toGlobal) } ?? [d]
+        // A place counts as changed when the frame reports a change there and its pixels differ from the last frame's (a
+        // change reported where nothing changed is not one); with no last frame to compare, it counts as changed.
+        func changed(_ g: CGRect) -> Bool {
+            guard changedAreas.contains(where: { $0.intersects(g) }) else { return false }
+            guard let prev = previous, let px = map.toPixels(g) else { return true }
+            return DirtyRegions.differ(prev, img, px)
+        }
         for i in held.indices {
             if moved.contains(where: { $0.0 == held[i].target }) { held[i].round = []; continue }
             guard !changedAreas.isEmpty else { continue }
-            if let g = fullRect(held[i], snapshot, visible), changedAreas.contains(where: { $0.intersects(g) }) {
+            if let g = fullRect(held[i], snapshot, visible), changed(g) {
                 held[i].clean = 0; held[i].round = []
             } else if !held[i].round.isEmpty {
-                held[i].round = held[i].round.filter { e in !changedAreas.contains { $0.intersects(map.toGlobal(e.rect)) } }
+                held[i].round = held[i].round.filter { e in !changed(map.toGlobal(e.rect)) }
             }
         }
 
