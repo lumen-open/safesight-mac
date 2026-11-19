@@ -82,6 +82,30 @@ python3 tools/testing_edition_scan.py --self-test || fail=1
 # shellcheck disable=SC2046
 python3 tools/testing_edition_scan.py $(cat "$tmp/modules.txt") || fail=1
 
+# The screen path is the release app's, line for line: the detector, its rules and thresholds, capture and the cover
+# drawing are the same sources in both apps. In those modules only the keeper check may depend on the edition; the
+# Testing line reaches the covers as a parameter. And the release app is built from the same modules, less one.
+screen="Sources/DetectorCore Sources/Preprocess Sources/RegionFinder Sources/SafeSightMacWatcher Sources/SafeSightMacCapture Sources/SafeSightMacCover"
+# shellcheck disable=SC2086
+drift=$(grep -rlE 'SAFESIGHTMAC_TESTING|BuildInfo\.edition' $screen | grep -v '^Sources/SafeSightMacWatcher/PracticeState\.swift$' || true)
+[ -z "$drift" ] || bad "the screen path depends on the edition in: $drift"
+swift package describe --type json > "$tmp/describe-release.json"
+python3 - "$tmp/describe.json" "$tmp/describe-release.json" <<'EOF' || fail=1
+import json, sys
+def closure(path):
+    targets = {t["name"]: t for t in json.load(open(path))["targets"]}
+    seen, todo = set(), ["SafeSightMacApp"]
+    while todo:
+        n = todo.pop()
+        if n not in seen:
+            seen.add(n); todo += targets[n].get("target_dependencies", [])
+    return seen
+testing, release = closure(sys.argv[1]), closure(sys.argv[2])
+if testing - {"SafeSightMacTestingEdition"} != release:
+    print("FAIL: the two apps' modules differ by more than SafeSightMacTestingEdition: %s" % sorted(testing ^ release)); sys.exit(1)
+print("Same screen path: both apps build the same %d modules, and the Testing app adds only its own" % len(release))
+EOF
+
 # 2. The binary.
 SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --product safesight-mac >/dev/null
 tools/make-app.sh --testing --no-models org.example.safesightmac.testing "$tmp" >"$tmp/make.txt" 2>&1 \
