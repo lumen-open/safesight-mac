@@ -6,7 +6,7 @@ SafeSight Mac watches your screen and covers explicit images as soon as they app
 
 What makes it different is that it stays on. There's no off switch for a bad night, no password to beg for, and nobody who can unlock it early, not even us. When you set it up, you choose how long getting out should take, anywhere from a week to a year, and you can always make it longer. If you ever ask to leave, the countdown starts; change your mind, press **Stay**, and it's as if you never asked. The only shortcut is a friend you choose, who can bring the wait down to a day but can never stop you leaving.
 
-**Going all in?** We're working on a Hardcore lock, where even wiping your Mac won't free it before your wait is over.
+**Going all in?** We're working on a Hardcore lock, where even wiping your Mac won't get you out early. The only way around it is Apple's own proof-of-purchase check, which takes weeks.
 
 **Looking for something for your phone?** We recommend [SHIFT](https://shiftyourphone.com/content-filter/). Its Content Filter is free, works on iPhone and Android, and is set up from your computer so it can't simply be deleted from the phone. We're not affiliated with SHIFT; we just think it's good.
 
