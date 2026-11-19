@@ -15,3 +15,7 @@ Thank you for helping.
 ## Weaknesses
 
 Never in public. See [SECURITY.md](SECURITY.md).
+
+## Words we never use
+
+The project never says "can't be bypassed", "100%", "blocks all", "treats addiction" or "nobody can ever unlock it". The app's text is checked for these (`AppTextTests`).

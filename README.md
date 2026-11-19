@@ -2,15 +2,17 @@
 
 **Why this exists:** so that men and women can experience freedom, and to fight back against a dark power that takes it from them.
 
-SafeSight Mac is a free-forever, open-source Mac app. You install it on your own Mac and choose how long switching it off will take: 7 days at least, up to a year. Explicit pictures are covered on your screens; everything else keeps working. Asking to leave starts a countdown, and pressing **Stay** throws the request away. An optional friend can shorten the wait to a day, but can never block it.
+SafeSight Mac covers explicit pictures anywhere on your Mac's screen: every app, every browser, every display. Everything else keeps working.
 
-**Status: step 1, not yet tried on a real screen.** The cover-only app is built and tested through a lab harness: it covers explicit pictures on screen and has no lock, so it can be paused or quit at any time. The lock comes next. See [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md) for what works, what is tested and the known limits.
+When you set it up, you choose how long switching it off will take, from a week to a year. Asking to leave starts a countdown; press **Stay** and the request is gone. An optional friend can shorten the wait to a day, but can never stop you leaving.
 
-## The honest promise
+It's free forever, open source, and runs entirely on your Mac. There's no company and no server, so nobody can shorten your wait, not even us.
 
-> SafeSight Mac is free, open-source software, built mostly by AI and provided as is. Nobody independent has tested it. It turns your own Mac into one where explicit pictures are covered and where switching protection off takes a wait you chose in advance. There is no company and no server, and nobody can shorten your wait for you, including the people who made it. It is not unbeatable: erasing your Mac always ends it, a determined person can find ways around it, it misses some pictures and wrongly covers others, and it does nothing for your phone, a TV or another computer. It may have bugs that lock you out of parts of your own Mac, so keep a backup. It is for adults, on their own Mac, by their own choice. It is not treatment for anything.
+**Status: early preview.** Step 1, the screen cover, is built and lab-tested. The lock comes next. Details: [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md).
 
-This project never says "can't be bypassed", "100%", "blocks all", "treats addiction" or "nobody can ever unlock it".
+## Our promise
+
+> SafeSight Mac is free, open-source software that runs entirely on your own Mac. It covers explicit pictures on your screen, and switching it off takes a wait you choose in advance. Nobody can shorten that wait for you, including the people who made it. It isn't perfect: erasing your Mac ends it, it can miss a picture or cover a harmless one, and it protects only this Mac. It's an early version built with AI, so keep a backup.
 
 ## Free forever
 
