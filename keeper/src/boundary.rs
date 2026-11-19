@@ -25,6 +25,25 @@ pub trait TimeSource {
     fn wall_clock_unix_seconds(&self) -> u64;
 }
 
+/// The Mac's own clocks as the hands layer reads them, before anything is carried
+/// (chapter 03 section 2, "The counters"). `counters::CarriedClock` turns them into the
+/// carried totals of `TimeSource`.
+pub trait RawClocks {
+    /// The continuous clock in milliseconds (`mach_continuous_time`): counts sleep,
+    /// ignores the date, and restarts from zero at each boot.
+    fn continuous_ms(&self) -> u64;
+
+    /// The absolute clock in milliseconds (`mach_absolute_time`): does not count sleep,
+    /// and restarts from zero at each boot.
+    fn absolute_ms(&self) -> u64;
+
+    /// This boot's identifier (`kern.bootsessionuuid`), as 16 bytes.
+    fn boot_session(&self) -> [u8; 16];
+
+    /// The Mac's date and time in Unix seconds. Only passed on to `clock`.
+    fn wall_clock_unix_seconds(&self) -> u64;
+}
+
 /// The check of a beacon round's signature against the chain public key pinned in the
 /// lock core (SD-038, SD-043). The real one is `beacon::QuicknetVerifier`.
 pub trait RoundVerifier {

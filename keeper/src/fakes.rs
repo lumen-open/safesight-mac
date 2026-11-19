@@ -2,7 +2,7 @@
 //! Fake implementations of the boundary traits, for tests only. This module is compiled
 //! only under `cfg(test)`: no fake clock, beacon or random source can reach a release.
 
-use crate::boundary::{RandomSource, RandomUnavailable, RoundVerifier, TimeSource};
+use crate::boundary::{RandomSource, RandomUnavailable, RawClocks, RoundVerifier, TimeSource};
 use crate::constants::{BEACON_CHAIN_HASH, BEACON_GENESIS_UNIX_SECONDS, BEACON_PERIOD_SECONDS};
 use crate::records::RoundRecord;
 
@@ -213,5 +213,75 @@ impl TestDir {
 impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// A Mac's raw clocks across boots, and the real time beside them. Each boot starts both
+/// raw clocks at zero and takes a new boot identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FakeMac {
+    pub continuous_ms: u64,
+    pub absolute_ms: u64,
+    pub boot_session: [u8; 16],
+    pub true_unix_ms: u64,
+    pub wall_unix_ms: u64,
+}
+
+impl FakeMac {
+    /// A Mac whose date is right, at the moment the beacon reaches `round`, booted
+    /// `uptime_ms` ago and awake all that time.
+    pub fn booted_at_round(round: u64, uptime_ms: u64) -> FakeMac {
+        let unix_ms = (BEACON_GENESIS_UNIX_SECONDS + BEACON_PERIOD_SECONDS * (round - 1)) * 1_000;
+        FakeMac {
+            continuous_ms: uptime_ms,
+            absolute_ms: uptime_ms,
+            boot_session: [0xB0; 16],
+            true_unix_ms: unix_ms,
+            wall_unix_ms: unix_ms,
+        }
+    }
+
+    pub fn pass_awake_ms(&mut self, ms: u64) {
+        self.continuous_ms += ms;
+        self.absolute_ms += ms;
+        self.true_unix_ms += ms;
+        self.wall_unix_ms += ms;
+    }
+
+    pub fn pass_asleep_ms(&mut self, ms: u64) {
+        self.continuous_ms += ms;
+        self.true_unix_ms += ms;
+        self.wall_unix_ms += ms;
+    }
+
+    /// Switched off for `off_ms`, then switched on: a new boot.
+    pub fn power_cycle(&mut self, off_ms: u64) {
+        self.true_unix_ms += off_ms;
+        self.wall_unix_ms += off_ms;
+        self.continuous_ms = 0;
+        self.absolute_ms = 0;
+        let mut i = 0;
+        while i < 16 {
+            self.boot_session[i] = self.boot_session[i].wrapping_add((i as u8) + 1);
+            i += 1;
+        }
+    }
+}
+
+impl RawClocks for FakeMac {
+    fn continuous_ms(&self) -> u64 {
+        self.continuous_ms
+    }
+
+    fn absolute_ms(&self) -> u64 {
+        self.absolute_ms
+    }
+
+    fn boot_session(&self) -> [u8; 16] {
+        self.boot_session
+    }
+
+    fn wall_clock_unix_seconds(&self) -> u64 {
+        self.wall_unix_ms / 1_000
     }
 }

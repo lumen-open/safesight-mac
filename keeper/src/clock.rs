@@ -8,11 +8,14 @@
 //! The wall clock never matures a request, never shortens anything and is never a tamper
 //! signal.
 //!
-//! Not in this pass: carrying the two counters across restarts, detecting a new boot, and
-//! reading or writing the clock record's two slots. `TimeSource` hands this module the
-//! carried totals; the carry itself belongs to the next pass.
+//! `TimeSource` hands this module the carried totals; the carry across restarts and the
+//! detection of a new boot are in `counters`, and the clock record's two slots on disk
+//! are in `store`. `Clock::record` and `Clock::restore` turn this state into the clock
+//! record and back.
 
 use crate::boundary::{RoundVerifier, TimeSource};
+use crate::counters::CounterState;
+use crate::records::ClockRecord;
 use crate::constants::{
     ANCHOR_CLOCK_TOLERANCE_ROUNDS, BEACON_CHAIN_HASH, BEACON_GENESIS_UNIX_SECONDS, BEACON_PERIOD_SECONDS,
     MS_PER_ROUND,
@@ -113,6 +116,46 @@ impl Clock {
             last_awake_ms: time.awake_total_ms(),
             clock_refuses_rounds: false,
         })
+    }
+
+    /// The clock at start-up, from the clock record read back from the store. The
+    /// high-water round's signature is checked again, so the record proves itself
+    /// (chapter 03 section 2). A record whose round does not verify is not adopted; what
+    /// follows is SD-227's table ("clock record: none adopted").
+    pub fn restore(record: &ClockRecord, verifier: &dyn RoundVerifier) -> Result<Clock, DropReason> {
+        if !verifier.verify_round(record.high_water_round, &record.high_water_signature) {
+            return Err(DropReason::BadSignature);
+        }
+        Ok(Clock {
+            high_water_round: record.high_water_round,
+            high_water_signature: record.high_water_signature,
+            high_water_boot_ms: record.high_water_boot_ms,
+            base_round: record.estimate_base_round,
+            base_boot_ms: record.estimate_base_boot_ms,
+            last_boot_ms: record.boot_total_ms,
+            last_awake_ms: record.awake_total_ms,
+            clock_refuses_rounds: false,
+        })
+    }
+
+    /// The clock record to save now (every `COUNTER_SAVE` and at every verified round):
+    /// this clock's rounds and estimate base, with the carried counters as they are now.
+    /// The store refuses it unless it follows the record before it, so a total that
+    /// would move back is never written.
+    pub fn record(&self, sequence: u64, counters: &CounterState) -> ClockRecord {
+        ClockRecord {
+            sequence,
+            high_water_round: self.high_water_round,
+            high_water_signature: self.high_water_signature,
+            high_water_boot_ms: self.high_water_boot_ms,
+            estimate_base_round: self.base_round,
+            estimate_base_boot_ms: self.base_boot_ms,
+            boot_total_ms: counters.boot_total_ms,
+            awake_total_ms: counters.awake_total_ms,
+            last_boot_reading_ms: counters.last_boot_reading_ms,
+            last_awake_reading_ms: counters.last_awake_reading_ms,
+            boot_session: counters.boot_session,
+        }
     }
 
     /// The highest round whose signature the keeper has verified. Never moves back.
@@ -550,6 +593,48 @@ mod tests {
         assert!(!include_str!("constants.rs").contains(call));
         assert!(!include_str!("lib.rs").contains(call));
         assert!(!include_str!("main.rs").contains(call));
+        assert!(!include_str!("age.rs").contains(call));
+        assert!(!include_str!("beacon.rs").contains(call));
+        assert!(!include_str!("capsule.rs").contains(call));
+        assert!(!include_str!("store.rs").contains(call));
+        assert!(!include_str!("timelock.rs").contains(call));
         assert!(include_str!("clock.rs").contains(call));
+        // `counters` implements `TimeSource` and so names the call: once to define it,
+        // once to pass the raw reading on unchanged, once in the test that checks that.
+        assert_eq!(include_str!("counters.rs").matches(call).count(), 3);
+    }
+
+    // The clock record is the clock's state and the counters, and the clock comes back
+    // from it whole.
+    #[test]
+    fn the_clock_comes_back_from_its_record() {
+        let mut time = FakeTime::at_round(R0);
+        let mut clock = clock_at(&time);
+        time.pass_awake_ms(300_000);
+        let _ = clock.offer_round(&FakeBeacon::record_bytes(R0 + 40), &FakeBeacon, &time);
+        let counters = CounterState {
+            boot_total_ms: time.boot_ms,
+            awake_total_ms: time.awake_ms,
+            last_boot_reading_ms: 1_234,
+            last_awake_reading_ms: 1_000,
+            boot_session: [3u8; 16],
+        };
+        let record = clock.record(7, &counters);
+        assert_eq!(record.sequence, 7);
+        assert_eq!(record.high_water_round, R0 + 40);
+        assert_eq!(record.estimate_base_round, R0);
+        assert_eq!(record.boot_total_ms, time.boot_ms);
+        assert_eq!(record.boot_session, [3u8; 16]);
+        let bytes = record.encode().unwrap();
+
+        let mut back = Clock::restore(&ClockRecord::decode(&bytes).unwrap(), &FakeBeacon).unwrap();
+        assert_eq!(back.high_water_round(), R0 + 40);
+        assert_eq!(back.estimate(&time), clock.estimate(&time));
+        assert_eq!(back.record(7, &counters), record);
+
+        // A record whose high-water signature does not verify is not adopted.
+        let mut forged = record;
+        forged.high_water_signature[0] ^= 1;
+        assert_eq!(Clock::restore(&forged, &FakeBeacon), Err(DropReason::BadSignature));
     }
 }

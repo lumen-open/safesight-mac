@@ -674,12 +674,13 @@ mod tests {
     fn only_the_sealing_function_writes_a_capsule() {
         let literal = ["Capsule", " {"].concat();
         let type_name = ["TYPE_", "CAPSULE"].concat();
-        let others: [(&str, &str); 12] = [
+        let others: [(&str, &str); 13] = [
             ("age.rs", include_str!("age.rs")),
             ("beacon.rs", include_str!("beacon.rs")),
             ("boundary.rs", include_str!("boundary.rs")),
             ("clock.rs", include_str!("clock.rs")),
             ("constants.rs", include_str!("constants.rs")),
+            ("counters.rs", include_str!("counters.rs")),
             ("fakes.rs", include_str!("fakes.rs")),
             ("frame.rs", include_str!("frame.rs")),
             ("lib.rs", include_str!("lib.rs")),

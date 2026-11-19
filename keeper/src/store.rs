@@ -753,6 +753,7 @@ mod tests {
             awake_total_ms: 4_000_000,
             last_boot_reading_ms: 70_000,
             last_awake_reading_ms: 60_000,
+            boot_session: [0x0B; 16],
         }
     }
 
