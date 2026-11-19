@@ -3,14 +3,14 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-pQIs7Ey7pODmOcR/BNSW4/wiOD8AbnCaj05keLpk2XQ='; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-YQbvSkQvAazm09uRI+rDzq4SLB/uOMaj9iC3Oipm9dA='; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f3f6f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b1112" media="(prefers-color-scheme: dark)">
-<meta name="description" content="Free, open-source protection from explicit images on your Mac, with an off switch that takes as long as you decide.">
-<title>SafeSight Mac · Free, open-source protection from explicit images</title>
+<meta name="description" content="Free, open-source blocking of explicit images on your Mac. Once it’s on, it stays on.">
+<title>SafeSight Mac · Free, open-source blocking of explicit images</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230b7f73'/%3E%3Ccircle cx='16' cy='16' r='8.5' fill='none' stroke='%23fff' stroke-width='2.6'/%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23fff'/%3E%3C/svg%3E">
 <style>
 :root {
@@ -206,7 +206,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 .card p { color: var(--muted); }
 .badge { width: 48px; height: 48px; border-radius: 14px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; }
 
-/* Off switch */
+/* How it stays on */
 .steps { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 14px; }
 .step-head { display: grid; grid-template-columns: 48px minmax(0, 1fr); grid-template-areas: "badge title"; align-items: center; column-gap: 16px; margin-bottom: 12px; }
 .step-head .badge { grid-area: badge; }
@@ -216,6 +216,8 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 .friend .badge { background: var(--card); }
 .friend p { font-size: 1.0625rem; text-wrap: pretty; }
 .sec-foot { margin-top: 22px; color: var(--muted); font-size: .9375rem; }
+.sec-foot strong { color: var(--text); }
+.sec-foot + .sec-foot { margin-top: 6px; }
 @media (min-width: 960px) {
   .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
   .step-head { grid-template-columns: 48px 1fr auto; grid-template-areas: "badge . num" "title title title"; row-gap: 22px; margin-bottom: 8px; }
@@ -382,7 +384,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
     <a class="brand" href="index.html"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>SafeSight Mac</a>
     <nav aria-label="Main">
       <ul class="nav" role="list">
-        <li><a href="#off-switch">The off switch</a></li>
+        <li><a href="#stays-on">How it stays on</a></li>
         <li><a href="#why">Why it exists</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="#promise">Our promise</a></li>
@@ -397,8 +399,8 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
 <section class="hero" aria-labelledby="hero-title">
   <div class="wrap hero-grid">
     <div>
-      <p class="pill"><span class="pill-dot" aria-hidden="true"></span>Free and open source · Early preview</p>
-      <h1 id="hero-title">Protection from explicit images on your Mac, <span class="soft">with an off switch that takes as long as you decide.</span></h1>
+      <p class="pill"><span class="pill-dot" aria-hidden="true"></span>Early preview · No download yet</p>
+      <h1 id="hero-title">Free, open-source blocking of explicit images on your Mac. <span class="soft">Once it’s on, it stays on.</span></h1>
       <p class="lead">SafeSight Mac watches your screen and covers explicit images as soon as they appear: in any app, in any browser, on every display. Everything else is left alone. Your work, your calls, your music and your code carry on as normal.</p>
       <div class="actions">
         <a class="btn btn-primary" href="https://github.com/lumen-open/safesight-mac"><svg class="ic ic-fill" aria-hidden="true"><use href="#i-github"/></svg>Follow on GitHub</a>
@@ -454,20 +456,21 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
   </div>
 </section>
 
-<section class="sec sec-band" id="off-switch" aria-labelledby="off-title">
+<section class="sec sec-band" id="stays-on" aria-labelledby="stays-title">
   <div class="wrap">
     <div class="sec-head">
-      <p class="eyebrow">How leaving works</p>
-      <h2 id="off-title">What makes it different is the off switch.</h2>
+      <p class="eyebrow">How it stays on</p>
+      <h2 id="stays-title">What makes it different is that it stays on.</h2>
+      <p class="sec-lead">There’s no off switch for a bad night, no password to beg for, and nobody who can unlock it early, not even us.</p>
     </div>
     <ol class="steps" role="list">
       <li class="card step">
         <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg></span><h3>You choose the wait</h3><span class="step-num" aria-hidden="true">01</span></div>
-        <p>When you set it up, you choose how long turning it off should take, anywhere from a week to a year.</p>
+        <p>When you set it up, you choose how long getting out should take, anywhere from a week to a year, and you can always make it longer.</p>
       </li>
       <li class="card step">
         <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-hourglass"/></svg></span><h3>Leaving starts a countdown</h3><span class="step-num" aria-hidden="true">02</span></div>
-        <p>If you ask to leave, a countdown starts. When it ends, you’re free to go.</p>
+        <p>If you ever ask to leave, the countdown starts. When it ends, you’re free to go.</p>
       </li>
       <li class="card step">
         <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></span><h3>Stay, and it never happened</h3><span class="step-num" aria-hidden="true">03</span></div>
@@ -476,8 +479,9 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
     </ol>
     <div class="friend">
       <span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-friend"/></svg></span>
-      <p><strong>You can add a friend</strong> who’s allowed to shorten the wait to a day, but nobody can ever stop you from leaving.</p>
+      <p><strong>The only shortcut is a friend you choose,</strong> who can bring the wait down to a day but can never stop you leaving.</p>
     </div>
+    <p class="sec-foot"><strong>Going all in?</strong> We’re working on a Hardcore lock, where even wiping your Mac won’t free it before your wait is over.</p>
     <p class="sec-foot">The lock is being built now. <a href="#status">See where things stand</a>.</p>
   </div>
 </section>
@@ -629,7 +633,7 @@ h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; letter-spacing: -.012em;
       </svg>
       <h2 id="promise-title"><span class="mark"><svg aria-hidden="true"><use href="#i-mark"/></svg></span>Our promise</h2>
       <blockquote>
-        <p>SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and turning it off takes a waiting period you choose ahead of time. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn’t perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It’s an early release built with the help of AI, so keep a backup.</p>
+        <p>SafeSight Mac is free, open-source software that runs entirely on your Mac. It covers explicit images on your screen, and once it’s on, it stays on until a waiting period you chose ahead of time has passed. Only a friend you choose can shorten that wait, and never to less than a day. Nobody else can, including us. It isn’t perfect: wiping your Mac removes it, it can miss an image or cover a harmless one, and it only protects this Mac. It’s an early release built with the help of AI, so keep a backup.</p>
       </blockquote>
     </figure>
   </div>
