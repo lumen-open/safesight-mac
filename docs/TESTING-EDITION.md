@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # SafeSight Mac Testing: the Testing edition
 
-19 November 2026. Built and checked on a developer Mac (Apple M1 Max, macOS 26.3, Xcode 26.6, Swift 6.3.3) through tests, the lab harness and the checks CI runs. **Like the cover-only app it comes from, it has not been run live on any Mac yet** (see "Not done yet").
+19 November 2026, updated the same day after its first live run. Built and checked on a developer Mac (Apple M1 Max, macOS 26.3, Xcode 26.6, Swift 6.3.3) through tests, the lab harness and the checks CI runs. It has been run live only in a disposable virtual Mac (macOS 26.6.2 under Tart), never on a physical Mac: see "The first live runs" below.
 
 The owner's words: "I don't want people screwing up their Macs because of me, so we should develop and offer some sort of JUST TESTING mode that guarantees it's just a testing mode, and we must do a very careful pass to make sure it won't mess anything up on the Macs of any helpers who install it. Probably even hold off on being able to install the actual full system."
 
@@ -116,7 +116,7 @@ The temporary folder gained no compiled model in any of these runs.
 - the menu bar item: the icon with the word "Testing" beside it, and the line as its tooltip and spoken label;
 - the top of its menu, with what the edition is ("It has no lock and installs nothing...");
 - the repair card, under the way-out line, drawn the same way (words and key caps);
-- whole-window and whole-display covers, under the way-out line, and any cover hiding half a display;
+- one cover per display: the whole-display cover, else the largest whole-window cover or cover hiding half the display that has room, under its way-out line if it has one (several overlapping covers once drew two to four lines stacked on one another);
 - the "How it works" window, which opens with it and leaves out the release app's "the lock comes in a later version";
 - the app's name in Finder, the menu and the windows: "SafeSight Mac Testing".
 
@@ -142,9 +142,18 @@ tools/make-app.sh --testing <rd>.safesightmac.testing /path/to/converted-models
 `<rd>` is the reverse-domain prefix (not chosen yet; any you control will do for your own Mac). The identifier must end in `.testing`.
 
 **Running it.** Move the app to Applications if you like, and open it. There is no Dock icon: look for "Testing" in the menu bar.
-1. The menu says "Needs Screen Recording". Choose **Open Screen Recording settings…**, turn on SafeSight Mac Testing in System Settings, Privacy & Security, Screen & System Audio Recording, and let macOS quit and reopen it.
+1. The menu says "Needs Screen Recording". Choose **Open Screen Recording settings…**. macOS answers with **two questions of its own**, described under "The two macOS permission prompts" below: first its "would like to record this computer's screen" message (choose **Open System Settings**, turn on SafeSight Mac Testing, give your password to System Settings, and choose **Quit & Reopen**), then, after it reopens, on macOS 26, "is requesting to bypass the system private window picker" (choose **Allow**).
 2. The menu should say **"Covering: on"**. If it says "Not sandboxed: covering is off", the app was not made by `make-app.sh --testing`.
-3. When it starts, and after sleep or a display change, each display is covered whole until it has been checked: a few seconds, longer the first time while the models load. The cover shows the way out and ⌃⌥⌘Q.
+3. When it starts, and after sleep or a display change, each display is covered whole until it has been checked: a few seconds, longer the first time while the models load. The cover shows the way out and ⌃⌥⌘Q. Then the screen is checked picture by picture: on a slow Mac, pictures and text that look like pictures may stay blurred for a while the first time (up to a few minutes on a slow virtual Mac), and are cleared as each is judged clean. A still screen settles to nothing covered.
+
+### The two macOS permission prompts
+
+Neither prompt comes from the app, and either answer is safe.
+
+- **"SafeSight Mac Testing would like to record this computer's screen and audio."** macOS shows it the first time the app asks for Screen Recording, with **Open System Settings** and **Deny**. It is an ordinary window: it does not stay in front, and if another window comes up it slips behind it and waits there, unanswered, until you answer it or quit the app (in the first live run it sat behind System Settings, and later under the covers). So the first time, the app asks macOS and nothing else: it no longer opens System Settings over that message (not yet seen live). Answer it with Open System Settings. If you choose the menu item again, macOS does not ask again, and the app opens System Settings itself.
+- **"SafeSight Mac Testing is requesting to bypass the system private window picker and directly access your screen and audio."** On macOS 26, after you turn the permission on and the app reopens, macOS asks this once more when the app first reads the screen, with **Allow** and **Open System Settings**. Until it is answered, nothing is checked, so every display stays covered whole, with the way out, ⌃⌥⌘Q and, after two seconds, the card with Quit. In the first live run the question showed above the covers. If you ever cannot see it, quit with ⌃⌥⌘Q: macOS keeps asking, and the question is in sight once the app has quit.
+
+**A lab build for developers.** `tools/make-app.sh --testing --lab <rd>.safesightmac.lab.testing <models>` builds "SafeSight Mac Testing LAB.app" (`.build-testing-lab/`), a lab Testing build (`SAFESIGHTMAC_LAB=1`): the same app, sandboxed with the same one entitlement, that also covers the lab stand-in (the synthetic magenta-and-green checker, never a real picture) and keeps a lab event log in its own container (`Library/Caches/lab-events.log`: frame statuses, counts, timings, and window levels and rectangles in points; never a pixel, a window title, an app's name or an address). Its identifier must end in `.lab.testing` and it says LAB in its name. It is for a developer's test Mac only, never for helpers. `tools/check-no-standin.sh` proves the release build and the normal Testing build contain no stand-in and no lab log; `tools/check-testing-edition.sh` checks the normal Testing app, not this one.
 
 **After a rebuild.** An ad hoc signature is new with every build, so macOS treats each build as a new app for Screen Recording: the old entry stays in the list but no longer applies. Remove it with the minus button and grant the new build again (or run `tccutil reset ScreenCapture <bundle id>`).
 
@@ -166,7 +175,7 @@ Other things that are macOS's, not the app's: if you added it to Login Items you
 
 ## What helpers can test, and the one rule
 
-**Never test it with explicit material.** Not to see whether it works, not once. Use it with what you normally do. Developers who need a picture that must be covered use the lab stand-in, a synthetic magenta-and-green checker that exists only in lab builds (`SAFESIGHTMAC_LAB=1`) and the harness; the Testing edition has no stand-in.
+**Never test it with explicit material.** Not to see whether it works, not once. Use it with what you normally do. Developers who need a picture that must be covered use the lab stand-in, a synthetic magenta-and-green checker that exists only in lab builds (`SAFESIGHTMAC_LAB=1`): the harness, and the lab Testing build above (open a picture of the checker in Preview and it is covered). The Testing edition helpers get has no stand-in.
 
 What helps most:
 - **False covers:** anything harmless that gets covered or blurred, and in which app or site. Describe it; send a screenshot only if nothing private is on screen.
@@ -186,7 +195,7 @@ Report in a GitHub issue, with the **Testing report** form (`.github/ISSUE_TEMPL
 
 **Reporting.** In the menu, choose **Testing report…**. A window shows numbers about your Mac and the run (listed below) and updates every two seconds. Type what happened in the note field at the top (in your own words; no names or addresses needed), then select the report's text, copy it, and paste it into a new issue with the Testing report form. The app puts nothing on your clipboard, saves nothing and sends nothing: what you paste is all anyone sees.
 
-**What the report holds:** the Mac's model and macOS version; the number of displays, their sizes, scale and whether each is built in or mirrored; the edition, version and the first characters of the app's and the models' hashes; whether ⌃⌥⌘Q is the app's; how long it has covered, frames judged and how many a second; the CPU it used; the Mac's heat and whether Low Power Mode is on; how long judging and capture-to-cover take (median, 90%, 99%); how many frames had a cover; how many times a whole display was covered, and why. **Never** a picture, a window title, an app's or site's name, an address, or what was covered. The battery's charge is not shown: reading it needs a framework (IOKit) the Testing app is not allowed to link. Battery drain is best judged from macOS's own battery settings.
+**What the report holds:** the Mac's model and macOS version; the number of displays, their sizes, scale and whether each is built in or mirrored; the edition, version and the first characters of the app's and the models' hashes; whether ⌃⌥⌘Q is the app's; how long it has covered, frames judged and how many a second; the CPU it used; the Mac's heat and whether Low Power Mode is on; how long judging and capture-to-cover take (median, 90%, 99%); frames captured by the status macOS gave them (new pixels, nothing changed, and the rest); frames judged with new pixels and frames on which covers waiting to lift were judged again; updates drawn on screen and how many had a cover or blur (every update drawn, not only each frame's final plan: the first live run's report said 0 over a covered screen), the covers and blurs drawn and what is on screen now; how many times a whole display was covered on screen, and why; and how often the slow paths fired (changed parts blurred at once, pictures blurred first, parts left for later, entries left unjudged, covers judged on their own, and timer ticks that covered changes left waiting). **Never** a picture, a window title, an app's or site's name, an address, or what was covered. The battery's charge is not shown: reading it needs a framework (IOKit) the Testing app is not allowed to link. Battery drain is best judged from macOS's own battery settings.
 
 **When you are done.** Choose **Remove SafeSight Mac Testing** in its menu, then follow "Removing it" above.
 
@@ -218,7 +227,7 @@ Everything else, from when a display is covered whole to how long a cover stays 
 
 ## Asked for, and not done
 
-- **A stand-in demonstration** (a built-in harmless picture that the app covers, so a helper can see it work). Not done. The stand-in exists only in lab builds, and `tools/check-no-standin.sh` keeps it out of every app a person runs, on purpose (SD-139): a picture the detector is built to flag, shipped in an app, is a way to make it look better than it is, and it would show the fast path for a picture it already knows, not real speed. Helpers see it work on their own screens instead, and the harness's `demo` shows it to developers.
+- **A stand-in demonstration** (a built-in harmless picture that the app covers, so a helper can see it work). Not done for helpers. The stand-in exists only in lab builds, and `tools/check-no-standin.sh` keeps it out of the release app and the Testing app helpers get, on purpose (SD-139): a picture the detector is built to flag, shipped in an app, is a way to make it look better than it is, and it would show the fast path for a picture it already knows, not real speed. Developers see it work through the real app in the lab Testing build (`make-app.sh --testing --lab`), and in the harness's `demo`.
 - **The battery's charge in the live read-out.** Not done: it needs IOKit, which the Testing app may not link. The read-out shows CPU use, heat and Low Power Mode instead.
 - **Copying the report to the clipboard with a button.** Not done: the pasteboard stays forbidden, so the helper copies it by hand and sees what they copy.
 
@@ -253,6 +262,8 @@ Every way the Testing edition could get in a helper's way or leave something beh
 | Displays | With a third display (beyond `DISPLAYS_MAX`, 2) covered for good, the repair card sat in the middle of the main display and never went away | **Fixed for both editions:** the card sits on a display that is covered whole |
 | Displays | Plugging, unplugging or a resolution change covers a display whole until it is judged | By design; the covers show the way out and ⌃⌥⌘Q |
 | Sleep and wake | Covered whole on sleep and until judged after wake | By design. The lock screen is above every cover, so unlocking is never blocked. If capture does not come back, the card offers Try again, Pause and Quit |
+| Locking | The canvas was taken off as soon as the session said "locked", seconds before the lock screen was drawn on a slow Mac, and the desktop was in sight meanwhile (first live run) | **Fixed for both editions:** every display stays covered whole, below the lock screen's level, until the lock screen is seen over it, and 10 s at most |
+| Normal use | On a slow Mac a still screen never settled; covers flickered between covered whole and blurred (first live run) | **Fixed for both editions:** see "The first live runs" |
 | macOS update | "Reopen windows when logging back in" would start it again after the restart | **Fixed for both editions:** `disableRelaunchOnLogin()`, and no window state is kept |
 | macOS update | An update may reset Screen Recording, or change capture | It then says "Needs Screen Recording" and covers nothing, or covers whole with the card. Nothing is locked |
 | Crash | Covers left on screen | Not possible: confirmed gone 3 ms after the process is killed |
@@ -313,12 +324,20 @@ A second reviewer read the code, without this document's conclusions, looking fo
 
 Not changed: the sandbox check relies on what macOS tells a sandboxed app (an environment variable and its home folder); a person who crafts both for a copy run outside the sandbox gets what they asked for, and the removal still touches only a folder named after the app. The review found no memory-safety problem in the hot-key code.
 
+## The first live runs (19 November 2026)
+
+**The first run,** in a disposable virtual Mac (Tart, macOS 26.6.2, 1024 by 768 points at 2x), was unusable: on a still, harmless desktop nearly everything stayed blurred or covered for minutes, the covers flipped between covered whole and blurred about 20 times a second, the app used about 150% of a core, two to four Testing lines stacked, the repair card's buttons were cut off, the report said "Frames with a cover or blur: 0" over a covered screen, and the desktop was in sight for a moment while the screen locked. Capture inside the App Sandbox worked, ⌃⌥⌘Q quit with a real key press, and covers vanished with a killed process. The causes, found by reproducing the still desktop off the screen with the real models (`safesightmac-harness static`, on a harmless screenshot taken in the virtual Mac), and what changed, are in [STEP-1-STATUS.md](STEP-1-STATUS.md), "The first live run". In short: the judging budget went to the same borderline pictures in every frame and the rest of the screen was never judged; a cover could only lift in one call that judged everything over it; covers grew into whole-window covers; a still screen was never looked at again; every frame blurred things first; the window server's own screen-recording indicator counted as another app's window over the covers; and the app's own menu bar item, which on macOS 26 the capture sees, kept changing.
+
+**Off the screen, after the fixes** (the virtual Mac's desktop screenshot, real models, judging slowed by 10 ms a judgement to about the virtual Mac's speed, the register's budget of 40 judgements a second): the code that ran live never settled (after 90 seconds at full speed, 234 covers; the same few judgements every frame). Now most of the desktop clears in about 100 seconds (19 covers left), the last covers (the whole-window covers made while the models first worked through the screen, which need four clean rounds of every picture in the window) lift by about 200 seconds, and then nothing is drawn and nothing is judged: the screen stayed clear for the remaining 157 seconds of the run and the watcher stopped judging. On a slow Mac a busy screen is therefore covered for minutes the first time it is seen, not for ever; afterwards each new thing on screen is judged in turn (new things before old).
+
+**The second run,** to see the fixes live, stopped at the Screen Recording permission: an ad hoc signature is new with every build, so each build needs the permission again, and turning it on asks for the administrator's password, which the agent doing the run may not type into a system dialog. The lab Testing build in the virtual Mac is now signed with a signing identity made inside that virtual Mac, so the permission survives rebuilds once it has been given; it still has to be given once, by the owner. The window server's user was read as 88 inside the sandbox, and the lock screen's windows (levels 2001 and 2004, covering the display) were seen in the window list there.
+
 ## Not done yet
 
-- **Nothing has been run live.** The app has not been opened on any Mac: the rules for this work forbid running it or capturing the screen on the developer Mac. On the test Mac, check first, in this order:
+- **Not yet run on a physical Mac.** It has run only in a disposable virtual Mac (see "The first live runs"): the rules for this work forbid running it or capturing the screen on the developer Mac. On a physical test Mac, check first, in this order:
   1. the menu reads "Covering: on" (capture works inside the App Sandbox);
   2. ⌃⌥⌘Q quits with a real key press while SafeSight Mac Testing is listed under neither Accessibility nor Input Monitoring, also with a password field focused, in a full-screen app and on an AZERTY layout;
-  3. the lab stand-in (in a lab Testing build) is covered and the Testing line shows;
+  3. the lab stand-in, opened in Preview with the lab Testing build (`make-app.sh --testing --lab`) running, is covered and the Testing line shows;
   4. with a copy covering, opening a second copy shows "already running" **above** the first copy's covers, and the second copy quits;
   5. Core ML's cache in the container stays about the same size over three starts;
   6. the Testing report opens, updates, and shows the right displays;
