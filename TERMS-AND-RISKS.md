@@ -13,7 +13,7 @@ SafeSight Mac is free, open-source software. Please read this short page before 
 
 ## What it is, and what it isn't
 
-SafeSight Mac covers explicit images on your screen. It's a tool, not a treatment for anything, and it doesn't replace the people in your life or professional help.
+SafeSight Mac covers explicit images and video on your screen. It's a tool, not a treatment for anything, and it doesn't replace the people in your life or professional help.
 
 ## What can go wrong
 
