@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The keeper: the one root part of SafeSight Mac.
 //!
-//! Step 2, first pass: the pure core only. The constants the register fixes, the first
-//! fixed-layout records, the clock and the wait state machine, with every edge of the
-//! real system behind a trait in `boundary`. Nothing here touches the Mac: no launch
-//! item, no account, no password, no Secure Enclave, no network. `docs/STEP-2-STATUS.md`
-//! says what exists, what is open and what comes next.
+//! Step 2: the core. The constants the register fixes, the fixed-layout records, the
+//! clock and the wait state machine, the real check of a beacon round, with every other
+//! edge of the real system behind a trait in `boundary`. Nothing here touches the Mac: no
+//! launch item, no account, no password, no Secure Enclave, no network.
+//! `docs/STEP-2-STATUS.md` says what exists, what is open and what comes next.
 
 #![forbid(unsafe_code)]
 
+pub mod beacon;
 pub mod boundary;
 pub mod clock;
 pub mod constants;

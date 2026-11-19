@@ -39,6 +39,39 @@ pub const BEACON_CHAIN_HASH: [u8; 32] = [
 /// nothing else (SD-039 rule (b), SD-041).
 pub const BEACON_GENESIS_UNIX_SECONDS: u64 = 1_692_803_367;
 
+/// The chain public key (SD-043; chapter 03 section 2): a point of G2 on BLS12-381, 96
+/// bytes, compressed. Taken from the League's published chain information for quicknet
+/// (`/info` at api.drand.sh, read 18 November 2026). A round is accepted only if its
+/// signature verifies under this key (SD-038). A test rebuilds `BEACON_CHAIN_HASH` from
+/// this key and the other published parts, so the key and the chain hash of chapter 03
+/// check each other (SD-043: two sources).
+pub const BEACON_PUBLIC_KEY: [u8; 96] = [
+    0x83, 0xcf, 0x0f, 0x28, 0x96, 0xad, 0xee, 0x7e, 0xb8, 0xb5, 0xf0, 0x1f, 0xca, 0xd3, 0x91, 0x22,
+    0x12, 0xc4, 0x37, 0xe0, 0x07, 0x3e, 0x91, 0x1f, 0xb9, 0x00, 0x22, 0xd3, 0xe7, 0x60, 0x18, 0x3c,
+    0x8c, 0x4b, 0x45, 0x0b, 0x6a, 0x0a, 0x6c, 0x3a, 0xc6, 0xa5, 0x77, 0x6a, 0x2d, 0x10, 0x64, 0x51,
+    0x0d, 0x1f, 0xec, 0x75, 0x8c, 0x92, 0x1c, 0xc2, 0x2b, 0x0e, 0x17, 0xe6, 0x3a, 0xaf, 0x4b, 0xcb,
+    0x5e, 0xd6, 0x63, 0x04, 0xde, 0x9c, 0xf8, 0x09, 0xbd, 0x27, 0x4c, 0xa7, 0x3b, 0xab, 0x4a, 0xf5,
+    0xa6, 0xe9, 0xc7, 0x6a, 0x4b, 0xc0, 0x9e, 0x76, 0xea, 0xe8, 0x99, 0x1e, 0xf5, 0xec, 0xe4, 0x5a,
+];
+
+/// The group hash of the published chain information (SD-043). The keeper never uses it
+/// to decide anything; it is pinned so that the chain hash can be rebuilt in a test.
+pub const BEACON_GROUP_HASH: [u8; 32] = [
+    0xf4, 0x77, 0xd5, 0xc8, 0x9f, 0x21, 0xa1, 0x7c, 0x86, 0x3a, 0x7f, 0x93, 0x7c, 0x6a, 0x6d, 0x15,
+    0x85, 0x94, 0x14, 0xd2, 0xbe, 0x09, 0xcd, 0x44, 0x8d, 0x42, 0x79, 0xaf, 0x33, 0x1c, 0x5d, 0x3e,
+];
+
+/// The chain's beacon ID in the published chain information (SD-043).
+pub const BEACON_ID: &str = "quicknet";
+
+/// The chain's scheme (chapter 03 section 2): BLS on BLS12-381, signatures on G1 with no
+/// link to the previous round, hashed to the curve as RFC 9380 says.
+pub const BEACON_SCHEME: &str = "bls-unchained-g1-rfc9380";
+
+/// The domain separation tag the scheme hashes to G1 with (RFC 9380, suite
+/// BLS12381G1_XMD:SHA-256_SSWU_RO_). Fixed by the scheme; checked by real rounds.
+pub const BEACON_DST: &[u8] = b"BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_";
+
 // ----- The exit wait (SD-042, SD-044, SD-045, SD-046) -----
 
 /// `SIX_MONTHS_DAYS`: the day count of "6 months" (SD-042). A proposal; SQ-01 may change it.
@@ -306,6 +339,40 @@ mod tests {
             text.push_str(&format!("{:02x}", byte));
         }
         assert_eq!(text, "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971");
+    }
+
+    // SD-043: the chain hash is SHA-256 over the period (4 bytes, big-endian), the genesis
+    // time (8 bytes, big-endian), the public key, the group hash and the beacon ID. So the
+    // pinned key and the pinned chain hash, taken from two places, must agree.
+    #[test]
+    fn the_chain_hash_follows_from_the_pinned_key_and_parameters() {
+        use sha2::{Digest, Sha256};
+        let mut hash = Sha256::new();
+        hash.update((BEACON_PERIOD_SECONDS as u32).to_be_bytes());
+        hash.update((BEACON_GENESIS_UNIX_SECONDS as i64).to_be_bytes());
+        hash.update(BEACON_PUBLIC_KEY);
+        hash.update(BEACON_GROUP_HASH);
+        hash.update(BEACON_ID.as_bytes());
+        let digest = hash.finalize();
+        assert_eq!(digest.as_slice(), &BEACON_CHAIN_HASH[..]);
+
+        // Any other key gives another chain.
+        let mut other_key = BEACON_PUBLIC_KEY;
+        other_key[95] ^= 1;
+        let mut hash = Sha256::new();
+        hash.update((BEACON_PERIOD_SECONDS as u32).to_be_bytes());
+        hash.update((BEACON_GENESIS_UNIX_SECONDS as i64).to_be_bytes());
+        hash.update(other_key);
+        hash.update(BEACON_GROUP_HASH);
+        hash.update(BEACON_ID.as_bytes());
+        assert_ne!(hash.finalize().as_slice(), &BEACON_CHAIN_HASH[..]);
+    }
+
+    #[test]
+    fn the_scheme_names_are_the_published_ones() {
+        assert_eq!(BEACON_ID, "quicknet");
+        assert_eq!(BEACON_SCHEME, "bls-unchained-g1-rfc9380");
+        assert_eq!(BEACON_DST, &b"BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_"[..]);
     }
 
     #[test]

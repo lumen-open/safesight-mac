@@ -4,8 +4,9 @@
 //! Everything that decides lives in the pure modules and runs on CI. Everything that
 //! touches the real system (clocks, the beacon signature check, the password dialog, the
 //! random generator, the keyholder's signature, files) is behind one of the traits here.
-//! This pass has fake implementations only, in the test-only module `fakes`. No real
-//! implementation exists yet, and none is linked into a release build.
+//! The fakes are in the test-only module `fakes`. The one real implementation so far is
+//! the round check, `beacon::QuicknetVerifier`; the others belong to the hands layer and
+//! are not written yet.
 
 /// The Mac's clocks, as the keeper reads them itself (SD-037). Never taken from a message.
 pub trait TimeSource {
@@ -25,7 +26,7 @@ pub trait TimeSource {
 }
 
 /// The check of a beacon round's signature against the chain public key pinned in the
-/// lock core (SD-038, SD-043). The real one is a BLS check from the reviewed crate list.
+/// lock core (SD-038, SD-043). The real one is `beacon::QuicknetVerifier`.
 pub trait RoundVerifier {
     fn verify_round(&self, round: u64, signature: &[u8; 48]) -> bool;
 }
