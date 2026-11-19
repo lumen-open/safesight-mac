@@ -22,6 +22,12 @@ Nobody looks over your shoulder, nothing is reported to anyone, and there's no l
 
 This is about freedom. Not the thin kind, where you do whatever the next five minutes want, but the real kind: being the same person at midnight that you were at noon.
 
+## Why we build it with AI
+
+The technology on the other side keeps getting better. Feeds learn exactly what keeps you scrolling, recommendations learn what you can't resist, and AI can now make explicit images of anything, on demand. Every year it gets easier to get pulled in and lose yourself to the void.
+
+Those tools are improving fast, and the way to keep up is to turn the same power around and use it for good. So we build SafeSight Mac with AI, on purpose, to fight back: it lets a small project build faster and probe its own defences harder than it ever could alone. Every line is public, every change has to pass the project's checks, and the lock's core needs a second human reader before it ships.
+
 ## Hard to get around, by design
 
 Most blockers fall to a five-minute trick, and everyone who's needed one knows the tricks. SafeSight Mac is built to be airtight. Here's what happens to the usual ones.
