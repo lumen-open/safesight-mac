@@ -266,12 +266,20 @@ public final class DisplayPipeline {
         for (t, old) in lastBounds { if let nb = snapshot.bounds(of: t), nb != old { moved.append((t, old, nb)) } }
         // What the frame itself shows changed (global points): nothing for a frame that says nothing changed, the whole
         // display when it cannot say. A full re-judge on the `FULL_REJUDGE` rhythm, or covers judged again, is no change:
-        // nothing new is blurred first for them. An entry judged before a change in its place no longer counts towards a
-        // cover's next clean judgement.
+        // nothing new is blurred first for them.
+        // A change under a cover starts its count again: only clean judgements of what it hides now count, so four more
+        // are needed, the first possibly in this very frame. (The count is not kept for content that keeps changing, a
+        // playing video included: a cover over it lifts once it has been still for four clean judgements.) Elsewhere, an
+        // entry judged before a change that touched it no longer counts towards any cover's next clean judgement.
         let changedAreas: [CGRect] = dirty.map { DirtyRegions.prepare($0, width: img.width, height: img.height).map(map.toGlobal) } ?? [d]
         for i in held.indices {
             if moved.contains(where: { $0.0 == held[i].target }) { held[i].round = []; continue }
-            if let g = fullRect(held[i], snapshot, visible), changedAreas.contains(where: { $0.intersects(g) }) { held[i].round = [] }
+            guard !changedAreas.isEmpty else { continue }
+            if let g = fullRect(held[i], snapshot, visible), changedAreas.contains(where: { $0.intersects(g) }) {
+                held[i].clean = 0; held[i].round = []
+            } else if !held[i].round.isEmpty {
+                held[i].round = held[i].round.filter { e in !changedAreas.contains { $0.intersects(map.toGlobal(e.rect)) } }
+            }
         }
 
         // 1. What to judge: the changed areas; regions waiting to lift; overflow from earlier calls;
@@ -403,6 +411,8 @@ public final class DisplayPipeline {
         func againBudget(_ key: CallKey, normal: Int) -> Int {
             savingUsed.insert(key)
             if let n = saving[key] {
+                // Never more than half of `JUDGING_STALL` on one entry: on a Mac that slow it is left (and its covers stay).
+                guard Double(n) * msPerJudgement <= Register.JUDGING_STALL * 500 else { saving[key] = nil; return holding ? 0 : normal }
                 if bucket.available >= n { return max(normal, n) }
                 holding = true
                 return 0
@@ -571,6 +581,7 @@ public final class DisplayPipeline {
         held.removeAll { fullRect($0, snapshot, visible) == nil }
         for i in held.indices where held[i].missingSince == nil { held[i].lastGlobal = fullRect(held[i], snapshot, visible) }
         contentOffset = contentOffset.filter { visible[$0.key] != nil }
+        served = served.filter { visible[$0.key] != nil }
 
         // 5. Draw.
         let items = drawItems(snapshot, visible, map, moved: moved, lead: lead) + leftOver
