@@ -74,6 +74,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
     private let stoppedByItself: @Sendable () -> Void
     private let lock = NSLock()
     private var ended = false
+    /// Set when capture starts and taken when it is closed, under `lock`: `start` and `close` can run on different threads.
     private var stream: SCStream?
 
     init(display: SCDisplay, excluding own: [SCRunningApplication], sink: CaptureSink, generation: Int,
@@ -113,14 +114,19 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
         let s = SCStream(filter: filter, configuration: Self.configuration(for: filter, displayID: display.displayID), delegate: self)
         try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
         try await s.startCapture()
-        stream = s
+        // Closed while it was starting: stop it now rather than keep it.
+        let closed = lock.withLock { () -> Bool in
+            if ended { return true }
+            stream = s
+            return false
+        }
+        if closed { try? await s.stopCapture() }
     }
 
     func close() async {
         _ = end()
-        guard let s = stream else { return }
-        stream = nil
-        try? await s.stopCapture()
+        let s = lock.withLock { () -> SCStream? in defer { stream = nil }; return stream }
+        try? await s?.stopCapture()
     }
 
     // MARK: SCStreamOutput

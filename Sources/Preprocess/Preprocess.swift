@@ -30,6 +30,8 @@ public struct RGBAImage: Sendable {
         self.width = width; self.height = height; self.pixels = pixels
     }
     /// From a BGRA capture buffer (opaque premultiplied equals straight).
+    /// A display capture's BGRA pixels as RGBA. A display has no see-through parts: alpha is always 255, so a capture
+    /// whose alpha bytes are not opaque is never darkened by the alpha step before judging.
     public static func fromBGRA(width: Int, height: Int, bytesPerRow: Int, base: UnsafePointer<UInt8>) -> RGBAImage {
         var px = [UInt8](repeating: 0, count: width * height * 4)
         px.withUnsafeMutableBufferPointer { out in
@@ -37,7 +39,7 @@ public struct RGBAImage: Sendable {
                 let row = base + y * bytesPerRow
                 for x in 0..<width {
                     let s = row + x * 4, d = (y * width + x) * 4
-                    out[d] = s[2]; out[d + 1] = s[1]; out[d + 2] = s[0]; out[d + 3] = s[3]
+                    out[d] = s[2]; out[d + 1] = s[1]; out[d + 2] = s[0]; out[d + 3] = 255
                 }
             }
         }
