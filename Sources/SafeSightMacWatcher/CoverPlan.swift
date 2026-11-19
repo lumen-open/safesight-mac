@@ -84,9 +84,14 @@ public enum CoverLayout {
     }
 
     /// What a plan covers, in global points, cut to its display, with each piece's way-out placement.
-    static func globalPieces(_ plan: CoverPlan) -> [CoverPiece] {
+    /// A whole-display cover leaves the top `menuBar` points (`WayOut.menuBarHeight`) for the menu bar; the
+    /// Dock stays covered.
+    static func globalPieces(_ plan: CoverPlan, menuBar: CGFloat) -> [CoverPiece] {
         let d = plan.display.bounds
-        if plan.wholeDisplay != nil { return [CoverPiece(frame: d, kind: .plain, wayOut: .belowCard)] }
+        if plan.wholeDisplay != nil {
+            let mb = min(max(0, menuBar.isFinite ? menuBar : 0), WayOut.menuBarMax)
+            return [CoverPiece(frame: CGRect(x: d.minX, y: d.minY + mb, width: d.width, height: d.height - mb), kind: .plain, wayOut: .belowCard)]
+        }
         return plan.items.compactMap { item in
             let r = item.rect.intersection(d)
             return r.hasArea ? CoverPiece(frame: r, kind: item.kind, wayOut: item.wayOut ? .centre : nil) : nil
@@ -94,23 +99,23 @@ public enum CoverLayout {
     }
 
     /// Each cover inside the canvas (layer space: display-local, origin bottom-left).
-    public static func layerPieces(_ plan: CoverPlan) -> [CoverPiece] {
-        globalPieces(plan).map { var p = $0; p.frame = CoordinateSpace.toCanvasLayer(p.frame, display: plan.display.bounds); return p }
+    public static func layerPieces(_ plan: CoverPlan, menuBar: CGFloat = 0) -> [CoverPiece] {
+        globalPieces(plan, menuBar: menuBar).map { var p = $0; p.frame = CoordinateSpace.toCanvasLayer(p.frame, display: plan.display.bounds); return p }
     }
 
     /// Each cover's frame inside the canvas (layer space: display-local, origin bottom-left).
-    public static func layerFrames(_ plan: CoverPlan) -> [(CGRect, CoverKind)] {
-        layerPieces(plan).map { ($0.frame, $0.kind) }
+    public static func layerFrames(_ plan: CoverPlan, menuBar: CGFloat = 0) -> [(CGRect, CoverKind)] {
+        layerPieces(plan, menuBar: menuBar).map { ($0.frame, $0.kind) }
     }
 
     /// The per-window overlay form (the written pivot of ST-032): one overlay window per cover, its
     /// frame in Cocoa points, cut to the display.
-    public static func overlayPieces(_ plan: CoverPlan, primaryHeight: CGFloat) -> [CoverPiece] {
-        globalPieces(plan).map { var p = $0; p.frame = CoordinateSpace.toCocoa(p.frame, primaryHeight: primaryHeight); return p }
+    public static func overlayPieces(_ plan: CoverPlan, primaryHeight: CGFloat, menuBar: CGFloat = 0) -> [CoverPiece] {
+        globalPieces(plan, menuBar: menuBar).map { var p = $0; p.frame = CoordinateSpace.toCocoa(p.frame, primaryHeight: primaryHeight); return p }
     }
 
-    public static func overlayFrames(_ plan: CoverPlan, primaryHeight: CGFloat) -> [(CGRect, CoverKind)] {
-        overlayPieces(plan, primaryHeight: primaryHeight).map { ($0.frame, $0.kind) }
+    public static func overlayFrames(_ plan: CoverPlan, primaryHeight: CGFloat, menuBar: CGFloat = 0) -> [(CGRect, CoverKind)] {
+        overlayPieces(plan, primaryHeight: primaryHeight, menuBar: menuBar).map { ($0.frame, $0.kind) }
     }
 }
 

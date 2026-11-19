@@ -43,4 +43,24 @@ public enum WayOut {
     /// Whether a whole cover over this window carries the way-out line: ordinary windows (layer 0) only,
     /// not the Dock, menus, the desktop picture or other system surfaces.
     public static func carriesLine(_ w: WindowInfo) -> Bool { w.layer == 0 }
+
+    /// The window-list layers of the menu bar (kCGMainMenuWindowLevel 24, kCGStatusWindowLevel 25).
+    public static let menuBarLayers: Set<Int> = [24, 25]
+    /// No menu bar is taller than this (about 38 points on a display with a camera notch).
+    public static let menuBarMax: CGFloat = 44
+
+    /// How much of a display's top a whole-display cover leaves for the menu bar, in points: the display's
+    /// menu bar height (`topInset`, its visible frame's top inset), but only while the window list shows a
+    /// menu-bar window along the display's top edge. Otherwise 0 and the display is covered whole: the menu
+    /// bar is hidden (a full-screen app, or "hide the menu bar"), and the top of the display shows content
+    /// nobody has judged. Never more than the menu-bar window's own height or `menuBarMax`.
+    public static func menuBarHeight(display d: CGRect, topInset: CGFloat, windows: [WindowInfo]) -> CGFloat {
+        guard topInset > 0, topInset.isFinite, d.hasArea else { return 0 }
+        let bars = windows.filter { w in
+            menuBarLayers.contains(w.layer) && abs(w.bounds.minY - d.minY) <= 1 && w.bounds.height > 0
+                && w.bounds.intersection(d).width >= d.width / 2
+        }
+        guard let tallest = bars.map(\.bounds.height).max() else { return 0 }
+        return min(topInset, tallest, menuBarMax)
+    }
 }

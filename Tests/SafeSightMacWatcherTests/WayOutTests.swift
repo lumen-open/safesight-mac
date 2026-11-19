@@ -155,3 +155,51 @@ extension CoverPlan {
         #expect(!plan.touches(CGRect(x: 60, y: 32, width: 200, height: 88)))
     }
 }
+
+@Suite struct MenuBarTests {
+    let display = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    let bar = WindowInfo(number: 9, ownerPID: 90, layer: 24, bounds: CGRect(x: 0, y: 0, width: 1440, height: 24))
+
+    @Test func theMenuBarIsLeftOnlyWhileItIsOnScreen() {
+        #expect(WayOut.menuBarHeight(display: display, topInset: 24, windows: [bar]) == 24)
+        #expect(WayOut.menuBarHeight(display: display, topInset: 37, windows: [WindowInfo(number: 9, ownerPID: 90, layer: 24, bounds: CGRect(x: 0, y: 0, width: 1440, height: 37))]) == 37,
+                "a display with a camera notch has a taller menu bar")
+        #expect(WayOut.menuBarHeight(display: display, topInset: 24, windows: []) == 0, "hidden (full screen, or set to hide): cover it all")
+        #expect(WayOut.menuBarHeight(display: display, topInset: 0, windows: [bar]) == 0, "no top inset: no menu bar on this display")
+        #expect(WayOut.menuBarHeight(display: CGRect(x: 1440, y: 0, width: 1920, height: 1080), topInset: 24, windows: [bar]) == 0,
+                "the menu bar of another display does not count")
+        let statusItem = WindowInfo(number: 8, ownerPID: 91, layer: 25, bounds: CGRect(x: 1300, y: 0, width: 30, height: 24))
+        #expect(WayOut.menuBarHeight(display: display, topInset: 24, windows: [statusItem]) == 0, "a status item alone is not the menu bar")
+        let tall = WindowInfo(number: 9, ownerPID: 90, layer: 24, bounds: CGRect(x: 0, y: 0, width: 1440, height: 400))
+        #expect(WayOut.menuBarHeight(display: display, topInset: 200, windows: [tall]) == WayOut.menuBarMax, "never more than a menu bar")
+        #expect(WayOut.menuBarHeight(display: display, topInset: 30, windows: [bar]) == 24, "never more than the menu bar window")
+    }
+
+    @Test func aWholeDisplayCoverLeavesTheMenuBarAndCoversTheDock() throws {
+        let d = DisplayDescriptor(id: 5, bounds: CGRect(x: 0, y: 0, width: 1440, height: 900))
+        let plan = CoverPlan.covered(d, because: .displayChanging)
+        let piece = try #require(CoverLayout.layerPieces(plan, menuBar: 24).first)
+        // Layer space: origin bottom-left, so the menu bar is the top 24 points.
+        #expect(piece.frame == CGRect(x: 0, y: 0, width: 1440, height: 876))
+        #expect(!piece.frame.intersects(CGRect(x: 0, y: 876, width: 1440, height: 24)), "the menu bar stays in sight")
+        #expect(piece.frame.contains(CGRect(x: 0, y: 0, width: 1440, height: 90)), "the Dock stays covered")
+        #expect(piece.wayOut == .belowCard)
+        // The overlay form, in Cocoa points on a display above-right of a 900-point primary.
+        let side = DisplayDescriptor(id: 6, bounds: CGRect(x: 1440, y: -200, width: 1920, height: 1080))
+        let o = try #require(CoverLayout.overlayFrames(.covered(side, because: .tooManyDisplays), primaryHeight: 900, menuBar: 24).first)
+        #expect(o.0 == CGRect(x: 1440, y: 900 - 880, width: 1920, height: 1056))
+        // With no menu bar on screen the display is covered whole.
+        #expect(CoverLayout.layerFrames(plan, menuBar: 0).map(\.0) == [CGRect(x: 0, y: 0, width: 1440, height: 900)])
+    }
+
+    @Test func noFaultCoversLessThanTheDisplayBelowTheMenuBar() {
+        let d = DisplayDescriptor(id: 5, bounds: CGRect(x: 0, y: 0, width: 1440, height: 900))
+        for cause in FaultCause.allCases {
+            for mb in [0, 24, 37, 500] as [CGFloat] {
+                let f = CoverLayout.layerFrames(.covered(d, because: cause), menuBar: mb)
+                #expect(f.count == 1)
+                #expect(f[0].0.contains(CGRect(x: 0, y: 0, width: 1440, height: 900 - WayOut.menuBarMax)), "at most the menu bar is left")
+            }
+        }
+    }
+}

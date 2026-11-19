@@ -162,14 +162,24 @@ enum WayOutScenes {
                 plan = pipeline.process(CapturedFrame(display: display, status: .blank, image: nil, map: nil, dirty: [], time: 0.1), snapshot: snapshot, now: 0.1)
                 precondition(plan.wholeDisplay == cause)
             }
-            let pieces = CoverLayout.layerPieces(plan)
-            let lines = CoverDrawing.layers(for: plan, theme: theme, scale: scale).compactMap { $0 as? WayOutLayer }
+            // A whole-display cover leaves the menu bar, found as the app finds it: the screen's top inset, while
+            // the window list shows a menu-bar window there.
+            let mb = plan.wholeDisplay == nil ? 0 : WayOut.menuBarHeight(display: display.bounds, topInset: menuBar, windows: snapshot.windows)
+            let pieces = CoverLayout.layerPieces(plan, menuBar: mb)
+            let lines = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: mb).compactMap { $0 as? WayOutLayer }
             let file = out.appendingPathComponent("wayout-\(s.name)-\(look).png")
+            // The repair card, centred on the screen's visible frame (below the menu bar, above the Dock).
+            let card = s.whole.flatMap { c in MainActor.assumeIsolated { Composite.card(c, pause: true, theme: theme, scale: scale) } }
+            let visibleMid = (size.height - 80 + menuBar) / 2
+            let cardFrame = card.map { CGRect(x: (size.width - $0.1.width) / 2, y: size.height - visibleMid - $0.1.height / 2, width: $0.1.width, height: $0.1.height) }
             // The screen under a whole-display cover still shows the desktop; draw it beneath the cover.
-            if let cg = Composite.render(img, plan, scale: scale, theme: theme) { Composite.writePNG(cg, to: file) }
+            if let cg = Composite.render(img, plan, scale: scale, theme: theme, menuBar: mb, above: { ctx in
+                if let card, let cardFrame { Composite.drawCard(ctx, card, at: cardFrame, theme: theme) }
+            }) { Composite.writePNG(cg, to: file) }
             let line: [String: Any] = ["scene": s.name, "appearance": look, "file": file.path, "covers": plan.plainCount, "blurs": plan.blurCount,
                                        "wholeDisplay": plan.wholeDisplay?.rawValue ?? NSNull(),
-                                       "wayOutPieces": pieces.filter { $0.wayOut != nil }.count,
+                                       "wayOutPieces": pieces.filter { $0.wayOut != nil }.count, "menuBarLeft": Double(mb),
+                                       "card": cardFrame.map(rectJSON) ?? NSNull(),
                                        "lines": lines.map { ["frame": rectJSON($0.frame), "size": "\($0.size)"] }]
             print(String(data: try! JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]), encoding: .utf8)!)
         }

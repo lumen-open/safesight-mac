@@ -67,8 +67,8 @@ final class CoverPanel: NSPanel {
 /// harness's bench times it on a detached layer (no window, nothing drawn on a screen); the harness also
 /// renders it into its frames.
 public enum CoverDrawing {
-    public static func layers(for plan: CoverPlan, theme: CoverTheme = .light, scale: CGFloat = 2) -> [CALayer] {
-        layers(for: CoverLayout.layerPieces(plan), theme: theme, scale: scale)
+    public static func layers(for plan: CoverPlan, theme: CoverTheme = .light, scale: CGFloat = 2, menuBar: CGFloat = 0) -> [CALayer] {
+        layers(for: CoverLayout.layerPieces(plan, menuBar: menuBar), theme: theme, scale: scale)
     }
 
     /// Every cover, then every way-out line on top (each line lies inside its own cover, with room to spare).
@@ -141,8 +141,10 @@ public final class CoverCanvas: CoverPresenter {
             if panel.frame != frame { panel.setFrame(frame, display: false) }
             let root = panel.contentView!.layer!
             root.frame = CGRect(origin: .zero, size: frame.size)
-            let scale = Self.screen(plan.display.id)?.backingScaleFactor ?? 2
-            root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale)
+            let screen = Self.screen(plan.display.id)
+            let scale = screen?.backingScaleFactor ?? 2
+            let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
+            root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar)
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
         CATransaction.commit()
@@ -162,8 +164,10 @@ public final class OverlayCovers: CoverPresenter {
 
     public func apply(_ plans: [CoverPlan]) {
         let frames = plans.flatMap { plan in
-            let scale = CoverCanvas.screen(plan.display.id)?.backingScaleFactor ?? 2
-            return CoverLayout.overlayPieces(plan, primaryHeight: CoverCanvas.primaryHeight).map { ($0, scale) }
+            let screen = CoverCanvas.screen(plan.display.id)
+            let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
+            return CoverLayout.overlayPieces(plan, primaryHeight: CoverCanvas.primaryHeight, menuBar: menuBar)
+                .map { ($0, screen?.backingScaleFactor ?? 2) }
         }
         let theme = CoverTheme.current
         CATransaction.begin()
@@ -184,5 +188,23 @@ public final class OverlayCovers: CoverPresenter {
 
     public func removeAll() {
         for p in pool { p.orderOut(nil) }
+    }
+}
+
+/// The menu bar a whole-display cover leaves in sight: the screen's menu bar height, while the window list
+/// shows the menu bar on that display (`WayOut.menuBarHeight`). Window titles are never read.
+@MainActor
+enum MenuBarProbe {
+    static func height(_ display: DisplayDescriptor, screen: NSScreen?) -> CGFloat {
+        guard let screen else { return 0 }
+        let inset = screen.frame.maxY - screen.visibleFrame.maxY
+        guard inset > 0, let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return 0 }
+        let bars: [WindowInfo] = list.compactMap { d in
+            guard let layer = d[kCGWindowLayer as String] as? Int, WayOut.menuBarLayers.contains(layer),
+                  let b = d[kCGWindowBounds as String] as? NSDictionary, let bounds = CGRect(dictionaryRepresentation: b as CFDictionary)
+            else { return nil }
+            return WindowInfo(number: 0, ownerPID: 0, layer: layer, bounds: bounds)
+        }
+        return WayOut.menuBarHeight(display: display.bounds, topInset: inset, windows: bars)
     }
 }
