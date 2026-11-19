@@ -62,6 +62,13 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         set { presenter.notice = newValue; repairCard.notice = newValue; present() }
     }
 
+    /// Waits, at most `timeout` seconds, for the judging queue to finish what it is doing. True when it did.
+    func waitForJudging(timeout: TimeInterval) -> Bool {
+        let done = DispatchSemaphore(value: 0)
+        judgeQueue.async { done.signal() }
+        return done.wait(timeout: .now() + timeout) == .success
+    }
+
     // MARK: Start, stop
 
     @MainActor func start(rule: DetectorRule) {

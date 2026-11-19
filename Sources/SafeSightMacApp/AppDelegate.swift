@@ -214,6 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(item(AppText.howItWorks) { [weak self] in self?.showHowItWorks() })
         #if SAFESIGHTMAC_TESTING
+        menu.addItem(item(AppText.testingRemove) { [weak self] in self?.removeEverything() })
         let quit = item(AppText.testingQuit) { NSApp.terminate(nil) }
         testing.showShortcut(on: quit)
         menu.addItem(quit)
@@ -232,6 +233,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         howItWorks = w
         w.show()
     }
+
+    #if SAFESIGHTMAC_TESTING
+    /// "Remove SafeSight Mac Testing": stop, clear its own data, say what is left, quit.
+    private func removeEverything() {
+        if let s = statusItem { NSStatusBar.system.removeStatusItem(s) }
+        statusItem = nil
+        testing.removeEverything(watcher: watcher)
+    }
+    #endif
 
     static func openScreenRecordingSettings() {
         if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(u) }

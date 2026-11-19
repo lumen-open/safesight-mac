@@ -6,6 +6,7 @@
 // - It checks and covers only inside the App Sandbox (Sandbox).
 // - Its line is on the menu bar item, the menu, the repair card, whole-window and whole-display covers, any cover
 //   that hides half a display, and the "How it works" window.
+// - "Remove SafeSight Mac Testing" clears its own settings and data (Removal) and says what macOS keeps.
 #if SAFESIGHTMAC_TESTING
 import AppKit
 import Carbon.HIToolbox
@@ -77,6 +78,30 @@ final class TestingEditionApp {
         guard shortcutWorks else { return }
         item.keyEquivalent = "q"
         item.keyEquivalentModifierMask = [.control, .option, .command]
+    }
+
+    /// "Remove SafeSight Mac Testing". Stops covering, waits briefly for judging to finish, removes the app's own
+    /// settings and data, says what macOS keeps and how to remove it, and quits.
+    func removeEverything(watcher: WatcherController) {
+        watcher.stop()
+        _ = watcher.waitForJudging(timeout: 3)
+        if let id = Bundle.main.bundleIdentifier, !id.isEmpty {
+            Removal.run(bundleID: id)
+        }
+        NSApp.activate()
+        let a = NSAlert()
+        a.messageText = AppText.testingRemovedTitle
+        a.informativeText = AppText.testingRemovedDetail
+        a.addButton(withTitle: AppText.testingRemovedOpenSettings)
+        a.addButton(withTitle: AppText.testingRemovedShowApp)
+        a.addButton(withTitle: AppText.testingRemovedDone)
+        switch a.runModal() {
+        case .alertFirstButtonReturn: AppDelegate.openScreenRecordingSettings()
+        case .alertSecondButtonReturn: NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+        default: break
+        }
+        // Ends without AppKit's own quitting steps, so nothing is written again after the removal.
+        exit(0)
     }
 }
 #endif
