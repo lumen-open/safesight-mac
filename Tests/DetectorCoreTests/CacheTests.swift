@@ -97,7 +97,7 @@ final class CacheTests: XCTestCase {
         let c = VerdictCache(capacity: 64)
         XCTAssertEqual(c.maxBytes, 64 * VerdictCache.bytesPerEntry)
         let img = noise(64, 64, seed: 3)
-        let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
+        let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false, cacheable: true)
         for i in 0..<5_000 {
             c.put(VerdictCache.key(img, PixelRect(x: 0, y: 0, w: 1 + i % 64, h: 1 + (i / 64) % 64), pass: "region", version: "v"), o)
             XCTAssertLessThanOrEqual(c.count, 64)
@@ -108,7 +108,7 @@ final class CacheTests: XCTestCase {
     func testRecentlyUsedEntriesSurvive() {
         let c = VerdictCache(capacity: 64)
         let img = noise(64, 64, seed: 3)
-        let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
+        let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false, cacheable: true)
         let kept = VerdictCache.key(img, PixelRect(x: 0, y: 0, w: 64, h: 64), pass: "region", version: "v")
         c.put(kept, o)
         for i in 0..<2_000 {

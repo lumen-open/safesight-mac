@@ -104,6 +104,12 @@ public final class Detector {
         }
     }
 
+    /// Whether an outcome is covered under the current rule: confirmed, or (Balanced) a dispute no tie-breaker
+    /// could settle (SD-125, C06-3 c).
+    func covers(_ o: TileOutcome) -> Bool {
+        confirmed(o) || (config.rule == .balanced && o.disputed && !o.refereeRan)
+    }
+
     struct Task {
         var rect: PixelRect      // what the verdict applies to
         var pieces: [PixelRect]  // aspect-limited pieces actually judged
@@ -234,7 +240,7 @@ public final class Detector {
         timings.cacheMs += msSince(t0)
 
         if let progress {
-            let coveredByCache = tasks.filter { t in t.pass == .region && t.outcome.map { confirmed($0) || (config.rule == .balanced && $0.disputed && !$0.refereeRan) } ?? false }
+            let coveredByCache = tasks.filter { t in t.pass == .region && t.outcome.map { covers($0) } ?? false }
             progress(.found(pending: tasks.filter { $0.pass == .region && !$0.judged }.map(\.rect),
                             coveredByCache: coveredByCache.map(\.rect), estimatedMs: Double(pendingCost) * msPerJudgement))
         }
@@ -261,7 +267,8 @@ public final class Detector {
         for i in chosen {
             if let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) {
                 tasks[i].outcome = o; tasks[i].judged = true
-                cache.put(tasks[i].key, o)
+                // Kept only if it covers or was clearly clean (the margin rule); otherwise judged again next time.
+                if o.cacheable { cache.put(tasks[i].key, o) }
             }
         }
         for (i, j) in sameAs where tasks[j].judged { tasks[i].outcome = tasks[j].outcome; tasks[i].judged = true }
@@ -403,6 +410,8 @@ public final class Detector {
     /// Judges every piece of a task with every model (jitter before every judgement) and folds the
     /// scores into outcome flags. Scores do not outlive this function. `precomputed` holds scores already
     /// made for this task in this call (the fastest model's), so no model judges the same task twice.
+    /// The outcome is marked cacheable here, where the scores are, and only a flag leaves (the margin rule,
+    /// `VerdictCache.CLEAN_CACHE_MARGIN`).
     func judgeTask(_ frame: RGBAImage, _ t: Task, precomputed: [String: Float] = [:]) -> TileOutcome? {
         let band = Band(shortSide: t.rect.shortSide)
         var o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
@@ -410,11 +419,14 @@ public final class Detector {
         if let s = standIn, t.pieces.contains(where: { s.detects(frame, $0) }) { o.forced = true }
         #endif
         var strikeA = false, strikeB = false
+        // Clearly clean: every model's top score below the margin's share of its cover cut-off for this band.
+        var clearlyClean = true
         let small = t.rect.shortSide < config.containBelow
         let judges = models.models + (small ? models.students : [])
         for m in judges {
             let cut = table.cutoffs(model: m.id, band: band)
             guard let top = precomputed[m.id] ?? topScore(frame, t, m) else { return nil }
+            if !(top < VerdictCache.CLEAN_CACHE_MARGIN * cut.cover) { clearlyClean = false }
             let flag = top >= cut.cover
             if top > cut.clean { o.clean = false }
             if top >= cut.gridMember { o.gridMember = true }
@@ -446,6 +458,9 @@ public final class Detector {
                 refereeCalls += t.pieces.count
             }
         }
+        // Cache a cover (reusing it only ever covers) or a clearly clean outcome. A borderline-clean one, a
+        // dispute the tie-breaker declined among them, is judged again with fresh jitter when it comes back.
+        o.cacheable = covers(o) || clearlyClean
         return o
     }
 }
