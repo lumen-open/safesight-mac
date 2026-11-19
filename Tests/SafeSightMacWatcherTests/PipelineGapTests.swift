@@ -7,6 +7,24 @@ import Testing
 @testable import DetectorCore
 @testable import SafeSightMacWatcher
 
+/// A judge that answers with a verdict a test writes, for the cover layer's side of the contract.
+final class VerdictScript: Judging {
+    var answer: (PixelRect) -> FrameVerdict
+    var calls: [PixelRect] = []
+    init(_ answer: @escaping (PixelRect) -> FrameVerdict) { self.answer = answer }
+    func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                   progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+        calls.append(area)
+        return answer(area)
+    }
+    func setRule(_ rule: DetectorRule) {}
+
+    static func clean(_ area: PixelRect) -> FrameVerdict {
+        FrameVerdict(regions: [RegionVerdict(rect: area, display: .clear, reason: .judgedClean, pass: .whole)],
+                     coverWindow: false, strike: false, hot: false, judgements: 2, overloaded: 0)
+    }
+}
+
 @Suite struct PipelineGapTests {
     let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
     let win = WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
@@ -36,5 +54,28 @@ import Testing
         // Nothing else changes: the small picture is judged again under the hot rule and blurred.
         let third = p.process(idle(0.3), snapshot: snap, now: 0.3)
         #expect(third.covers(g, kind: .blur(BlurTile(columns: 1, rows: 1, rgba: [0, 0, 0, 255]))), "\(third.items.map(\.rect))")
+    }
+
+    // MARK: Whole-pass flag
+
+    @Test func aFlaggedWholePassCoversTheCallAreaEvenWithARegionCover() {
+        // The changed area is part of the window. The whole pass over it flags, and one small region in it is covered
+        // too: the rest of the changed area must not be left showing.
+        let changed = PixelRect(x: 100, y: 100, w: 200, h: 160)
+        let region = PixelRect(x: 110, y: 110, w: 40, h: 40)
+        var flagNext = false
+        let judge = VerdictScript { area in
+            guard flagNext else { return VerdictScript.clean(area) }
+            return FrameVerdict(regions: [RegionVerdict(rect: region, display: .cover, reason: .bothFamilies, pass: .region),
+                                          RegionVerdict(rect: area, display: .cover, reason: .bothFamilies, pass: .whole)],
+                                coverWindow: true, strike: false, hot: false, judgements: 4, overloaded: 0)
+        }
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: 1e6, ignoredPIDs: [])
+        var img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        flagNext = true
+        img.pixels[(150 * 600 + 150) * 4] = 9
+        let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [changed], t: 0.1), snapshot: snap, now: 0.1)
+        #expect(plan.covers(CGRect(x: 100, y: 100, width: 200, height: 160)), "\(plan.items.map(\.rect))")
     }
 }

@@ -402,16 +402,14 @@ public final class DisplayPipeline {
     /// entry left unjudged (`overload`) keeps the detector's class and is judged again.
     ///
     /// The whole pass is over the call's area. When the call spanned the window's visible area, a flagged
-    /// whole pass covers the whole window. When the call covered only changed parts of the window, the
-    /// flag is explained by any region cover in the same call; with none, the judged area is covered.
+    /// whole pass covers the whole window. When the call covered only changed parts of the window, the judged
+    /// area is covered, whatever region covers the same call made: a region cover does not explain the flag away.
     func covers(from v: FrameVerdict, target: JudgeTarget, origin o: CGPoint, img: RGBAImage, map: CaptureMap,
                 callArea: CGRect, visibleBox: CGRect) -> [Held] {
         func rel(_ r: PixelRect) -> CGRect { map.toGlobal(r).offsetBy(dx: -o.x, dy: -o.y) }
         let spansWindow = callArea.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel).contains(visibleBox)
-        let regionCover = v.regions.contains { $0.pass == .region && $0.display == .cover && $0.reason != .overload }
         func wholeOrArea() -> [Held] {
             if spansWindow { return [Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0)] }
-            if regionCover { return [] }
             return [Held(target: target, rel: callArea.offsetBy(dx: -o.x, dy: -o.y), whole: false, kind: .plain, clean: 0)]
         }
         var out: [Held] = []
