@@ -82,4 +82,23 @@ final class CoverGapTests: XCTestCase {
             XCTAssertTrue(rv.allSatisfy { $0.display == .cover }, "\(rv)")
         }
     }
+
+    // MARK: Hot ordering
+
+    func testASmallPictureJudgedBeforeTheHitIsHeldToTheHotRule() {
+        // A small picture that is not clean (a fifth of it red, under the cut-off) and, far from it, a picture both
+        // families flag. Regions are judged smallest first, so the small one comes before the hit.
+        var img = canvas(500, 300)
+        let small = PixelRect(x: 30, y: 30, w: 40, h: 40)
+        paint(&img, small, channel: nil, seed: 3)
+        paint(&img, PixelRect(x: 30, y: 30, w: 40, h: 8), channel: 0, seed: 5)
+        paint(&img, PixelRect(x: 300, y: 100, w: 60, h: 120), channel: 0, seed: 1)
+        paint(&img, PixelRect(x: 360, y: 100, w: 60, h: 120), channel: 2, seed: 2)
+        let (d, _, _) = detector(cover: 0.3)
+        let v = d.judge(img, context: JudgeContext(windowID: 99, startsCovered: false))
+        XCTAssertTrue(v.hot)
+        let rv = v.regions.filter { $0.pass == .region && $0.rect.intersects(small) }
+        XCTAssertFalse(rv.isEmpty, "the finder sees the small picture")
+        XCTAssertTrue(rv.allSatisfy { $0.display != .clear }, "\(rv)")
+    }
 }

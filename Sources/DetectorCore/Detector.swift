@@ -277,7 +277,12 @@ public final class Detector {
         // (several low-level tiles) and the tie-breaker-confirmed trigger are removed.
         let tDecide = nowNs()
         defer { timings.decisionMs += msSince(tDecide) }
-        var becameHot = false
+        // Decided over every outcome before any is classified, so a small picture judged before the hit in this call
+        // is held to the hot rule too.
+        let becameHot = tasks.contains { t in
+            guard t.judged, let o = t.outcome, !o.forced else { return false }
+            return confirmed(o) && o.flagA && o.flagB && t.rect.shortSide >= config.coverMinSide
+        }
 
         var out: [RegionVerdict] = []
         var coverWindow = false, strike = false, overloaded = 0
@@ -304,7 +309,6 @@ public final class Detector {
                 // A flagged picture under 32 detail pixels is covered too (SD-125), but makes nothing hot.
                 display = .cover
                 reason = o.flagA && o.flagB ? .bothFamilies : .referee
-                if o.flagA && o.flagB && t.rect.shortSide >= config.coverMinSide { becameHot = true }
                 if t.pass == .whole { coverWindow = true }
             } else if display == .clear && config.rule == .balanced && o.disputed && !o.refereeRan {
                 display = .cover

@@ -249,7 +249,11 @@ public final class DisplayPipeline {
             tStage = PipelineTimings.now()
             defer { timing.planMs += PipelineTimings.ms(since: tStage) }
             if judged { bucket.spend(v.judgements) }
+            let wasHot = hot.contains(p.target)
             if v.hot { hot.insert(p.target) } else { hot.remove(p.target) }
+            // A window that has just turned hot is judged again wherever it shows, so pictures judged before it turned
+            // hot are held to the hot rule too.
+            if v.hot && !wasHot { pending += p.visible }
 
             let o = origin(of: p.target, snapshot)
             countCleanJudgements(p.target, judgedArea: map.toGlobal(area).intersection(visBox), verdict: v, map: map, snapshot, visible)
