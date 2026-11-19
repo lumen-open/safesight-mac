@@ -43,10 +43,10 @@ flowchart LR
   ci --> releases
 
   classDef planned stroke-dasharray: 6 4
-  class app,shield,ext,opener,keeper planned
+  class app,shield,ext,keeper,opener planned
 ```
 
-Dashed boxes are not finished yet. The keeper's core logic is built and tested, but it does not run on a Mac yet; the opener is in progress; the app with network access, the plain shield and the browser extension are designs. Today's preview is the watcher alone, inside one menu-bar app with no networking code at all.
+Dashed boxes are not finished yet. The keeper's core logic is built and tested, but it does not run on a Mac yet; the opener is on an open pull request; the app with network access, the plain shield and the browser extension are designs. Today's preview is the watcher alone, inside one menu-bar app with no networking code at all.
 
 ## The parts
 
@@ -89,7 +89,7 @@ The keyholder page (`keyholder/`) is one static HTML file the friend opens on th
 
 ### The opener
 
-The opener is an offline page and a command-line tool, built from the keeper's own Rust core, that opens a capsule with the Recovery Key once its round exists. It runs on any computer, so a dead or wiped Mac does not strand the owner after their wait. The core is built and tested inside the keeper (an `opener` feature the keeper itself never turns on); the page and tool are in progress.
+The opener is an offline page and a command-line tool, built from the keeper's own Rust core, that opens a capsule with the Recovery Key once its round exists. It runs on any computer, so a dead or wiped Mac does not strand the owner after their wait. Its core lives inside the keeper behind an `opener` feature the keeper itself never turns on. The page and the tool are in progress on an open pull request.
 
 ### Browser extras
 
@@ -165,8 +165,8 @@ Today's preview contains no networking code at all, and `tools/check-no-network.
 | Keeper, second pass: time-signal checks, time lock, capsules, store, counters | Built, tested on CI (176 tests) | `keeper-core`, pull request #3 |
 | Keyholder page | Built, tested in Node; not yet tried on real phones | `keyholder-page`, pull request #4 |
 | Terms and risks page | Draft | `terms-page`, pull request #2 |
-| Opener page and tool | In progress (its core is in the keeper) | `opener` |
-| Website | Built, not published | `website` |
+| Opener page and tool | In progress: the tool's tests pass on CI, the page's build check doesn't yet | `opener`, pull request #6 |
+| Website | Built, not published | `website`, pull request #5 |
 | App with network, setup, Leave and Stay | Designed | — |
 | Plain shield | Designed | — |
 | Browser extension and profile | Designed | — |
@@ -202,6 +202,10 @@ cd keeper && cargo build --release && cargo test
 
 # The keyholder page (on the keyholder-page branch)
 node keyholder/build.mjs && node --test keyholder/tests/*.test.mjs
+
+# The opener (on the opener branch): the tool is part of the keeper crate, the page has its own tests
+(cd keeper && cargo test --features opener --test opener_cli)
+node --test opener/tests/*.test.mjs
 
 # The website (on the website branch)
 node site/check.mjs

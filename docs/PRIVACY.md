@@ -82,7 +82,7 @@ What this doesn't hide: someone who can watch your network can see that your Mac
 
 ## The opener
 
-**Designed, in progress.** The opener opens a capsule with your Recovery Key once your wait is over, on any computer. It sends nothing about you or your capsule. It needs one public time-signal round: it can download that round from a mirror, which then sees your internet address and which round was asked for, or you can paste the round in and it makes no request at all.
+**In progress, not yet released.** The opener opens a capsule with your Recovery Key once your wait is over, on any computer. It sends nothing about you or your capsule. It needs one public time-signal round: it can download that round from a mirror, which then sees your internet address and which round was asked for, or you can paste the round in and it makes no request at all.
 
 ## The website
 
