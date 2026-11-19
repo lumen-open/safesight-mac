@@ -6,16 +6,30 @@ SafeSight Mac watches your screen and covers explicit images as soon as they app
 
 What makes it different is the off switch. When you set it up, you choose how long turning it off should take, anywhere from a week to a year. If you ask to leave, a countdown starts. Change your mind, press **Stay**, and it's as if you never asked. You can add a friend who's allowed to shorten the wait to a day, but nobody can ever stop you from leaving.
 
-It's a promise you make to yourself on a good day that still holds on a bad one.
-
 ## Why it exists
 
-So that men and women can experience real freedom, and to fight back against a dark power that quietly takes it from them. Nobody watches you, nobody gets told, and there's no shame in using it.
+There's a dark power that takes freedom from men and women, one late night at a time. It's free, it never runs out, and it's built to keep you coming back.
+
+SafeSight Mac is how you fight back. You decide who you want to be on a good day, and it holds that line for you on the bad ones. Nobody is watching, nobody gets told, and there's nothing to be ashamed of. This is about taking your freedom back.
+
+## Hard to get around, by design
+
+Most blockers fall to a five-minute trick, and everyone who's needed one knows the tricks. SafeSight Mac is designed so the usual ones don't work.
+
+| The usual way around it | Most blockers | SafeSight Mac |
+|---|---|---|
+| Open a private window or a different browser | Often slips straight through | Still covered. It watches the screen, not the browser |
+| Turn on a VPN or change your DNS | Defeats network filters | Changes nothing. It doesn't filter the internet at all |
+| Find it on a "safe" site: social media, image search, a chat app | Blocklists can't see it | Covered wherever it shows up |
+| Use an app instead of a browser | Usually not filtered | Covered in every app |
+| Delete the extension or quit the app | Done in seconds | You're not an admin any more, and leaving takes the wait you chose |
+| Ask whoever holds the password | One weak moment, one text | Nobody holds a password. Nobody can shorten your wait, not even us |
+| Change your Mac's clock | Fools some timers | The wait is checked against a public time signal |
+| Wipe the Mac | Works | Works here too. That's an evening of work, not a click |
 
 ## How it works
 
 - **Everything stays on your Mac.** There's no account and no server, and your screen is checked on the device itself. Nothing you see is ever uploaded.
-- **Nobody can shorten your wait.** Not a friend, not support, not the people who made it. The countdown is checked against a public time signal, so changing your Mac's clock doesn't help either.
 - **It's free forever.** No trial, no card, no account. The core will never be put behind a paywall ([CORE.md](CORE.md)).
 - **The code is public,** and the lock is designed to hold even though anyone can read every line.
 
