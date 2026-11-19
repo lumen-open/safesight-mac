@@ -79,8 +79,11 @@ import Testing
     @Test(arguments: [CoverTheme.light, .dark])
     func theLineReadsClearly(_ t: CoverTheme) {
         #expect(t.text.contrast(t.card) >= 7, "words on the line: at least 7 to 1")
-        #expect(t.keyText.contrast(t.keyFill) >= 4.5, "key cap letters: at least 4.5 to 1")
+        #expect(t.keyText.contrast(t.keyFill) >= 7, "key cap letters: at least 7 to 1, the most legible thing on a cover")
         #expect(t.card.contrast(t.cover) > 1.05 || t.line.contrast(t.cover) > 1.1, "the line stands off its cover")
+        // Plain neutral caps: never the accent, and quieter than it.
+        #expect(t.keyFill != t.accent && t.keyText != t.accent && t.keyFill != t.softAccent)
+        #expect(t.keyFill.chroma * 2 < t.accent.chroma)
     }
 
     @Test(arguments: [CoverTheme.light, .dark])
@@ -90,9 +93,12 @@ import Testing
         #expect(cover.isOpaque)
         #expect(cover.backgroundColor?.alpha == 1)
         #expect(cover.opacity == 1)
-        // Neutral: no channel more than a few levels from the others (the teal is for accents only).
+        // Neutral: limestone by day, lapis-black by night. Barely any colour (the night's faint blue is the most,
+        // 22 levels), far less than the accent, and never the accent or gold.
         let c = t.cover
-        #expect(max(c.r, c.g, c.b) - min(c.r, c.g, c.b) <= 8)
+        #expect(c.chroma <= 24)
+        #expect(c.chroma * 4 < t.accent.chroma)
+        #expect(c != t.accent && c != t.softAccent && c != t.gold)
     }
 
     @Test func theAppearanceChoosesTheTheme() {

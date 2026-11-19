@@ -88,8 +88,14 @@ final class RepairPanel: NSPanel {
 public enum RepairCardView {
     public static let width: CGFloat = 440
     static let pad: CGFloat = 28
+    /// The mark: a small niche, 36 by 40 points.
+    static let mark = CGSize(width: 36, height: 40)
+    /// The gold hairline sits this far inside the card's edge, its corners concentric with the panel's.
+    static let goldInset: CGFloat = 6
+    /// The panel's corner radius as the lab harness draws it (the real panel's corners are the system's).
+    nonisolated public static let panelCorner: CGFloat = 16
 
-    /// A top-down view that paints the card, its mark and its divider.
+    /// A top-down view that paints the card, its gold hairline, its mark and its divider.
     final class Card: NSView {
         let theme: CoverTheme
         var divider: CGFloat = 0
@@ -98,20 +104,25 @@ public enum RepairCardView {
         override var isFlipped: Bool { true }
         override func draw(_ dirty: CGRect) {
             guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-            ctx.setFillColor(theme.card.cg()); ctx.fill(bounds)
-            // The mark: a soft teal tile behind the app's symbol.
-            let mark = CGRect(x: RepairCardView.pad, y: RepairCardView.pad, width: 36, height: 36)
-            ctx.setFillColor(theme.softAccent.cg())
-            ctx.addPath(CGPath(roundedRect: mark, cornerWidth: 10, cornerHeight: 10, transform: nil)); ctx.fillPath()
-            ctx.setFillColor(theme.line.cg())
-            ctx.fill(CGRect(x: RepairCardView.pad, y: divider, width: bounds.width - 2 * RepairCardView.pad, height: 1))
+            let t = theme, pad = RepairCardView.pad
+            ctx.setFillColor(t.card.cg()); ctx.fill(bounds)
+            // Gold leaf: one hairline just inside the edge. It carries no meaning and no words.
+            let i = RepairCardView.goldInset + 0.5, r = RepairCardView.panelCorner - i
+            ctx.setStrokeColor(t.gold.cg(t.goldLineAlpha)); ctx.setLineWidth(1)
+            ctx.addPath(CGPath(roundedRect: bounds.insetBy(dx: i, dy: i), cornerWidth: r, cornerHeight: r, transform: nil)); ctx.strokePath()
+            // The mark: the app's symbol in a small niche of malachite wash.
+            ctx.setFillColor(t.softAccent.cg())
+            ctx.addPath(Niche.path(CGRect(origin: CGPoint(x: pad, y: pad), size: RepairCardView.mark),
+                                   arch: RepairCardView.mark.width / 2, corner: 9, topAtMinY: true)); ctx.fillPath()
+            ctx.setFillColor(t.line.cg())
+            ctx.fill(CGRect(x: pad, y: divider, width: bounds.width - 2 * pad, height: 1))
         }
     }
 
-    static func label(_ s: String, _ font: NSFont, _ color: CoverTheme.RGB, width: CGFloat) -> NSTextField {
+    static func label(_ s: String, _ font: NSFont, _ color: CoverTheme.RGB, width: CGFloat, kern: CGFloat = 0) -> NSTextField {
         let f = NSTextField(wrappingLabelWithString: s)
         f.font = font
-        f.textColor = NSColor(cgColor: color.cg())
+        f.attributedStringValue = NSAttributedString(string: s, attributes: [.font: font, .foregroundColor: color.ns(), .kern: kern])
         f.isSelectable = false
         f.drawsBackground = false
         f.preferredMaxLayoutWidth = width
@@ -126,19 +137,20 @@ public enum RepairCardView {
         card.setAccessibilityLabel("SafeSight Mac")
         var y = pad
 
-        let symbol = NSImageView(frame: CGRect(x: pad + 8, y: y + 8, width: 20, height: 20))
+        // The symbol sits a little low in the niche, centred under the arch.
+        let symbol = NSImageView(frame: CGRect(x: pad + (mark.width - 20) / 2, y: y + 12, width: 20, height: 20))
         symbol.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(pointSize: 15, weight: .semibold))
-        symbol.contentTintColor = NSColor(cgColor: t.accent.cg())
+        symbol.contentTintColor = t.accentText.ns()
         card.addSubview(symbol)
-        y += 36 + 16
+        y += mark.height + 16
 
-        for (text, font, color, gap) in [
-            (AppText.repairHeading, NSFont.systemFont(ofSize: 15, weight: .semibold), t.text, CGFloat(6)),
-            (cause.plainWords, NSFont.systemFont(ofSize: 13), t.text, CGFloat(10)),
-            (AppText.repairDetail, NSFont.systemFont(ofSize: 12), t.muted, CGFloat(18)),
+        for (text, font, color, gap, kern) in [
+            (AppText.repairHeading, CoverTheme.heading(18), t.text, CGFloat(6), CoverTheme.headingKern(18)),
+            (cause.plainWords, CoverTheme.body(13), t.text, CGFloat(10), CGFloat(0)),
+            (AppText.repairDetail, CoverTheme.body(12), t.muted, CGFloat(18), CGFloat(0)),
         ] {
-            let l = label(text, font, color, width: inner)
+            let l = label(text, font, color, width: inner, kern: kern)
             l.frame.origin = CGPoint(x: pad - 2, y: y)   // a label draws its text 2 points in
             card.addSubview(l)
             y += l.frame.height + gap
@@ -157,7 +169,8 @@ public enum RepairCardView {
             y += size.height + 22
         }
 
-        // Buttons, right-aligned: Quit, Pause (practice state only), Try again.
+        // Buttons, right-aligned: Quit, Pause (practice state only), Try again. Native push buttons; Try again
+        // is malachite with its own ink.
         var specs: [(String, Selector?, Bool)] = [(AppText.repairQuit, quit, false)]
         if pause { specs.append((AppText.repairPause, pauseAction, false)) }
         specs.append((AppText.repairTryAgain, tryAgain, true))
@@ -166,8 +179,13 @@ public enum RepairCardView {
             let b = NSButton(title: title, target: target, action: action)
             b.bezelStyle = .push
             b.controlSize = .large
-            b.font = .systemFont(ofSize: 13, weight: main ? .medium : .regular)
-            if main { b.bezelColor = NSColor(cgColor: t.accent.cg()) }
+            b.font = CoverTheme.body(13, weight: main ? .medium : .regular)
+            if main {
+                b.bezelColor = t.accent.ns()
+                b.attributedTitle = NSAttributedString(string: title, attributes: [
+                    .font: CoverTheme.body(13, weight: .medium), .foregroundColor: t.onAccent.ns(), .paragraphStyle: centred,
+                ])
+            }
             // A click never makes the card key, so the keyboard stays with the app underneath.
             b.refusesFirstResponder = true
             b.sizeToFit()
@@ -180,5 +198,11 @@ public enum RepairCardView {
         y += 32 + pad - 4
         card.frame.size.height = ceil(y)
         return card
+    }
+
+    static var centred: NSParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        p.alignment = .center
+        return p
     }
 }

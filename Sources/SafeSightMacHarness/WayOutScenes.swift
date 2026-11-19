@@ -2,7 +2,8 @@
 // LAB ONLY. Synthetic desktops for looking at the way out: a browser-like window drawn from plain shapes
 // (title bar, tabs, toolbar, a page of grey bars), a menu bar and a Dock, and the lab stand-in (a synthetic
 // magenta-and-green checker) to force the covers. The real pipeline judges each frame with null models;
-// only the stand-in covers. Each scene is written as a PNG with the cover layer's own layers drawn on it.
+// only the stand-in covers. Each scene is written as a PNG with the cover layer's own layers drawn on it, and
+// one more shows the "How it works" window drawn from its own views.
 // Harmless shapes only; nothing is captured from the screen.
 #if SAFESIGHTMAC_LAB
 import AppKit
@@ -181,6 +182,19 @@ enum WayOutScenes {
                                        "wayOutPieces": pieces.filter { $0.wayOut != nil }.count, "menuBarLeft": Double(mb),
                                        "card": cardFrame.map(rectJSON) ?? NSNull(),
                                        "lines": lines.map { ["frame": rectJSON($0.frame), "size": "\($0.size)"] }]
+            print(String(data: try! JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]), encoding: .utf8)!)
+        }
+        // The "How it works" window on the plain desktop, drawn offscreen from its own views.
+        let titleBar: CGFloat = 28
+        if let page = MainActor.assumeIsolated({ Composite.snapshot(HowItWorksView.make(), theme: theme, scale: scale) }) {
+            let h = min(page.1.height + titleBar, size.height - menuBar - 16)
+            let r = CGRect(x: (size.width - page.1.width) / 2, y: (size.height - menuBar - h) / 2, width: page.1.width, height: h)
+            let img = frame { ctx in desktop(ctx, p) }
+            let file = out.appendingPathComponent("howitworks-\(look).png")
+            if let cg = Composite.render(img, CoverPlan(display: display, items: []), scale: scale, theme: theme, above: { ctx in
+                Composite.drawWindow(ctx, page, title: "How SafeSight Mac works", at: r, titleBar: titleBar, theme: theme)
+            }) { Composite.writePNG(cg, to: file) }
+            let line: [String: Any] = ["scene": "howitworks", "appearance": look, "file": file.path, "window": rectJSON(r)]
             print(String(data: try! JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]), encoding: .utf8)!)
         }
     }

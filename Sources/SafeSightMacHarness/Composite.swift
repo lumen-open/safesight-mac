@@ -4,6 +4,7 @@
 // lines included. Nothing is captured from the screen and no window is shown.
 import AppKit
 import CoreGraphics
+import CoreText
 import Foundation
 import ImageIO
 import Preprocess
@@ -38,7 +39,11 @@ enum Composite {
 
     /// The repair card, drawn offscreen from its views (no window is shown), with its size in points.
     @MainActor static func card(_ cause: FaultCause, pause: Bool, theme t: CoverTheme, scale: CGFloat) -> (CGImage, CGSize)? {
-        let v = RepairCardView.make(cause: cause, pause: pause, theme: t, target: nil, tryAgain: nil, pause: nil, quit: nil)
+        snapshot(RepairCardView.make(cause: cause, pause: pause, theme: t, target: nil, tryAgain: nil, pause: nil, quit: nil), theme: t, scale: scale)
+    }
+
+    /// A view drawn offscreen in the theme's appearance (no window is shown), with its size in points.
+    @MainActor static func snapshot(_ v: NSView, theme t: CoverTheme, scale: CGFloat) -> (CGImage, CGSize)? {
         let look = NSAppearance(named: t.isDark ? .darkAqua : .aqua)!
         v.appearance = look
         let size = v.bounds.size
@@ -53,7 +58,7 @@ enum Composite {
     /// Draws the card as its panel shows it: rounded, with a hairline edge and a soft shadow. `at` is its frame
     /// in display points, y up.
     static func drawCard(_ ctx: CGContext, _ card: (CGImage, CGSize), at r: CGRect, theme t: CoverTheme) {
-        let shape = CGPath(roundedRect: r, cornerWidth: 16, cornerHeight: 16, transform: nil)
+        let rc = RepairCardView.panelCorner, shape = CGPath(roundedRect: r, cornerWidth: rc, cornerHeight: rc, transform: nil)
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: 0, height: -12), blur: 40, color: CGColor(gray: 0, alpha: t.isDark ? 0.6 : 0.22))
         ctx.setFillColor(t.card.cg()); ctx.addPath(shape); ctx.fillPath()
@@ -64,7 +69,35 @@ enum Composite {
         ctx.restoreGState()
         ctx.setStrokeColor(t.isDark ? CGColor(gray: 1, alpha: 0.12) : CGColor(gray: 0, alpha: 0.12))
         ctx.setLineWidth(0.5)
-        ctx.addPath(CGPath(roundedRect: r.insetBy(dx: 0.25, dy: 0.25), cornerWidth: 16, cornerHeight: 16, transform: nil)); ctx.strokePath()
+        ctx.addPath(CGPath(roundedRect: r.insetBy(dx: 0.25, dy: 0.25), cornerWidth: rc, cornerHeight: rc, transform: nil)); ctx.strokePath()
+    }
+
+    /// Draws a window of the app as the system shows it, sketched: the theme's ground under a transparent title bar
+    /// (window buttons and the title), the page below it, rounded, with a hairline edge and a soft shadow. `at` is
+    /// the window's frame in display points, y up; the title bar is its top `titleBar` points.
+    static func drawWindow(_ ctx: CGContext, _ page: (CGImage, CGSize), title: String, at r: CGRect, titleBar: CGFloat, theme t: CoverTheme) {
+        let rc = RepairCardView.panelCorner, shape = CGPath(roundedRect: r, cornerWidth: rc, cornerHeight: rc, transform: nil)
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: -12), blur: 40, color: CGColor(gray: 0, alpha: t.isDark ? 0.6 : 0.22))
+        ctx.setFillColor(t.background.cg()); ctx.addPath(shape); ctx.fillPath()
+        ctx.restoreGState()
+        ctx.saveGState()
+        ctx.addPath(shape); ctx.clip()
+        ctx.draw(page.0, in: CGRect(x: r.minX, y: r.maxY - titleBar - page.1.height, width: page.1.width, height: page.1.height))
+        for (i, c) in [0xFF5F57, 0xFEBC2E, 0x28C840].enumerated() {
+            ctx.setFillColor(CoverTheme.RGB(UInt32(c)).cg())
+            ctx.fillEllipse(in: CGRect(x: r.minX + 14 + CGFloat(i) * 20, y: r.maxY - titleBar / 2 - 6, width: 12, height: 12))
+        }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: title, attributes: [
+            .font: NSFont.titleBarFont(ofSize: NSFont.systemFontSize), .foregroundColor: t.text.ns(0.85)]))
+        let w = CTLineGetTypographicBounds(line, nil, nil, nil)
+        ctx.textMatrix = .identity
+        ctx.textPosition = CGPoint(x: r.midX - CGFloat(w) / 2, y: r.maxY - titleBar / 2 - 4.5)
+        CTLineDraw(line, ctx)
+        ctx.restoreGState()
+        ctx.setStrokeColor(t.isDark ? CGColor(gray: 1, alpha: 0.12) : CGColor(gray: 0, alpha: 0.12))
+        ctx.setLineWidth(0.5)
+        ctx.addPath(CGPath(roundedRect: r.insetBy(dx: 0.25, dy: 0.25), cornerWidth: rc, cornerHeight: rc, transform: nil)); ctx.strokePath()
     }
 
     static func cgImage(_ img: RGBAImage) -> CGImage? {
