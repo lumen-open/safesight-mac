@@ -110,9 +110,9 @@ Commands, all run before the final commit:
 
 ```
 swift build -c release                                     # passes, no warnings in new code
-swift test                                                 # 349 tests pass (64 XCTest, 285 Swift Testing)
-SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 354 (67, 287)
-SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing  # 339 (64, 275)
+swift test                                                 # 352 tests pass (64 XCTest, 288 Swift Testing)
+SAFESIGHTMAC_LAB=1 swift test --scratch-path .build-lab        # 357 (67, 290)
+SAFESIGHTMAC_TESTING=1 swift test --scratch-path .build-testing  # 342 (64, 278)
 tools/check-spdx.sh && tools/check-signoff.sh && tools/check-no-network.sh && tools/check-no-standin.sh
 tools/check-testing-edition.sh && tools/check-covers-vanish.sh
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness demo --origin 1440,0 --primary-height 900 --out OUT
@@ -356,7 +356,8 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
   - whether a still screen sends idle frames;
   - whether `.best` gives full backing pixels on every display type;
   - whether excluding the app keeps the content under a cover visible to capture.
-- **Window levels and surfaces** (ST-032): full-screen apps, Spaces, Mission Control, menus, the Dock, notifications, click-through, VoiceOver. The canvas level is a working value: just under the lock screen's shielding level, far above the screen saver and the assistive-technology levels, with the app's own windows and its menu one level higher. Another app's window at or above the canvas, over a cover, covers that display whole. **Must check on a test Mac** which ordinary system windows sit that high or could trigger it, so none leaves a display covered whole for good: Live Captions, the Accessibility Keyboard, VoiceOver's caption panel, Zoom's window, picture-in-picture video, the screenshot toolbar (⇧⌘5), Notification Centre, Spotlight, the Force Quit window and the lock screen itself. Also check that the app's own menu really opens above a whole-display cover (its windows are lifted while it is open), and that ScreenCaptureKit always lists the app while its canvas is up (no stream starts otherwise).
+- **The lock screen over a whole-display cover. Test this first on the virtual Mac.** With a display covered whole, lock the screen, log out to the login window, trigger an authorization prompt (an administrator password request) and open the Accessibility Keyboard: each must stay visible and usable above the cover. The canvas sits at level 1990, below loginwindow's windows, which were read at levels 2001 and 2004 on a locked Mac, and every cover is taken off the screen while the OS says the screen is locked or another session has the console. Raising the canvas above the lock screen is not allowed until this test passes.
+- **Window levels and surfaces** (ST-032): full-screen apps, Spaces, Mission Control, menus, the Dock, notifications, click-through, VoiceOver. The canvas level is a working value: 1990, above the screen saver (1000) and the assistive-technology levels (up to 1500), below the lock screen, with the app's own windows and its menu at 1991. Another app's window at or above the canvas, over a cover, covers that display whole, and the repair card says why. **An app that raises its own window above 1990 is itself not covered** (only everything else is); the planned answer is to close such an app (blueprint SD-304). **Must check on a test Mac** which ordinary system windows sit that high or could trigger the whole-display cover, so none leaves a display covered whole for good: Live Captions, the Accessibility Keyboard, VoiceOver's caption panel, Zoom's window, picture-in-picture video, the screenshot toolbar (⇧⌘5), Notification Centre, Spotlight and the Force Quit window. Also check that the app's own menu really opens above a whole-display cover (its windows are lifted while it is open), and that ScreenCaptureKit always lists the app while its canvas is up (no stream starts otherwise).
 - **Displays** (ST-033, ST-034): external, mirrored, Sidecar, AirPlay, DisplayLink; plug, unplug, sleep, wake, lid, rotation and resolution changes. The display rule is tested with faked display lists and frames only. Not yet seen on hardware:
   - whether macOS makes the reconfiguration callback's begin call before it applies each kind of change, and on the main thread;
   - how many frames a new display shows before its canvas exists (SL-023);
@@ -410,10 +411,10 @@ The set is the lab build's 932 held-out harmless screens: 180 composed pages of 
 - **Other screens.** Media sent from the Mac straight to a TV, and a window capture sent to another device, never pass through the cover. See "Other displays and other screens" below.
 - **Load.** A busy screen judged from scratch exceeds the budget. Its new pictures are blurred first; unjudged 512-pixel slices are covered; after 0.5 s of unjudged entries the window is covered whole. A busy Retina page stays blurred or covered for 13 to 21 s at `JUDGEMENT_BUDGET` (6 to 8 s with no budget limit). A third display and beyond are covered whole.
 - **Choices made where the register is silent or open.** Each is a working value tied to its test:
-  - canvas window level: just under the shielding level (ST-032);
+  - canvas window level: 1990, below the lock screen (ST-032);
   - time per judged frame: 0.25 s (`JUDGE_CALL_WALL`); a change left unjudged 0.5 s is covered; the pictures of new frames are blurred before judging after 3 slow frames in a row; a large change is blurred whole only until its pictures are found (ST-038);
   - a closed window's cover: kept where it stood until judged clean 4 times, or 2 times after 1 s (`WINDOW_GONE`);
-  - the reported changed areas are checked against the pixels once a second;
+  - the reported changed areas are checked against the pixels once a second, by comparing the frame with the frame of the last check outside every area reported since. That keeps one more full frame per display in memory (about 59 MB on a 5K display). When more than 256 areas are reported between checks they are merged, grown to the 8-pixel grid, so a change in that margin is not caught by the check;
   - cover colour: one calm neutral per appearance, in the theme type `CoverTheme` (the desert study);
   - the control band a whole-window cover leaves: 92 points (`WayOut.controlBand`, ST-032);
   - the room a cover needs around the way-out line: 24 points;
