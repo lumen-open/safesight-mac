@@ -45,4 +45,15 @@ mod tests {
         assert_eq!(parts.len(), 3);
         assert!(parts.iter().all(|p| p.parse::<u32>().is_ok()));
     }
+
+    // For one CI run only: writes the lock file CI resolved into the log, past the test
+    // harness's capture, so that it can be committed. Removed by the commit that adds it.
+    #[test]
+    fn show_the_lock_file_in_the_log() {
+        use std::io::Write;
+        let mut out = std::io::stderr();
+        let _ = out.write_all(b"=====BEGIN KEEPER CARGO.LOCK=====\n");
+        let _ = out.write_all(include_str!("../Cargo.lock").as_bytes());
+        let _ = out.write_all(b"=====END KEEPER CARGO.LOCK=====\n");
+    }
 }
