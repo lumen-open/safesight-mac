@@ -35,7 +35,7 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 | The usual way around it | Most blockers | SafeSight Mac |
 |---|---|---|
 | Open a private window or a different browser | Often slips straight through | Still covered. It works on the screen itself, not inside the browser |
-| Turn on a VPN or change your DNS | Defeats network filters | Changes nothing. It doesn't filter the internet at all |
+| Turn on a VPN or change your DNS | Defeats network filters | Changes nothing. The cover works on the screen, not the network, and the site blocking we're adding runs on your Mac, where a VPN or new DNS can't switch it off |
 | Find it on a "safe" site: social media, image search, a chat app | Blocklists can't see it | Covered wherever it shows up |
 | Use an app instead of a browser | Usually not filtered | Covered in every app |
 | Delete the extension or quit the app | Done in seconds | You're not an admin any more, and leaving takes the wait you chose |
