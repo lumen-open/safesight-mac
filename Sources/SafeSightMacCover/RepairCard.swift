@@ -54,8 +54,7 @@ public final class RepairCard {
                                         notice: notice)
             p.appearance = NSAppearance(named: theme.isDark ? .darkAqua : .aqua)
             p.backgroundColor = NSColor(cgColor: theme.card.cg())
-            p.contentView = v
-            p.setContentSize(v.frame.size)
+            p.fit(v)
             shown = (first, actions.pause != nil, theme.isDark, notice)
         }
         // Centred on its display when it appears or its display changes; after that the owner may move it.
@@ -81,6 +80,16 @@ public final class RepairCard {
 /// The card's panel: above the covers, on every Space, never main, key only if a view needs typing.
 final class RepairPanel: NSPanel {
     override var canBecomeMain: Bool { false }
+
+    /// Shows `card` whole. Setting a window's content view first resizes the view to the window's current content size
+    /// (300 points high when the panel is new), so the card's own size is read before, and the window made that size
+    /// after: the buttons at the bottom of a taller card were cut off on a real screen.
+    func fit(_ card: NSView) {
+        let size = card.frame.size
+        contentView = card
+        setContentSize(size)
+        card.setFrameSize(size)
+    }
 
     static func make() -> RepairPanel {
         let p = RepairPanel(contentRect: CGRect(x: 0, y: 0, width: RepairCardView.width, height: 300),
@@ -209,6 +218,7 @@ public enum RepairCardView {
         if pause { specs.append((AppText.repairPause, pauseAction, false)) }
         specs.append((AppText.repairTryAgain, tryAgain, true))
         var x = width - pad
+        var buttonHeight: CGFloat = 32
         for (title, action, main) in specs.reversed() {
             let b = NSButton(title: title, target: target, action: action)
             b.bezelStyle = .push
@@ -227,9 +237,11 @@ public enum RepairCardView {
             x -= b.frame.width
             b.frame.origin = CGPoint(x: x, y: y)
             card.addSubview(b)
+            buttonHeight = max(buttonHeight, b.frame.height)
             x -= 8
         }
-        y += 32 + pad - 4
+        // The tallest button's own height: large push buttons are taller on recent macOS than the 32 points once assumed.
+        y += buttonHeight + pad - 4
         card.frame.size.height = ceil(y)
         return card
     }
