@@ -3,7 +3,7 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-69VVbN0WESlJFyRt3g714MdY9YX73Xk4HgiI6HFwbcg='; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-W91UzDs2TdfMdBL6VNThVKvZ+h/Q9hPMob44x9yuLIA='; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
@@ -34,6 +34,9 @@
   --tile: #eaece6;
   --glyph: #d2d7cd;
   --knot: #87908b;
+  --ill: #7c8681;
+  --night: #dce5eb;
+  --moon: #fbfbf8;
   --hover: rgba(21, 28, 27, .05);
   --us-bg: #f3f7f4;
   --head-bg: #f4f5f1;
@@ -65,6 +68,9 @@
     --tile: #182035;
     --glyph: #283250;
     --knot: #6d7791;
+    --ill: #75809b;
+    --night: #121c3a;
+    --moon: #dcdfd4;
     --hover: rgba(236, 238, 230, .06);
     --us-bg: #11222f;
     --head-bg: #10172a;
@@ -238,23 +244,132 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
 /* Badges are small niches: a round arch over a short wall */
 .badge { width: 46px; height: 50px; border-radius: 23px 23px 10px 10px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; padding-top: 4px; }
 
-/* How it stays on */
-.steps { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 14px; }
-.step-head { display: grid; grid-template-columns: 48px minmax(0, 1fr); grid-template-areas: "badge title"; align-items: center; column-gap: 16px; margin-bottom: 12px; }
-.step-head .badge { grid-area: badge; }
-.step-head h3 { grid-area: title; }
-.step-num { display: none; grid-area: num; color: var(--muted); font-family: var(--serif); font-style: italic; font-size: 1.0625rem; font-weight: 400; font-variant-numeric: oldstyle-nums; letter-spacing: .02em; }
-.friend { margin-top: 14px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding: 22px 20px 24px; border-radius: var(--radius); background: var(--accent-soft); }
-.friend .badge { background: var(--card); }
-.friend p { font-size: 1.0625rem; text-wrap: pretty; }
-.sec-foot { margin-top: 22px; color: var(--muted); font-size: .9375rem; }
+/* Illustrations: one line weight, flat fills, every colour from the tokens above */
+.ill { width: 100%; height: auto; overflow: visible; }
+.w-l, .w-paper, .w-acc-l, .w-track, .w-prog, .w-gold, .w-sun, .w-door, .w-moon, .w-leaf, .w-cover, .w-seal, .w-dash, .w-friend, .w-badge { vector-effect: non-scaling-stroke; }
+.w-l { fill: none; stroke: var(--ill); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.w-faint { stroke-opacity: .55; }
+.w-paper { fill: var(--card); stroke: var(--ill); stroke-width: 1.5; stroke-linejoin: round; }
+.w-tile { fill: var(--tile); }
+.w-glyph { fill: var(--glyph); }
+.w-cover { fill: var(--stone); stroke: var(--ill); stroke-opacity: .4; stroke-width: 1; }
+.w-seal { fill: none; stroke: var(--muted); stroke-opacity: .5; stroke-width: 1.5; }
+.w-seal-dot { fill: var(--muted); fill-opacity: .5; }
+.w-soft { fill: var(--accent-soft); }
+.w-acc { fill: var(--accent); }
+.w-acc-l { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.w-hole { fill: var(--card); }
+.w-track { fill: none; stroke: var(--glyph); stroke-width: 5; stroke-linecap: round; }
+.w-prog { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; }
+.w-thin { stroke-width: 3; }
+.w-mini { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.w-knob { fill: var(--card); stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.w-btn { fill: var(--on-accent); font-family: var(--sans); font-size: 13px; font-weight: 650; letter-spacing: .01em; }
+.w-gold { fill: none; stroke: var(--gold-line); stroke-width: 1.25; stroke-linecap: round; }
+.w-sun { fill: var(--gold-wash); stroke: var(--gold); stroke-opacity: .7; stroke-width: 1.25; }
+.w-door { fill: url(#g-dawn); stroke: var(--ill); stroke-width: 1.5; }
+.w-dawn0 { stop-color: var(--card); }
+.w-dawn1 { stop-color: var(--gold); stop-opacity: .13; }
+.w-spill1 { stop-color: var(--gold); stop-opacity: 0; }
+.w-spill { fill: url(#g-spill); }
+.w-moon { fill: var(--moon); stroke: var(--ill); stroke-width: 1.5; stroke-linejoin: round; }
+.w-leaf { fill: var(--accent-soft); stroke: var(--ill); stroke-width: 1.5; stroke-linejoin: round; }
+.w-dash { fill: none; stroke: var(--ill); stroke-width: 1.5; stroke-dasharray: 3 3.5; stroke-linecap: round; stroke-opacity: .8; }
+.w-friend { fill: none; stroke: var(--accent-text); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.w-badge { fill: var(--accent-soft); stroke: var(--card); stroke-width: 3; }
+@media (prefers-color-scheme: dark) {
+  .w-dawn1 { stop-opacity: .10; }
+  .w-cover { stroke-opacity: .55; }
+}
+
+/* How it stays on: five steps, each drawn in a small niche */
+.walk { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 40px; }
+.walk-step { display: grid; gap: 18px; align-content: start; }
+.niche {
+  display: flex; align-items: flex-end; justify-content: center;
+  height: 190px; padding: 0 16px 12px;
+  border-radius: 50% 50% 16px 16px / 88px 88px 16px 16px;
+  background: var(--bg);
+}
+.niche .ill { width: 208px; max-width: 100%; }
+.niche-night { background: var(--night); }
+.niche-dawn { background: radial-gradient(85% 75% at 50% 100%, var(--gold-wash), transparent 80%), var(--bg); }
+.walk-num {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+  font-family: var(--serif); font-style: italic; font-size: 1.1875rem; line-height: 1; font-variant-numeric: oldstyle-nums;
+  color: var(--accent-text);
+}
+.walk-num::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.walk-step h3 { margin-bottom: 8px; text-wrap: balance; }
+.walk-text p:not(.walk-num) { color: var(--muted); text-wrap: pretty; }
+.walk-text strong { color: var(--text); }
+.sec-foot { margin-top: 40px; color: var(--muted); font-size: .9375rem; max-width: 62rem; }
 .sec-foot strong { color: var(--text); }
 .sec-foot + .sec-foot { margin-top: 6px; }
+@media (min-width: 720px) and (max-width: 1079px) {
+  .walk { gap: 36px; }
+  .walk-step { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); column-gap: 44px; align-items: center; }
+  .walk-step:nth-child(even) { grid-template-columns: minmax(0, 1fr) minmax(0, 300px); }
+  .walk-step:nth-child(even) .niche { order: 2; }
+  .niche { height: 216px; border-radius: 50% 50% 16px 16px / 112px 112px 16px 16px; }
+  .walk-text { max-width: 30rem; }
+}
+@media (min-width: 1080px) {
+  .walk { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px; margin-top: 52px; }
+  .niche { height: auto; aspect-ratio: 5 / 6; padding: 0 10px 14px; border-radius: 50% 50% 14px 14px / 41.667% 41.667% 14px 14px; }
+  .niche .ill { width: 100%; }
+  .walk-num { margin-top: 4px; }
+  .walk-num::after { margin-right: -24px; }
+  .walk-step:last-child .walk-num::after { margin-right: 0; }
+  .walk-step h3 { font-size: 1.1875rem; }
+  .walk-text p:not(.walk-num) { font-size: 1rem; line-height: 1.55; }
+}
+
+/* What's inside: your Mac and its three parts, and the only two things that go online */
+.inside { margin: 48px 0 0; }
+.net { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; max-width: 360px; margin: 0 auto 34px; padding: 0; list-style: none; }
+.net-item {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg);
+  color: var(--text); font-size: .875rem; font-weight: 600; line-height: 1.3; text-align: center;
+}
+.net-item .ic { width: 20px; height: 20px; color: var(--accent-text); }
+.net-item::after { content: ""; position: absolute; left: 50%; top: 100%; height: 34px; border-left: 1.5px dashed var(--accent); }
+.net-item::before { content: ""; position: absolute; left: calc(50% - 3.25px); top: calc(100% + 30px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--card); z-index: 1; }
+.mac { position: relative; margin-bottom: 14px; padding: 18px 14px 14px; border: 1px solid var(--line); border-radius: 22px; background: var(--bg); }
+.mac::after { content: ""; position: absolute; left: -12px; right: -12px; bottom: -13px; height: 12px; border: 1px solid var(--line); border-radius: 2px 2px 12px 12px; background: var(--tile); }
+.mac-label { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; color: var(--muted); font-size: .8125rem; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; }
+.mac-label .ic { width: 20px; height: 20px; }
+.parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.part { display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 14px; align-items: center; padding: 16px 16px 16px 12px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.part-ill { width: 76px; height: auto; overflow: visible; }
+.part h3 { font-size: 1.125rem; margin-bottom: 4px; }
+.part p { color: var(--muted); font-size: .9375rem; line-height: 1.5; text-wrap: pretty; }
+.inside-cap { max-width: 40rem; margin: 44px auto 0; color: var(--muted); text-align: center; text-wrap: balance; }
+.cards2 { margin-top: 48px; display: grid; gap: 14px; }
+.cards2 .card { display: flex; flex-direction: column; align-items: flex-start; }
+@media (min-width: 820px) { .cards2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; } }
+@media (min-width: 960px) { .cards2 .card { padding: 28px 26px 30px; } }
+.inside-cap strong { color: var(--text); }
+@media (min-width: 820px) {
+  .net { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: none; gap: 16px; padding-inline: 29px; margin-bottom: 40px; }
+  .net-item { grid-column: 2; flex-direction: row; justify-self: center; gap: 8px; padding: 9px 16px 9px 13px; border-radius: 999px; white-space: nowrap; }
+  .net-item + .net-item { grid-column: 3; }
+  .net-item::after { height: 40px; }
+  .net-item::before { top: calc(100% + 36px); }
+  .mac { padding: 22px 28px 28px; }
+  .mac::after { left: -22px; right: -22px; }
+  .parts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .part { grid-template-columns: 1fr; justify-items: center; align-content: start; text-align: center; padding: 26px 22px 28px; }
+  .part-ill { width: 144px; margin-bottom: 14px; }
+}
+
+/* Small drawings beside a heading */
+.head-art { display: grid; gap: 32px; align-items: end; }
+.head-art .ill { max-width: 300px; }
 @media (min-width: 960px) {
-  .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
-  .step-head { grid-template-columns: 48px 1fr auto; grid-template-areas: "badge . num" "title title title"; row-gap: 22px; margin-bottom: 8px; }
-  .step-num { display: block; }
-  .friend { flex-direction: row; align-items: center; margin-top: 20px; padding: 24px 28px; gap: 18px; }
+  .head-art { grid-template-columns: minmax(0, 1fr) 300px; gap: 56px; }
+  .head-art .ill { margin-bottom: 4px; }
 }
 
 /* Cards with an icon: icon beside the title on phones, above it on wider screens */
@@ -358,6 +473,14 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
 .st-later { border-color: var(--muted); opacity: .8; }
 .two .card > p { color: var(--muted); }
 @media (min-width: 820px) { .two { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; } .two .card { padding: 36px 34px 38px; } }
+.limits-head { align-self: stretch; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 18px; margin-bottom: 20px; }
+.limits-head h2 { margin-bottom: 0; }
+.limits-art { width: 132px; height: auto; overflow: visible; }
+@media (min-width: 820px) and (max-width: 1079px) { .limits-art { display: none; } }
+@media (min-width: 1080px) {
+  .limits-head { flex-direction: row; justify-content: space-between; }
+  .limits-art { width: 140px; margin: -8px -4px 0 0; }
+}
 
 /* Promise */
 /* The promise sits in an apse: an arched top, and a gold hairline inside the stone edge */
@@ -418,6 +541,9 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
   <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2 5 6v5.6c0 4.3 2.9 7.6 7 9.2 4.1-1.6 7-4.9 7-9.2V6l-7-2.8Z"/><path d="M12 9v4M12 16v.1"/></symbol>
   <symbol id="i-hand" viewBox="0 0 24 24"><path d="M12 21c4.4 0 8-3.6 8-8V9.5a1.6 1.6 0 0 0-3.2 0V12M16.8 11V6.5a1.6 1.6 0 0 0-3.2 0V11M13.6 10.5V5a1.6 1.6 0 0 0-3.2 0v6M10.4 11V7.5a1.6 1.6 0 0 0-3.2 0V14l-1.4-1.5a1.7 1.7 0 0 0-2.5 2.3L7 19c1.3 1.3 3 2 5 2Z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19 12a7 7 0 0 1-12.4 4.5M5 12a7 7 0 0 1 12.4-4.5M17.6 3.8v3.9h-3.9M6.4 20.2v-3.9h3.9"/></symbol>
+  <symbol id="s-seal" viewBox="-8 -8 16 16"><circle class="w-seal" r="6"/><circle class="w-seal-dot" r="2.2"/></symbol>
   <symbol id="i-knot" viewBox="-1 0 58 11"><path class="k-s" d="M0 5.5C1.304 3.451 2.552 1.5 4 1.5M0 5.5C1.304 7.549 2.552 9.5 4 9.5M4 9.5C5.448 9.5 6.696 7.549 8 5.5C9.305 3.451 10.552 1.5 12 1.5M12 9.5C13.448 9.5 14.695 7.549 16 5.5C17.305 3.451 18.552 1.5 20 1.5M20 9.5C21.448 9.5 22.695 7.549 24 5.5C25.305 3.451 26.552 1.5 28 1.5M28 9.5C29.448 9.5 30.695 7.549 32 5.5C33.304 3.451 34.552 1.5 36 1.5M36 9.5C37.448 9.5 38.696 7.549 40 5.5C41.304 3.451 42.552 1.5 44 1.5M44 9.5C45.448 9.5 46.696 7.549 48 5.5C49.304 3.451 50.552 1.5 52 1.5M52 1.5C53.448 1.5 54.696 3.451 56 5.5M52 9.5C53.448 9.5 54.696 7.549 56 5.5"/><path class="k-case" d="M4 1.5C5.448 1.5 6.696 3.451 8 5.5C9.305 7.549 10.552 9.5 12 9.5M12 1.5C13.448 1.5 14.695 3.451 16 5.5C17.305 7.549 18.552 9.5 20 9.5M20 1.5C21.448 1.5 22.695 3.451 24 5.5C25.305 7.549 26.552 9.5 28 9.5M28 1.5C29.448 1.5 30.695 3.451 32 5.5C33.304 7.549 34.552 9.5 36 9.5M36 1.5C37.448 1.5 38.696 3.451 40 5.5C41.304 7.549 42.552 9.5 44 9.5M44 1.5C45.448 1.5 46.696 3.451 48 5.5C49.304 7.549 50.552 9.5 52 9.5"/><path class="k-s" d="M4 1.5C5.448 1.5 6.696 3.451 8 5.5C9.305 7.549 10.552 9.5 12 9.5M12 1.5C13.448 1.5 14.695 3.451 16 5.5C17.305 7.549 18.552 9.5 20 9.5M20 1.5C21.448 1.5 22.695 3.451 24 5.5C25.305 7.549 26.552 9.5 28 9.5M28 1.5C29.448 1.5 30.695 3.451 32 5.5C33.304 7.549 34.552 9.5 36 9.5M36 1.5C37.448 1.5 38.696 3.451 40 5.5C41.304 7.549 42.552 9.5 44 9.5M44 1.5C45.448 1.5 46.696 3.451 48 5.5C49.304 7.549 50.552 9.5 52 9.5"/><circle class="k-dot" cx="28" cy="5.5" r="1.15"/></symbol>
   <symbol id="i-mark" viewBox="0 0 32 32"><circle class="mk-ring" cx="16" cy="16" r="9.5"/><circle class="mk-dot" cx="16" cy="16" r="3.8"/><path class="mk-glint" d="M10.2 12.6a6.8 6.8 0 0 1 3.4-3.6"/></symbol>
 </svg>
@@ -508,26 +634,124 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
     <div class="sec-head">
       <p class="eyebrow">How it stays on</p>
       <h2 id="stays-title">What makes it different is that it stays on.</h2>
-      <p class="sec-lead">There’s no off switch for a bad night, no password to beg for, and nobody who can unlock it early, not even us.</p>
+      <p class="sec-lead">Here’s the whole idea in five steps, from the day you set it up to the day you leave.</p>
     </div>
-    <ol class="steps" role="list">
-      <li class="card step">
-        <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg></span><h3>You choose the wait</h3><span class="step-num" aria-hidden="true">01</span></div>
-        <p>When you set it up, you choose how long getting out should take, anywhere from a week to a year, and you can always make it longer.</p>
+    <ol class="walk" role="list">
+      <li class="walk-step">
+        <div class="niche" aria-hidden="true">
+          <svg class="ill" viewBox="10 10 180 144" focusable="false">
+            <rect class="w-paper" x="22" y="34" width="86" height="90" rx="10"/>
+            <path class="w-tile" d="M22.75 52V44A9.25 9.25 0 0 1 32 34.75h66A9.25 9.25 0 0 1 107.25 44v8Z"/>
+            <path class="w-l" d="M22 52.5h86M42 27v13M88 27v13"/>
+            <g class="w-glyph">
+              <rect x="34" y="62" width="8" height="8" rx="2"/><rect x="48" y="62" width="8" height="8" rx="2"/><rect x="62" y="62" width="8" height="8" rx="2"/><rect x="76" y="62" width="8" height="8" rx="2"/><rect x="90" y="62" width="8" height="8" rx="2"/>
+              <rect x="34" y="76" width="8" height="8" rx="2"/>
+              <rect x="34" y="90" width="8" height="8" rx="2"/><rect x="48" y="90" width="8" height="8" rx="2"/><rect x="62" y="90" width="8" height="8" rx="2"/><rect x="76" y="90" width="8" height="8" rx="2"/><rect x="90" y="90" width="8" height="8" rx="2"/>
+              <rect x="34" y="104" width="8" height="8" rx="2"/><rect x="48" y="104" width="8" height="8" rx="2"/><rect x="62" y="104" width="8" height="8" rx="2"/>
+            </g>
+            <rect class="w-soft" x="45" y="73" width="56" height="14" rx="7"/>
+            <circle class="w-acc" cx="66" cy="80" r="1.8"/><circle class="w-acc" cx="80" cy="80" r="1.8"/>
+            <circle class="w-acc" cx="52" cy="80" r="4.5"/><circle class="w-acc" cx="94" cy="80" r="4.5"/>
+            <circle class="w-paper" cx="142" cy="98" r="40"/>
+            <path class="w-l w-faint" d="M118.31 121.69l-1.77 1.77M110.14 108.35l-2.38.77M108.91 92.76l-2.47-.39M114.9 78.31l-2.02-1.47M126.79 68.15l-1.13-2.23M142 64.5V62M157.21 68.15l1.13-2.23M169.1 78.31l2.02-1.47M175.09 92.76l2.47-.39M173.86 108.35l2.38.77M165.69 121.69l1.77 1.77"/>
+            <path class="w-track" d="M122.91 117.09A27 27 0 1 1 161.09 117.09"/>
+            <path class="w-prog" d="M122.91 117.09A27 27 0 0 1 156.47 75.2"/>
+            <circle class="w-knob" cx="156.47" cy="75.2" r="5"/>
+            <circle class="w-glyph" cx="142" cy="98" r="3.2"/>
+          </svg>
+        </div>
+        <div class="walk-text">
+          <p class="walk-num" aria-hidden="true">1</p>
+          <h3>Choose your wait</h3>
+          <p>Install it and pick how long leaving should take, anywhere from a week to a year. You can always make it longer.</p>
+        </div>
       </li>
-      <li class="card step">
-        <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-hourglass"/></svg></span><h3>Leaving starts a countdown</h3><span class="step-num" aria-hidden="true">02</span></div>
-        <p>If you ever ask to leave, the countdown starts. When it ends, you’re free to go.</p>
+      <li class="walk-step">
+        <div class="niche" aria-hidden="true">
+          <svg class="ill" viewBox="10 10 180 144" focusable="false">
+            <rect class="w-paper" x="16" y="24" width="168" height="114" rx="10"/>
+            <path class="w-l w-faint" d="M16 42h168"/>
+            <circle class="w-glyph" cx="28" cy="33" r="2.4"/><circle class="w-glyph" cx="36" cy="33" r="2.4"/><circle class="w-glyph" cx="44" cy="33" r="2.4"/>
+            <rect class="w-glyph" x="28" y="52" width="76" height="5" rx="2.5"/>
+            <rect class="w-tile" x="28" y="61" width="50" height="5" rx="2.5"/>
+            <rect class="w-cover" x="28" y="76" width="54" height="50" rx="6"/>
+            <use href="#s-seal" x="47" y="93" width="16" height="16"/>
+            <rect class="w-cover" x="92" y="76" width="80" height="45" rx="6"/>
+            <use href="#s-seal" x="124" y="90.5" width="16" height="16"/>
+            <path class="w-track w-thin" d="M93.5 129.5h77"/>
+            <path class="w-l" d="M93.5 129.5h22"/>
+            <circle class="w-paper" cx="117" cy="129.5" r="3.4"/>
+          </svg>
+        </div>
+        <div class="walk-text">
+          <p class="walk-num" aria-hidden="true">2</p>
+          <h3>It covers explicit images and video</h3>
+          <p>It watches your screen and covers them as soon as they appear, on every display. Everything else carries on as normal.</p>
+        </div>
       </li>
-      <li class="card step">
-        <div class="step-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></span><h3>Stay, and it never happened</h3><span class="step-num" aria-hidden="true">03</span></div>
-        <p>Change your mind, press <strong>Stay</strong>, and it’s as if you never asked.</p>
+      <li class="walk-step">
+        <div class="niche niche-night" aria-hidden="true">
+          <svg class="ill" viewBox="10 10 180 144" focusable="false">
+            <path class="w-moon" d="M147.44 27.01A13 13 0 1 0 160.1 44.74A11 11 0 0 1 147.44 27.01Z"/>
+            <path class="w-l" d="M12 134h176"/>
+            <path class="w-paper" d="M24 116h17l-2.6 18H26.6Z"/>
+            <path class="w-leaf" d="M32.5 116c-1.6-8.5 1.6-15.5 9.5-19 1.6 8.5-1.6 15.5-9.5 19Z"/>
+            <path class="w-leaf" d="M32.5 116c-.6-7-5-11.5-12-13-.6 7 4.4 11.6 12 13Z"/>
+            <rect class="w-paper" x="56" y="66" width="88" height="60" rx="6"/>
+            <rect class="w-tile" x="62.5" y="72.5" width="75" height="47" rx="3"/>
+            <path class="w-paper" d="M45 126h110l-7 8H52Z"/>
+            <path class="w-acc-l" d="M93.5 96v-5.5a6.5 6.5 0 0 1 13 0V96"/>
+            <rect class="w-acc" x="90" y="94" width="20" height="16" rx="3.5"/>
+            <circle class="w-hole" cx="100" cy="101" r="2.2"/>
+            <rect class="w-hole" x="99" y="101" width="2" height="4.5" rx="1"/>
+          </svg>
+        </div>
+        <div class="walk-text">
+          <p class="walk-num" aria-hidden="true">3</p>
+          <h3>No off switch for a bad night</h3>
+          <p>There’s no password to beg for. It’s designed so nobody can unlock it early, not even us.</p>
+        </div>
+      </li>
+      <li class="walk-step">
+        <div class="niche" aria-hidden="true">
+          <svg class="ill" viewBox="10 10 180 144" focusable="false">
+            <rect class="w-paper" x="40" y="14" width="120" height="128" rx="12"/>
+            <circle class="w-track" cx="100" cy="58" r="25"/>
+            <path class="w-prog" d="M100 33A25 25 0 1 1 76.22 65.73"/>
+            <path class="w-l" d="M94.5 48h11M94.5 68h11M96 48v2.4c0 3.6 4 5 4 7.6s-4 4-4 7.6V68M104 48v2.4c0 3.6-4 5-4 7.6s4 4 4 7.6V68"/>
+            <rect class="w-acc" x="62" y="100" width="76" height="28" rx="9"/>
+            <text class="w-btn" x="100" y="118.6" text-anchor="middle">Stay</text>
+            <circle class="w-badge" cx="158" cy="134" r="16"/>
+            <use class="w-friend" href="#i-friend" x="147" y="123" width="22" height="22"/>
+          </svg>
+        </div>
+        <div class="walk-text">
+          <p class="walk-num" aria-hidden="true">4</p>
+          <h3>Asking to leave starts a countdown</h3>
+          <p>Change your mind, press <strong>Stay</strong>, and it’s as if you never asked. Only a friend you choose can shorten the wait, and never to less than a day.</p>
+        </div>
+      </li>
+      <li class="walk-step">
+        <div class="niche niche-dawn" aria-hidden="true">
+          <svg class="ill" viewBox="10 10 180 144" focusable="false">
+            <defs><linearGradient id="g-dawn" x1="0" y1="0" x2="0" y2="1"><stop offset=".15" class="w-dawn0"/><stop offset=".95" class="w-dawn1"/></linearGradient><linearGradient id="g-spill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="w-dawn1"/><stop offset="1" class="w-spill1"/></linearGradient></defs>
+            <path class="w-door" d="M48 138V84a52 52 0 0 1 104 0v54Z"/>
+            <path class="w-gold" d="M55 116V84a45 45 0 0 1 90 0v32"/>
+            <path class="w-gold" d="M100 91v-6M83.9 96.8l-3.8-4.5M116.1 96.8l3.8-4.5M75.9 109.5l-5.8-1.5M124.1 109.5l5.8-1.5"/>
+            <path class="w-sun" d="M80 116a20 20 0 0 1 40 0Z"/>
+            <path class="w-tile" d="M48.75 116.5h102.5v21.5H48.75Z"/>
+            <path class="w-spill" d="M48.75 138.75h102.5L178 154H22Z"/>
+            <path class="w-l w-faint" d="M48 116.5h104"/>
+            <path class="w-l" d="M12 138h176"/>
+          </svg>
+        </div>
+        <div class="walk-text">
+          <p class="walk-num" aria-hidden="true">5</p>
+          <h3>Then you’re free to go</h3>
+          <p>When the countdown ends, you can turn it off and remove it. No one to ask and nothing to explain.</p>
+        </div>
       </li>
     </ol>
-    <div class="friend">
-      <span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-friend"/></svg></span>
-      <p><strong>The only shortcut is a friend you choose,</strong> who can bring the wait down to a day but can never stop you leaving.</p>
-    </div>
     <p class="sec-foot"><strong>Going all in?</strong> We’re working on a Hardcore lock, where even wiping your Mac won’t get you out early. The only way around it is Apple’s own proof-of-purchase check, which takes weeks.</p>
     <p class="sec-foot">The lock is being built now. <a href="#status">See where things stand</a>.</p>
   </div>
@@ -560,10 +784,43 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
 
 <section class="sec" id="by-design" aria-labelledby="design-title">
   <div class="wrap">
-    <div class="sec-head">
-      <p class="eyebrow">The usual tricks</p>
-      <h2 id="design-title">Hard to get around, by design</h2>
-      <p class="sec-lead">Most blockers fall to a five-minute trick, and everyone who’s needed one knows the tricks. SafeSight Mac is designed so the usual ones don’t work.</p>
+    <div class="head-art">
+      <div class="sec-head">
+        <p class="eyebrow">The usual tricks</p>
+        <h2 id="design-title">Hard to get around, by design</h2>
+        <p class="sec-lead">Most blockers fall to a five-minute trick, and everyone who’s needed one knows the tricks. SafeSight Mac is designed so the usual ones don’t work.</p>
+      </div>
+      <svg class="ill" viewBox="0 0 300 192" aria-hidden="true" focusable="false">
+        <rect class="w-paper" x="8" y="50" width="156" height="112" rx="9"/>
+        <path class="w-l w-faint" d="M8 66h156"/>
+        <circle class="w-glyph" cx="19" cy="58" r="2"/><circle class="w-glyph" cx="26" cy="58" r="2"/><circle class="w-glyph" cx="33" cy="58" r="2"/>
+        <rect class="w-tile" x="48" y="54" width="84" height="8" rx="4"/>
+        <rect class="w-cover" x="20" y="76" width="66" height="54" rx="6"/>
+        <use href="#s-seal" x="45" y="95" width="16" height="16"/>
+        <rect class="w-glyph" x="96" y="78" width="56" height="5" rx="2.5"/>
+        <rect class="w-tile" x="96" y="88" width="40" height="5" rx="2.5"/>
+        <rect class="w-tile" x="20" y="140" width="76" height="5" rx="2.5"/>
+        <rect class="w-paper" x="138" y="12" width="152" height="108" rx="9"/>
+        <path class="w-l w-faint" d="M138 28h152"/>
+        <circle class="w-glyph" cx="149" cy="20" r="2"/><circle class="w-glyph" cx="156" cy="20" r="2"/><circle class="w-glyph" cx="163" cy="20" r="2"/>
+        <rect class="w-tile" x="178" y="16" width="88" height="8" rx="4"/>
+        <rect class="w-tile" x="150" y="38" width="40" height="34" rx="5"/>
+        <path class="w-glyph" d="M156 66l10-12 7 8 5-5 8 9Z"/>
+        <rect class="w-cover" x="194" y="38" width="40" height="34" rx="5"/>
+        <use href="#s-seal" x="206" y="47" width="16" height="16"/>
+        <rect class="w-tile" x="238" y="38" width="40" height="34" rx="5"/>
+        <rect class="w-tile" x="150" y="78" width="40" height="34" rx="5"/>
+        <rect class="w-tile" x="194" y="78" width="40" height="34" rx="5"/>
+        <path class="w-glyph" d="M200 106l10-12 7 8 5-5 8 9Z"/>
+        <rect class="w-tile" x="238" y="78" width="40" height="34" rx="5"/>
+        <rect class="w-paper" x="104" y="100" width="148" height="86" rx="9"/>
+        <path class="w-l w-faint" d="M104 116h148"/>
+        <circle class="w-glyph" cx="115" cy="108" r="2"/><circle class="w-glyph" cx="122" cy="108" r="2"/><circle class="w-glyph" cx="129" cy="108" r="2"/>
+        <rect class="w-tile" x="116" y="126" width="58" height="13" rx="6.5"/>
+        <rect class="w-tile" x="116" y="145" width="42" height="13" rx="6.5"/>
+        <rect class="w-cover" x="184" y="124" width="56" height="50" rx="8"/>
+        <use href="#s-seal" x="204" y="141" width="16" height="16"/>
+      </svg>
     </div>
     <div class="compare">
       <table role="table">
@@ -625,14 +882,74 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
 <section class="sec sec-band" id="how" aria-labelledby="how-title">
   <div class="wrap">
     <div class="sec-head">
-      <p class="eyebrow">The basics</p>
+      <p class="eyebrow">What’s inside</p>
       <h2 id="how-title">How it works</h2>
+      <p class="sec-lead">Three parts, all on your Mac.</p>
     </div>
-    <div class="cards3">
-      <div class="card">
-        <div class="card-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-laptop"/></svg></span><h3>Everything stays on your Mac.</h3></div>
-        <p>There’s no account and no server, and your screen is checked on the device itself. Nothing you see is ever uploaded.</p>
+    <figure class="inside">
+      <ul class="net" role="list" aria-label="What goes online">
+        <li class="net-item"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Public time signal</li>
+        <li class="net-item"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Update checks</li>
+      </ul>
+      <div class="mac">
+        <p class="mac-label"><svg class="ic" aria-hidden="true"><use href="#i-laptop"/></svg>Your Mac</p>
+        <ul class="parts" role="list">
+          <li class="part">
+            <svg class="part-ill" viewBox="0 0 120 84" aria-hidden="true" focusable="false">
+              <rect class="w-paper" x="12" y="8" width="96" height="66" rx="7"/>
+              <path class="w-l w-faint" d="M12 20h96"/>
+              <circle class="w-glyph" cx="20" cy="14" r="1.8"/><circle class="w-glyph" cx="26" cy="14" r="1.8"/><circle class="w-glyph" cx="32" cy="14" r="1.8"/>
+              <rect class="w-cover" x="20" y="28" width="42" height="36" rx="5"/>
+              <use href="#s-seal" x="33" y="38" width="16" height="16"/>
+              <rect class="w-glyph" x="70" y="30" width="30" height="4" rx="2"/>
+              <rect class="w-tile" x="70" y="39" width="22" height="4" rx="2"/>
+              <rect class="w-tile" x="70" y="48" width="27" height="4" rx="2"/>
+              <circle class="w-badge" cx="104" cy="70" r="12"/>
+              <circle class="w-acc-l" cx="104" cy="70" r="5"/>
+              <circle class="w-acc" cx="104" cy="70" r="2"/>
+            </svg>
+            <div>
+              <h3>The screen cover</h3>
+              <p>Watches your screen and covers explicit images and video. It never goes online.</p>
+            </div>
+          </li>
+          <li class="part">
+            <svg class="part-ill" viewBox="0 0 120 84" aria-hidden="true" focusable="false">
+              <path class="w-acc-l w-faint" d="M93 18a7 7 0 0 1 7 7M93 11a14 14 0 0 1 14 14"/>
+              <circle class="w-acc" cx="93" cy="25" r="2"/>
+              <path class="w-l" d="M45 38v-10a15 15 0 0 1 30 0v10"/>
+              <rect class="w-paper" x="35" y="35" width="50" height="42" rx="9"/>
+              <circle class="w-soft" cx="60" cy="56" r="12.5"/>
+              <path class="w-acc-l" d="M60 49.5V56l4.2 2.8"/>
+            </svg>
+            <div>
+              <h3>The lock</h3>
+              <p>Holds the key, and only gives it back when the public time signal says your wait is over.</p>
+            </div>
+          </li>
+          <li class="part">
+            <svg class="part-ill" viewBox="0 0 120 84" aria-hidden="true" focusable="false">
+              <rect class="w-tile" x="6" y="8" width="108" height="13" rx="3.5"/>
+              <rect class="w-glyph" x="12" y="12.5" width="14" height="4" rx="2"/>
+              <rect class="w-glyph" x="30" y="12.5" width="10" height="4" rx="2"/>
+              <rect class="w-glyph" x="96" y="12.5" width="12" height="4" rx="2"/>
+              <circle class="w-mini" cx="86" cy="14.5" r="3.4"/>
+              <circle class="w-acc" cx="86" cy="14.5" r="1.3"/>
+              <rect class="w-paper" x="48" y="25" width="60" height="54" rx="7"/>
+              <circle class="w-track w-thin" cx="78" cy="44" r="10"/>
+              <path class="w-prog w-thin" d="M78 34A10 10 0 1 1 68.49 47.09"/>
+              <rect class="w-acc" x="61" y="62" width="34" height="10" rx="4"/>
+            </svg>
+            <div>
+              <h3>The app</h3>
+              <p>Where you choose your wait, watch the countdown and press <strong>Stay</strong>.</p>
+            </div>
+          </li>
+        </ul>
       </div>
+      <figcaption class="inside-cap"><strong>Everything stays on your Mac.</strong> There’s no account and no server, and your screen is checked on the device itself. Nothing you see is ever uploaded. By design, the only things that go online are a check of the public time signal and a check for updates.</figcaption>
+    </figure>
+    <div class="cards2">
       <div class="card">
         <div class="card-head"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-infinity"/></svg></span><h3>It’s free forever.</h3></div>
         <p>No trial, no card, no account. The core will never be put behind a paywall.</p>
@@ -650,7 +967,19 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
 <section class="sec" aria-label="Limits and progress">
   <div class="wrap two">
     <div class="card" id="limits">
-      <h2>What it can’t do</h2>
+      <div class="limits-head">
+        <h2>What it can’t do</h2>
+        <svg class="limits-art" viewBox="0 0 200 84" aria-hidden="true" focusable="false">
+          <rect class="w-dash" x="14" y="26" width="26" height="46" rx="5"/>
+          <rect class="w-paper" x="62" y="12" width="76" height="50" rx="5"/>
+          <rect class="w-tile" x="68" y="18" width="64" height="38" rx="2"/>
+          <path class="w-paper" d="M52 62h96l-6 8H58Z"/>
+          <circle class="w-acc-l" cx="100" cy="37" r="6"/>
+          <circle class="w-acc" cx="100" cy="37" r="2.4"/>
+          <rect class="w-dash" x="152" y="20" width="40" height="30" rx="4"/>
+          <path class="w-dash" d="M164 58h16M172 50v8"/>
+        </svg>
+      </div>
       <ul class="limits" role="list">
         <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Wiping your Mac removes it.</li>
         <li><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>It can miss something, and it sometimes covers something harmless.</li>
