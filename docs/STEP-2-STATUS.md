@@ -260,8 +260,9 @@ Third pass, on pull request lumen-open/safesight-mac#22 (against `keeper-core`),
 |---|---|---|---|
 | 44579234330 | `ea0ccfb` Tighten the keeper's waits, clock, journal, store and approval check | 207 passed, 1 failed (`a_dropped_round_changes_nothing`: the test's own comparison did not allow for the bad-round window restarting), plus the test that wrote the lock file. One compiler warning, in a test | 0 dependencies (stale lock file, as above) |
 | 44580107866 | `9f6974b` Pin the crate versions CI resolved for p256 | 207 passed, 0 failed. No compiler warning | 77 dependencies, all allowed |
+| 44608488375 | `19b28fc` Make a keyholder with power wait again after a raise | 210 passed, 0 failed. No compiler warning | 77 dependencies, all allowed |
 
-Every other step passed in both runs. The keyholder page's side (draft pull request #21, against `main`) has its own run.
+Every other step passed in every run. The keyholder page's side (draft pull request #21, against `main`) has its own run.
 
 - The first pass's 110 tests were run for the first time in this pass's first CI run, and all passed.
 - Nothing has run on a virtual Mac or a test Mac. Gate G2 needs the keeper's CI and virtual-Mac tests green, the second-reader record (ST-063) and the keeper's size budget (SQ-08). None of these is done.
