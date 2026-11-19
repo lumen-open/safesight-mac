@@ -7,6 +7,8 @@
 //   safesightmac-harness frames FILE... [--models DIR] [--out DIR] image files as successive frames of one display
 //   safesightmac-harness bench [--models DIR] [--pages DIR] [--json FILE] [--trials N] [--cases single,grid,busy,scroll]
 //            (lab build only) times the chain from frame to cover plan to cover layer update, by stage; see Bench.swift
+//   safesightmac-harness falsecovers --models DIR --list FILE [--root DIR] [--rule R] [--jsonl FILE] [--json FILE]
+//            false covers on harmless screens through the whole pipeline; see FalseCovers.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
 //            --models DIR (real models, checked against the sealed hash list)  --null-models (lab build only)
@@ -37,6 +39,9 @@ struct Options {
     var nullModels = false
     var out: String?
     var bench = BenchSettings()
+    var list: String?
+    var root: String?
+    var jsonl: String?
 }
 
 /// Bench options, parsed in every build so that a release build can refuse `bench` plainly.
@@ -70,6 +75,9 @@ func parse() -> Options {
         case "--null-models": o.nullModels = true
         case "--out": o.out = v()
         case "--trials": o.bench.trials = Int(v()) ?? 8
+        case "--list": o.list = v()
+        case "--root": o.root = v()
+        case "--jsonl": o.jsonl = v()
         case "--pages": o.bench.pages = v()
         case "--json": o.bench.json = v()
         case "--cases": o.bench.cases = v().split(separator: ",").map(String.init)
@@ -203,6 +211,13 @@ func makeDetector() -> Detector {
 }
 
 let detector = makeDetector()
+
+if o.command == "falsecovers" {
+    guard let list = o.list, o.models != nil else { fail("falsecovers needs --models DIR and --list FILE") }
+    FalseCovers.run(detector: detector, list: list, root: o.root ?? FileManager.default.currentDirectoryPath, rule: o.rule,
+                    jsonl: o.jsonl, json: o.bench.json, modelsNote: "real models (\((o.models! as NSString).lastPathComponent)), checked against the sealed hash list: Marqo, NSFWJS and the Bumble tie-breaker")
+    exit(0)
+}
 
 if o.command == "bench" {
     #if SAFESIGHTMAC_LAB
