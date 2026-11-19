@@ -14,5 +14,5 @@ public enum BuildInfo {
     #endif
 
     /// One line for logs and the "What is running" screen.
-    public static var summary: String { "SafeSight Mac \(version) (\(flavour))" }
+    public static var summary: String { "\(AppText.productName) \(version) (\(flavour))" }
 }

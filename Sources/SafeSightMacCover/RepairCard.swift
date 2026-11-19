@@ -69,7 +69,7 @@ final class RepairPanel: NSPanel {
     static func make() -> RepairPanel {
         let p = RepairPanel(contentRect: CGRect(x: 0, y: 0, width: RepairCardView.width, height: 300),
                             styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
-        p.title = "SafeSight Mac"
+        p.title = AppText.productName
         p.titleVisibility = .hidden
         p.titlebarAppearsTransparent = true
         for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { p.standardWindowButton(b)?.isHidden = true }
@@ -134,7 +134,7 @@ public enum RepairCardView {
                             tryAgain: Selector?, pause pauseAction: Selector?, quit: Selector?) -> NSView {
         let inner = width - 2 * pad
         let card = Card(frame: CGRect(x: 0, y: 0, width: width, height: 100), theme: t)
-        card.setAccessibilityLabel("SafeSight Mac")
+        card.setAccessibilityLabel(AppText.productName)
         var y = pad
 
         // The symbol sits a little low in the niche, centred under the arch.

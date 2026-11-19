@@ -39,3 +39,20 @@ import Testing
     #expect(AppText.wayOutPieces.filter(\.isKey).map(\.text) == AppText.wayOutKeys)
     #expect(AppText.wayOutPieces.first?.text == "Press ")
 }
+
+/// The product's name is written once, in `AppText.productName`, so a rebrand is one line. Comments may name it.
+@Test func theProductNameIsWrittenOnlyInAppText() throws {
+    let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Sources").standardized
+    let files = (FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)?.allObjects ?? [])
+        .compactMap { $0 as? URL }
+        .filter { $0.pathExtension == "swift" && $0.lastPathComponent != "AppText.swift" }
+    #expect(!files.isEmpty)
+    for file in files {
+        let lines = try String(contentsOf: file, encoding: .utf8).components(separatedBy: "\n")
+        for (n, line) in lines.enumerated() {
+            let code = line.trimmingCharacters(in: .whitespaces)
+            if code.hasPrefix("//") { continue }
+            #expect(!code.contains(AppText.productName), "\(file.lastPathComponent):\(n + 1) names the product; use AppText.productName")
+        }
+    }
+}
