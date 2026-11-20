@@ -156,17 +156,17 @@ grep -q 'Testing edition: no lock. Quit any time with' "$tmp/strings.txt" || bad
 grep -q '_RegisterEventHotKey' "$tmp/imports.txt" || bad "the emergency quit (RegisterEventHotKey) is missing"
 
 # 3. The bundle: shape, Info.plist, signature and entitlements. Its models, when it has them, may only be the three
-# compiled models and their list.
+# compiled models, their list and the sealed manifest.
 (cd "$app" && find . -mindepth 1 | sort) > "$tmp/all.txt"
 grep -v '^\./Contents/Resources/models' "$tmp/all.txt" > "$tmp/shape.txt" || true
 grep '^\./Contents/Resources/models' "$tmp/all.txt" > "$tmp/models.txt" || true
 printf '%s\n' ./Contents ./Contents/Info.plist ./Contents/MacOS ./Contents/MacOS/safesight-mac ./Contents/Resources \
   ./Contents/_CodeSignature ./Contents/_CodeSignature/CodeResources | sort > "$tmp/shape-want.txt"
 diff -u "$tmp/shape-want.txt" "$tmp/shape.txt" || bad "the bundle holds something other than the app itself (no Library, PlugIns, XPCServices, Helpers or Frameworks)"
-models_ok='^\./Contents/Resources/models(/compiled\.sha256|/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector)'
+models_ok='^\./Contents/Resources/models(/compiled\.sha256|/bundle-manifest\.json|/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector)'
 models_ok="$models_ok"'(/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector\.fp32)\.mlmodelc(/.*)?)?)?$'
 if grep -vE "$models_ok" "$tmp/models.txt"; then
-  bad "the models folder holds something other than the three compiled models and their list"
+  bad "the models folder holds something other than the three compiled models, their list and the manifest"
 fi
 plutil -convert json -o "$tmp/info.json" "$app/Contents/Info.plist"
 codesign -d --entitlements - --xml "$app" 2>/dev/null > "$tmp/ent.plist" || true

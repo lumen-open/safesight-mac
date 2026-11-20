@@ -9,6 +9,8 @@ Sources/DetectorCore/BundleVerifier.swift: guard let mbytes = try? Data(contents
 Sources/DetectorCore/BundleVerifier.swift: guard let d = try? Data(contentsOf: u) else { throw Failure.missingFile(e.path) }
 # A cut-off table from a file; only the harness and the tests pass one (the app uses the table sealed in the build).
 Sources/DetectorCore/Thresholds.swift: try JSONDecoder().decode(ThresholdTable.self, from: Data(contentsOf: url))
+# The bundle's manifest, inside the models folder; checked against the sealed list before it is parsed.
+Sources/SafeSightMacWatcher/WatcherModels.swift: guard let data = try? Data(contentsOf: folder.appendingPathComponent(name)) else { throw ModelCheckFailure.missingFile(name) }
 # The compiled models' hash list, inside the models folder.
 Sources/SafeSightMacWatcher/WatcherModels.swift: guard let text = try? String(contentsOf: folder.appendingPathComponent(compiledListName), encoding: .utf8) else {
 # The same list inside the app bundle, shown in a Testing report.

@@ -1,6 +1,7 @@
 d7fb06e70cb56f4c93647b13633b5110b49cc477ba0928da77571e34ecbefafa  bumble-private-detector/bumble-private-detector.fp32.mlpackage/Data/com.apple.CoreML/model.mlmodel
 1d8bf152c99ffbc8cd7445276c5f64ab52f91095c08d58167ada6478fd6fb744  bumble-private-detector/bumble-private-detector.fp32.mlpackage/Data/com.apple.CoreML/weights/weight.bin
 e6939705f98a1b72bb2de758fb63abe408cc9381bb38f065a68f83b3e752bb5f  bumble-private-detector/bumble-private-detector.fp32.mlpackage/Manifest.json
+4a28780d383f1704abe111617b97780f425daf56320a028493e5230c881aa497  bundle-manifest.json
 7f8ed2ca9c7df7c7f728b3bb7141c73f9b97a33189cd930afab4571a43a94998  marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage/Data/com.apple.CoreML/model.mlmodel
 25f0a6ee9ddd1c5756a87f3fc61e5c0ae40e3803a36b890369a47b372079ce2d  marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage/Data/com.apple.CoreML/weights/weight.bin
 ce8389663040ae600b8c0662cb737ca64c17659a1b326605805e0e84a2efdeb7  marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage/Manifest.json

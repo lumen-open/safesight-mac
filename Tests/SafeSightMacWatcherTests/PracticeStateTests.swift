@@ -171,13 +171,14 @@ struct FakeFolder: LaunchFolderProbe {
         #expect(WatcherModels.committedHashList == list.trimmingCharacters(in: .newlines))
         let thr = try Data(contentsOf: root.appendingPathComponent("thresholds.json"))
         #expect(String(decoding: WatcherModels.committedThresholds, as: UTF8.self) == String(decoding: thr, as: UTF8.self).trimmingCharacters(in: .newlines))
-        #expect(try WatcherModels.parse(list).count == 9, "three packages, three files each")
+        #expect(try WatcherModels.parse(list).count == 10, "three packages, three files each, and the bundle's manifest")
     }
 
-    /// Local only: the lab build's converted models (read in place, never copied) match the sealed list.
+    /// Local only: the lab build's converted models, cloned beside the committed manifest, match the sealed list.
     @Test func theLabBuildsConvertedModelsMatchTheSealedList() throws {
-        let lab = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../v3-detector/models/converted").standardized
-        guard FileManager.default.fileExists(atPath: lab.path) else { return }   // not on CI
-        try WatcherModels.verify(folder: lab)
+        guard let dir = try Bundles.stagedLab() else { return }   // not on CI
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try WatcherModels.verify(folder: dir)
+        _ = try WatcherModels.readManifest(folder: dir)
     }
 }
