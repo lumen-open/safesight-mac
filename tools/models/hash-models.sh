@@ -1,15 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Prints the watcher's model hash list for a local models folder: one "sha256  path" line per
-# file of the three watcher model packages, sorted by path. The committed list is
-# models/watcher-models.sha256; the watcher refuses to load any file that does not match it.
+# Prints the watcher's model hash list for a local models folder: one "sha256  path" line per file of every model
+# package the folder's bundle-manifest.json names, and one for the manifest itself, sorted by path. The committed list
+# is models/watcher-models.sha256; the watcher refuses to load any file, the manifest included, that does not match it.
+# tools/conformance/bundle.py fill writes the manifest's own file lists first; `bundle.py seal` writes every sealed
+# file at once (spec/detector-contract.md).
 # Usage: tools/models/hash-models.sh DIR > models/watcher-models.sha256
 set -eu
 dir="${1:?models folder}"
-cd "$dir"
-for p in marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage \
-         nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage \
-         bumble-private-detector/bumble-private-detector.fp32.mlpackage; do
-  [ -d "$p" ] || { echo "missing: $p" >&2; exit 1; }
-  find "$p" -type f ! -name '.DS_Store'
-done | LC_ALL=C sort | while read -r f; do shasum -a 256 "$f"; done
+exec python3 -I "$(cd "$(dirname "$0")/.." && pwd)/conformance/bundle.py" hashlist "$dir"

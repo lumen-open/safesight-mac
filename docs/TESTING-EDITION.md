@@ -32,7 +32,7 @@ It contains no keeper, no installer, no updater, and no code that creates accoun
 
 **Enforced by the build.**
 - `SAFESIGHTMAC_TESTING=1` (Package.swift) compiles the Testing edition. The keeper check (`PracticeState`, which looks for a root-owned keeper launch file in `/Library/LaunchDaemons`) is compiled out, so the app never even reads that folder. Its menu shows "Testing edition: no lock" instead of the practice state, and pausing is always allowed.
-- The models come only from inside the app: the `SAFESIGHTMAC_MODELS` override and the working-folder fallback are compiled out. The app carries them already compiled (`make-app.sh` runs `xcrun coremlcompiler`), so it never compiles a model.
+- The models come only from inside the app, as in the release app: the `SAFESIGHTMAC_MODELS` override and the working-folder fallback exist only in lab builds of the release app. The app carries them already compiled (`make-app.sh` runs `xcrun coremlcompiler`), so it never compiles a model.
 - The app links one module the release app does not, `SafeSightMacTestingEdition` (the emergency quit, the sandbox check, one copy at a time, the stall watchdog and the removal). Any future lock code (`keeper/`, the opener, the time lock) lives in other modules or projects and cannot reach the Testing app without changing its module list, which the check below refuses.
 
 **Checked by `tools/check-testing-edition.sh`** (a CI step), on what is actually built. **The check is a tripwire for honest mistakes, not a proof:** it catches a lock, installer or file write added by accident, or by someone who did not know the rules. Someone set on hiding such code from a scan can, and no scan of Swift can stop that. The real boundary is macOS's App Sandbox (guarantee 2), which holds whatever the code says, and the second human reader every lock change needs.
@@ -217,7 +217,7 @@ The Testing edition is built from the same source files as the cover-only app of
 - **There is no lock, no site blocking, no file checks and no browser extension yet.** The release app of step 1 has none of these either: they are later steps. The full SafeSight Mac will have them; the Testing edition never will.
 - **The App Sandbox.** The release app of step 1 is not sandboxed. Capture inside the sandbox is the first thing to check on the test Mac; if it behaves differently there, that is a difference in what helpers see.
 - **The keeper check is compiled out** (`PracticeState.swift`), so the app never reads `/Library/LaunchDaemons`. The menu shows "Testing edition: no lock" instead of the practice state, and pausing is always allowed.
-- **Models only from inside the app.** The release app's developer overrides (`SAFESIGHTMAC_MODELS`, the working folder) are compiled out. Both editions load compiled models from the bundle the same way.
+- **Models only from inside the app.** Both editions read models only from inside the app bundle and load them compiled, the same way. The developer overrides (`SAFESIGHTMAC_MODELS`, the working folder) exist only in lab builds of the release app.
 - **The Testing line** on whole-window and whole-display covers, on the card, and on any cover, or the largest of several, hiding half a display. In the release edition picture covers stay wordless. This changes how big covers look, not where they go.
 - **The stall watchdog** quits the app after 8 s of a stuck main thread under a cover. The release app keeps covering instead (faults cover more).
 - **⌃⌥⌘Q, one copy at a time, Remove, and the Testing report,** none of which is in the release app.

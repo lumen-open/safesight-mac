@@ -55,7 +55,7 @@ The licence policy for new dependencies: Apache-2.0, MIT, BSD, ISC or similar; n
 | Bundle identifier | `tools/make-app.sh` takes it as an argument | None has been chosen, so pick your own reverse-domain prefix |
 | The keeper's launch file, `<prefix>.safesightmac.keeper.plist` | `Sources/SafeSightMacWatcher/PracticeState.swift` | Any prefix is accepted already; the `safesightmac` stem must match the keeper's launch label once it exists |
 | Executables and packages | `Package.swift` (`safesight-mac`, `safesightmac-harness`, `safesightmac-hello`), `keeper/Cargo.toml` (`safesightmac-keeper`), `.github/workflows/build-release.yml` | Rename together |
-| Development switches | `SAFESIGHTMAC_LAB`, `SAFESIGHTMAC_MODELS`, `SAFESIGHTMAC_COVER_FORM` | Developer-facing only |
+| Development switches | `SAFESIGHTMAC_LAB`, `SAFESIGHTMAC_MODELS` (lab builds only), `SAFESIGHTMAC_COVER_FORM` | Developer-facing only |
 
 **Don't rename the format tags** inside data: the keeper's record tag `SSMK`, the keyholder codes' tag `SM`, and the detector's `kestrel-*` format names. They identify file and wire formats, not the brand. Renaming them breaks compatibility and counts as a change to the lock.
 
@@ -89,6 +89,8 @@ Nothing has shipped and no Mac holds the lock, so today every identity below can
 - **The detector lab.** Converting the models to Core ML with parity checks, the converted model files the sealed hash list expects (`models/watcher-models.sha256`), and the harmless-screen sets behind the false-cover and speed results all live in the project's separate detector lab, which isn't public yet. Code comments call it `v3-detector`; the commands in `docs/STEP-1-STATUS.md` that need it name it `LAB` and `MODELS_DIR`. Without it you can fetch the pinned upstream models but can't rebuild the exact converted files. Ask for it in the handover, or vendor the conversion tools here.
 - **The design record.** The decision register, its chapters, three red-team reviews and the research behind the Hardcore lock are in a separate planning repository. Code comments cite its decision numbers (`SD-018` and so on). It comes with the project.
 - **Step documents written for the current maintainers.** `docs/STEP-0-OWNER.md` and "What needs the maintainers" in `docs/STEP-1-STATUS.md` list accounts and steps under today's names. Rewrite them for your team.
+
+**Bringing your own model.** The models the detector runs are named in a sealed manifest, not in the code, and a written contract says what a model has to provide. [BRING-YOUR-OWN-DETECTOR.md](BRING-YOUR-OWN-DETECTOR.md) walks through plugging one in and checking it with the conformance kit (`tools/conformance/run.sh`).
 
 ## 6. How SafeSight Mac fits your privacy policy
 
@@ -141,7 +143,7 @@ The design record lists each with its default. The ones that matter most:
 
 | Part | How separate it is | What still ties it |
 |---|---|---|
-| **Detector** | Its own library (`DetectorCore`, with `Preprocess` and `RegionFinder`), no knowledge of the screen, a written preprocessing spec with vectors | Nothing product-specific beyond comments |
+| **Detector** | Its own library (`DetectorCore`, with `Preprocess` and `RegionFinder`), no knowledge of the screen, a written preprocessing spec with vectors, and a written contract for bringing your own model ([BRING-YOUR-OWN-DETECTOR.md](BRING-YOUR-OWN-DETECTOR.md)) | Nothing product-specific beyond comments |
 | **Cover layer and covers** | `SafeSightMacWatcher` is pure logic, driven in tests with synthetic frames; `SafeSightMacCapture` and `SafeSightMacCover` are separate targets | Not yet exported as package products; they read their words from `SafeSightMacCore`; the practice-state check knows the keeper's launch file name |
 | **The lock** | The keeper (on the `keeper-core` branch) is a Rust crate with no Swift dependency; every edge to macOS is a trait with a fake | The watcher's heartbeat and the app's messages are designed, not built |
 | **Keyholder page** | One file, no dependencies, documented code formats | Approvals are checked by the keeper |
