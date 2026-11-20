@@ -78,6 +78,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
     private var stream: SCStream?
     /// The last complete frame's pixels (capture queue only), to find what really changed in the next. Held in memory only.
     private var previous: RGBAImage?
+    private var previousMap: CaptureMap?
 
     init(display: SCDisplay, excluding own: [SCRunningApplication], sink: CaptureSink, generation: Int,
          stoppedByItself: @escaping @Sendable () -> Void) {
@@ -167,8 +168,9 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
         // areas: in a virtual Mac every frame reports the whole display, and a frame caused only by the app's own covers
         // (left out of capture) reports a change where no pixel differs. Such a frame says nothing changed, so it is not
         // judged again, and the covers do not keep the screen busy. The first frame of a stream is judged whole.
-        let dirty = previous.flatMap { DirtyRegions.changedBlocks(old: $0, new: img) }
-        previous = img
+        // Another map (size, scale or place) on the same stream is "everything changed" too.
+        let dirty = previousMap == map ? previous.flatMap { DirtyRegions.changedBlocks(old: $0, new: img) } : nil
+        previous = img; previousMap = map
         sink.capture(CapturedFrame(display: desc, status: .complete, image: img, map: map,
                                    dirty: dirty, time: now, generation: generation))
     }

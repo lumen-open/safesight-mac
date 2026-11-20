@@ -80,3 +80,100 @@ import Testing
         #expect(again == settled && early == 0)
     }
 }
+
+/// The review of the fix: what a frame reporting nothing changed, a new map, many small changes and other frame kinds do.
+@Suite struct UnchangedFrameReviewTests {
+    let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 300, height: 200))
+    var snap: WindowSnapshot { Fixtures.oneWindow(d.bounds) }
+
+    /// A frame that reports nothing changed but whose pixels differ from the last judged frame: the places that changed are
+    /// judged (before, nothing outside the covers was, and a flagged picture painted in such a frame got no cover).
+    @Test func aFrameReportingNothingWhosePixelsChangedIsJudged() {
+        let img = Fixtures.blank(300, 200)
+        var b = img
+        let flagged = PixelRect(x: 40, y: 40, w: 120, h: 120)
+        Fixtures.paintFlagged(&b, flagged)
+        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        let plan = p.process(Fixtures.frame(b, display: d, scale: 1, dirty: [], t: 0.5), snapshot: snap, now: 0.5)
+        #expect(plan.covers(CGRect(x: 40, y: 40, width: 120, height: 120)), "\(plan.items.count) covers, whole \(String(describing: plan.wholeDisplay))")
+    }
+
+    /// The same pixels under another map on the same stream (the display moved in the arrangement): what changed cannot
+    /// be read against the last frame, so everything is judged again rather than taken as "nothing changed".
+    @Test func anotherMapOnTheSameStreamIsEverythingChanged() {
+        var img = Fixtures.blank(300, 200)
+        Fixtures.paint(&img, PixelRect(x: 40, y: 40, w: 120, h: 120), channel: nil, seed: 8)
+        let none = WindowSnapshot(windows: [], time: 0)
+        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: none, now: 0)
+        // Well within the full re-judge's rhythm, so only the map change can cause a judgement.
+        for k in 1...400 where p.needsAnotherLook {
+            let t = Double(k) * 0.05
+            _ = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t), snapshot: none, now: t)
+        }
+        #expect(!p.needsAnotherLook)
+        let moved = DisplayDescriptor(id: 1, bounds: CGRect(x: 500, y: 0, width: 300, height: 200))
+        _ = p.process(Fixtures.frame(img, display: moved, scale: 1, dirty: [], t: 25), snapshot: none, now: 25)
+        #expect(p.lastTimings.calls > 0, "judged whole, not taken as nothing changed")
+    }
+
+    /// Many small changes (blinking dots) count as everything changed rather than thousands of rectangles; the mailbox
+    /// never adds lists beyond the same limit.
+    @Test func manySmallChangesCountAsEverything() {
+        let a = Fixtures.blank(1024, 768)
+        var b = a
+        var dots = 0
+        for y in stride(from: 5, to: 768, by: 64) { for x in stride(from: 5, to: 1024, by: 64) { b.pixels[(y * 1024 + x) * 4] &+= 50; dots += 1 } }
+        #expect(dots > DirtyRegions.maxAreas / 2)
+        var c = a
+        for y in stride(from: 5, to: 768, by: 32) { for x in stride(from: 5, to: 1024, by: 64) { c.pixels[(y * 1024 + x) * 4] &+= 50 } }
+        #expect(DirtyRegions.changedBlocks(old: a, new: c) == nil, "more than \(DirtyRegions.maxAreas) places: judged whole")
+        #expect(DirtyRegions.changedBlocks(old: a, new: b) != nil)
+        var box = FrameMailbox()
+        let many = (0..<200).map { PixelRect(x: ($0 % 30) * 32, y: ($0 / 30) * 32, w: 8, h: 8) }
+        let disp = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        box.offer(Fixtures.frame(a, display: disp, scale: 1, dirty: many, t: 0))
+        box.offer(Fixtures.frame(a, display: disp, scale: 1, dirty: many, t: 0.1))
+        #expect(box.peek?.dirty == nil, "400 areas: judged whole")
+    }
+
+    /// A cover held across a frame in which nothing changed keeps the cover and its clean count.
+    @Test func aCoverHeldAcrossANothingChangedFrameKeepsItsCount() {
+        let g = PixelRect(x: 100, y: 60, w: 80, h: 80)
+        var flag = true
+        let judge = VerdictScript { area in
+            FrameVerdict(regions: [RegionVerdict(rect: g, display: flag ? .cover : .clear, reason: flag ? .bothFamilies : .judgedClean, pass: .region),
+                                   RegionVerdict(rect: area, display: .clear, reason: .judgedClean, pass: .whole)],
+                         coverWindow: false, strike: false, hot: false, judgements: 2, overloaded: 0)
+        }
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        var img = Fixtures.blank(300, 200)
+        Fixtures.paint(&img, g, channel: nil, seed: 4)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        flag = false
+        _ = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 0.25), snapshot: snap, now: 0.25)
+        let before = p.held.map(\.clean)
+        #expect(before == [1])
+        // A complete frame with the same pixels: judged as nothing changed, so the cover stays and its count is not
+        // started again (it can only go up by its own clean judgement).
+        let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [], t: 0.5), snapshot: snap, now: 0.5)
+        #expect(plan.covers(CGRect(x: 100, y: 60, width: 80, height: 80)))
+        #expect(p.held.count == 1 && p.held[0].clean >= before[0], "\(p.held.map(\.clean))")
+    }
+
+    /// Blank and suspended frames merged with waiting frames always mean the display is covered whole and judged whole
+    /// after: they never shrink to "nothing changed".
+    @Test(arguments: [FrameStatus.blank, .suspended, .stopped])
+    func unjudgeableFramesMergedWithWaitingOnesAreEverything(_ s: FrameStatus) {
+        let img = Fixtures.blank(300, 200)
+        let r = PixelRect(x: 32, y: 32, w: 32, h: 32)
+        var box = FrameMailbox()
+        box.offer(Fixtures.frame(img, display: d, scale: 1, dirty: [r], t: 0))
+        box.offer(CapturedFrame(display: d, status: s, image: nil, map: nil, dirty: [], time: 0.1))
+        #expect(box.peek?.status == s && box.peek?.dirty == nil)
+        #expect(FrameQueue.unjudgedAreas(box.peek!) == nil, "covered whole while it waits")
+        box.offer(Fixtures.frame(img, display: d, scale: 1, dirty: [r], t: 0.2))
+        #expect(box.peek?.status == .complete && box.peek?.dirty == nil, "the next pixels are judged whole")
+    }
+}
