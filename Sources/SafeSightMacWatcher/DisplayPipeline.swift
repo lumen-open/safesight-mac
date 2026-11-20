@@ -94,10 +94,16 @@ public final class DisplayPipeline {
     /// A judge call, by target and area (frame pixels).
     struct CallKey: Hashable { var target: JudgeTarget; var area: PixelRect }
     /// Calls that only judge again (nothing new in them) whose next entry costs more than they could be given (a long
-    /// thin strip's whole pass, say): the budget is saved up for it, and it is then judged whatever the call's time
-    /// limit. Without this, cheaper calls spend the budget every frame and that entry, and every cover over it, waits
-    /// for ever.
-    var saving: [CallKey: Int] = [:]
+    /// thin strip's whole pass, say): the budget is saved up for them, one at a time, in the order they started saving,
+    /// and each is then judged whatever the call's time limit. Until the first in line has been served, no call that only
+    /// judges again spends anything, in whatever order the calls come in a look; its cover is judged first among the
+    /// covers judged on their own, so no look leaves it out for want of time. Without this the cheaper calls spent the budget in every look, and that entry, and every cover over it,
+    /// waited for ever (the virtual Mac's menu bar, and a long line of text on its desktop).
+    struct Saving: Equatable { var cost: Int; var turn: Int }
+    var saving: [CallKey: Saving] = [:]
+    var savingTurns = 0
+    /// The call saving up that is served next: the one that started first.
+    var nextSaver: CallKey? { saving.min { $0.value.turn < $1.value.turn }?.key }
     /// Held covers (by index) already judged in this run by their window's own call.
     var talliedThisRun: Set<Int> = []
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
@@ -419,24 +425,29 @@ public final class DisplayPipeline {
         }
         // Parts this call had no time for: blurred in this plan, and judged in the next call.
         var leftOver: [CoverItem] = []
-        // Set once a call that only judges again is saving its budget up: the calls after it that only judge again get none.
-        var holding = false
+        // The calls that only judge again made in this look: a saving lasts while its call is made (the first in line always
+        // is, see step 3b), so a saving never waits for a call that no longer comes.
         var savingUsed: Set<CallKey> = []
-        /// The budget for a call that only judges again: what it is saving up for once there is enough (else none, and the
-        /// budget is kept), or none while another call saves up, or `normal`.
+        /// The budget for a call that only judges again: none while a call is saving up and has not been served; for the
+        /// first in line, what it is saving up for once there is enough (else none, and the budget is kept); else `normal`.
         func againBudget(_ key: CallKey, normal: Int) -> Int {
             savingUsed.insert(key)
-            if let n = saving[key] {
-                // Never more than half of `JUDGING_STALL` on one entry: on a Mac that slow it is left (and its covers stay).
-                guard Double(n) * msPerJudgement <= Register.JUDGING_STALL * 500 else { saving[key] = nil; return holding ? 0 : normal }
-                if bucket.available >= n { return max(normal, n) }
-                holding = true
-                return 0
-            }
-            return holding ? 0 : normal
+            // Never more than half of `JUDGING_STALL` on one entry: on a Mac that slow it is left (and its covers stay).
+            if let s = saving[key], Double(s.cost) * msPerJudgement > Register.JUDGING_STALL * 500 { saving[key] = nil }
+            guard let first = nextSaver else { return normal }
+            guard first == key, let s = saving[key], bucket.available >= s.cost else { return 0 }
+            return max(normal, s.cost)
         }
         func afterAgain(_ key: CallKey, given: Int, _ v: FrameVerdict) {
-            if v.nextCost > given { saving[key] = min(v.nextCost, Register.DETECTOR_CALL_CAP) } else { saving[key] = nil }
+            // Given nothing while saving up: it keeps its place in line.
+            if given == 0, saving[key] != nil { return }
+            if v.nextCost > given {
+                // Newly short, or served and still short (cheaper entries came first in the call): to the back of the line.
+                saving[key] = Saving(cost: min(v.nextCost, Register.DETECTOR_CALL_CAP), turn: savingTurns)
+                savingTurns += 1
+            } else {
+                saving[key] = nil
+            }
         }
         // The first frame after the display was covered whole is judged within one call's worth in all.
         let firstFrame = !judged
@@ -547,15 +558,22 @@ public final class DisplayPipeline {
         //     They take turns (from where the last frame stopped), within the time left; one already judged flagged on the
         //     same place is judged again only once something there has changed.
         let waiting = held.indices.filter { !talliedThisRun.contains($0) }
+        let coverCalls = held.map { h in fullRect(h, snapshot, visible).flatMap { map.toPixels($0) }.map { CallKey(target: h.target, area: $0) } }
+        var turns = waiting.indices.map { waiting[($0 + recheckTurn) % waiting.count] }
+        // The cover whose call is first in line for saved-up judgements goes first, so no look leaves it out for want of time.
+        if let first = nextSaver, let j = turns.firstIndex(where: { coverCalls[$0] == first }) { turns.insert(turns.remove(at: j), at: 0) }
         var checked = 0
-        for k in waiting.indices {
-            let i = waiting[(k + recheckTurn) % waiting.count]
+        for i in turns {
             // At least one takes its turn every frame, however long the rest took, so none waits for ever.
             let spent = PipelineTimings.ms(since: tRun)
             guard spent < callWallMs || checked == 0 else { break }
             guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
             if held[i].flaggedAt == g, !reported.contains(where: { $0.intersects(g) }), !moved.contains(where: { $0.0 == held[i].target }),
-               now - (held[i].flaggedWhen ?? now) < Register.RECHECK_FLAGGED_EVERY { continue }
+               now - (held[i].flaggedWhen ?? now) < Register.RECHECK_FLAGGED_EVERY {
+                // Not judged in this look: it gives up its place in line (it saves up again when it is next judged).
+                saving[CallKey(target: held[i].target, area: area)] = nil
+                continue
+            }
             bucket.refill(now: now)
             var budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
             budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(Double(Self.recheckFloor), (callWallMs - spent) / msPerJudgement))))
