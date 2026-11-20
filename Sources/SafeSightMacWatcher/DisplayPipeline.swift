@@ -48,6 +48,16 @@ public final class DisplayPipeline {
     struct EntryKey: Hashable { var pass: JudgePass; var rect: PixelRect }
     var held: [Held] = []
     var pending: [CGRect] = []
+    /// Parts of a full re-judge (`FULL_REJUDGE`) at a still screen that a look had no time for, with nothing in them left
+    /// unjudged: judged at the next looks, and shown as judged before, unchanged, meanwhile (never blurred for want of
+    /// time, so a still screen does not flicker at every full pass).
+    var dueAgain: [CGRect] = []
+    /// Since when each window has had a part waiting on `dueAgain` (cleared once a call with budget judges it). Past
+    /// `JUDGING_STALL` it is blurred until judged.
+    var dueSince: [JudgeTarget: TimeInterval] = [:]
+    /// The window list (on this display, front to back) at the last look: a look whose list differs (a window moved,
+    /// opened, closed or came forward) may show what the last frame does not, so nothing in it waits as `dueAgain`.
+    var lastWindows: [WindowInfo] = []
     var lastImage: RGBAImage?
     var lastMap: CaptureMap?
     var lastFullPass: TimeInterval?
@@ -94,10 +104,23 @@ public final class DisplayPipeline {
     /// A judge call, by target and area (frame pixels).
     struct CallKey: Hashable { var target: JudgeTarget; var area: PixelRect }
     /// Calls that only judge again (nothing new in them) whose next entry costs more than they could be given (a long
-    /// thin strip's whole pass, say): the budget is saved up for it, and it is then judged whatever the call's time
-    /// limit. Without this, cheaper calls spend the budget every frame and that entry, and every cover over it, waits
-    /// for ever.
-    var saving: [CallKey: Int] = [:]
+    /// thin strip's whole pass, say): the budget is saved up for them, one at a time, in the order they started saving,
+    /// and each is then judged whatever the call's time limit. While the first in line waits, a share of what comes in is
+    /// set aside for it (`saverReserve`), which no other call can spend, so judging elsewhere (new pictures, a video)
+    /// cannot keep it waiting for ever, and it never stops any other call from judging. Once there is enough, its cover is
+    /// judged first among the covers judged on their own. Without this the cheaper calls spent the budget in every look,
+    /// and that entry, and every cover over it, waited for ever (the virtual Mac's menu bar, and a long line of text on
+    /// its desktop).
+    struct Saving: Equatable { var cost: Int; var turn: Int; var since: TimeInterval }
+    var saving: [CallKey: Saving] = [:]
+    var savingTurns = 0
+    /// The call saving up that is served next: the one that started first.
+    var nextSaver: CallKey? { saving.min { $0.value.turn < $1.value.turn }?.key }
+    /// Judgements set aside for the first call in line, and when it was last added to.
+    var saverReserve = 0.0
+    var reserveAt: TimeInterval?
+    /// The share of what comes in that is set aside while a call waits first in line.
+    static let saverShare = 0.25
     /// Held covers (by index) already judged in this run by their window's own call.
     var talliedThisRun: Set<Int> = []
     /// Pictures seen clean once are waiting for their second clean check (`VerdictCache.CLEAN_CHECKS`), which the looks
@@ -149,7 +172,7 @@ public final class DisplayPipeline {
     /// frame itself (an idle frame); without one a still screen would never settle.
     /// Pictures seen clean once waiting for their second clean check count as something left (step 3c), until they have
     /// had it or until `secondChecksFor` has passed.
-    public var needsAnotherLook: Bool { judged && (!(held.isEmpty && pending.isEmpty) || secondChecksWanted) }
+    public var needsAnotherLook: Bool { judged && (!(held.isEmpty && pending.isEmpty && dueAgain.isEmpty) || secondChecksWanted) }
     var secondChecksWanted: Bool { secondChecksDue && backgroundSecondChecks }
 
     /// A judge call left pictures seen clean once: the looks at a still screen give them their second check, for at most
@@ -191,7 +214,8 @@ public final class DisplayPipeline {
 
     /// Drops every cover and all memory of the screen (used when the owner pauses, in practice state only).
     public func reset() {
-        held = []; pending = []; lastImage = nil; lastMap = nil; lastFullPass = nil
+        held = []; pending = []; dueAgain = []; dueSince = [:]; lastWindows = []; lastImage = nil; lastMap = nil; lastFullPass = nil
+        saving = [:]; saverReserve = 0; reserveAt = nil
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
         judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []; secondChecksDue = false; secondChecksUntil = nil
         cover(because: .notYetJudged)
@@ -225,7 +249,7 @@ public final class DisplayPipeline {
             // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels (of this stream only).
             // Pictures seen clean once get their second clean check meanwhile (step 3c).
             guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap,
-                  !(held.isEmpty && pending.isEmpty && !secondChecksWanted) else { return lastPlan }
+                  !(held.isEmpty && pending.isEmpty && dueAgain.isEmpty && !secondChecksWanted) else { return lastPlan }
             return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer,
                        idle: true, provisional: provisional)
         case .complete:
@@ -339,12 +363,15 @@ public final class DisplayPipeline {
         } else {
             areas = DirtyRegions.prepare(dirty!, width: img.width, height: img.height).map(map.toGlobal)
             reported = areas
-            areas += pending
+            areas += pending + dueAgain
             // Covers waiting to lift are judged on their own (step 3b), over exactly what each hides, so the entries over
             // each stay the same from one call to the next and its clean judgements can be gathered over several calls.
             for (_, old, new) in moved { areas += [old.intersection(d), new.intersection(d)].filter(\.hasArea) }
         }
+        // What was left unjudged before this look (work left over, failures to judge again, a window turned hot).
+        let pendingBefore = pending
         pending = []
+        dueAgain = []
 
         // 2. Split by window: one judge call per window (C05-6). Hot windows first; then the window under the
         //    pointer and the ones nearest it; otherwise front to back (SD-120's order of work).
@@ -373,6 +400,20 @@ public final class DisplayPipeline {
             let da = pointerDistance(a), db = pointerDistance(b)
             if da != db { return da < db }
             return order[a.target]! < order[b.target]!
+        }
+        // Work left unjudged by an earlier look (pictures it had no time or budget for, or a model failed on) is new content
+        // still to be judged: a part holding some that has not been served for two looks goes right after the hot windows,
+        // so a window whose content keeps changing (a video, typing) never keeps it waiting for ever.
+        if judged {
+            let waitingWork = parts.indices.filter { k in
+                !hot.contains(parts[k].target) && !fresh.contains(parts[k].target)
+                    && pendingBefore.contains { r in parts[k].changed.contains { $0.intersects(r) } }
+                    && runSerial - (served[parts[k].target] ?? -1) > 2
+            }
+            let firstNotHot = parts.firstIndex { !hot.contains($0.target) } ?? parts.count
+            let promoted = waitingWork.map { parts[$0] }
+            parts.removeAll { p in promoted.contains { $0.target == p.target } }
+            parts.insert(contentsOf: promoted, at: min(firstNotHot, parts.count))
         }
         timing.changeMs = PipelineTimings.ms(since: tStage)
 
@@ -448,24 +489,65 @@ public final class DisplayPipeline {
         }
         // Parts this call had no time for: blurred in this plan, and judged in the next call.
         var leftOver: [CoverItem] = []
-        // Set once a call that only judges again is saving its budget up: the calls after it that only judge again get none.
-        var holding = false
+        // A part a still look may leave for the next looks (`dueAgain`) rather than blur: see the parts loop.
+        // The window list compared is every window that can show anything here: not this app's own, and not the window
+        // server's small overlays (the pointer, the recording indicator), which draw nothing of anyone's.
+        let windowsHere = snapshot.windows.filter { $0.bounds.intersects(d) && !ignoredPIDs.contains($0.ownerPID) && !$0.systemOverlay }
+        let sameWindows = windowsHere == lastWindows
+        func onlyDue(_ p: TargetArea) -> Bool {
+            let known: Bool
+            if case .surface = p.target { known = true } else { known = lastBounds[p.target] != nil }
+            return idle && judged && sameWindows && known && !moved.contains(where: { $0.0 == p.target }) && !hot.contains(p.target)
+                && !fresh.contains(p.target) && !pendingBefore.contains { r in p.changed.contains { $0.intersects(r) } }
+                && now - (dueSince[p.target] ?? now) < Register.JUDGING_STALL
+        }
+        // The calls that only judge again made in this look: a saving lasts while its call is made, or, for the first in line,
+        // while its cover is held, so a saving never waits for a call that no longer comes.
         var savingUsed: Set<CallKey> = []
-        /// The budget for a call that only judges again: what it is saving up for once there is enough (else none, and the
-        /// budget is kept), or none while another call saves up, or `normal`.
+        // The first in line, once served in this look.
+        var saverServed: CallKey?
+        // A share of what came in since the last look is set aside for the first in line. One that has waited longer than
+        // that share could take to reach its cost, and `FULL_REJUDGE` more, goes to the back of the line (its call may not
+        // have come round), so none holds the share for ever. With no call saving up, what was set aside goes back.
+        bucket.refill(now: now)
+        if judged, let first = nextSaver, let s = saving[first] {
+            if now - s.since > Double(s.cost) / max(bucket.rate * Self.saverShare, 0.001) + Register.FULL_REJUDGE_SHOW_FIRST {
+                saving[first] = Saving(cost: s.cost, turn: savingTurns, since: now); savingTurns += 1
+            }
+            let cost = Double(saving[nextSaver!]!.cost)
+            if saverReserve > cost { bucket.give(saverReserve - cost); saverReserve = cost }
+            let dt = reserveAt.map { max(0, now - $0) } ?? 0
+            saverReserve += bucket.take(min(dt * bucket.rate * Self.saverShare, cost - saverReserve))
+        } else {
+            bucket.give(saverReserve); saverReserve = 0
+        }
+        reserveAt = now
+        /// True when the first in line can be served now, from what was set aside and the bucket.
+        func saverReady(_ key: CallKey) -> Bool {
+            guard key == nextSaver, saverServed == nil, let s = saving[key] else { return false }
+            return bucket.available + Int(saverReserve) >= s.cost
+        }
+        /// The budget for a call that only judges again: for the first in line, once there is enough, what it is saving up
+        /// for (from what was set aside first); otherwise `normal`. No call is ever held back for another.
         func againBudget(_ key: CallKey, normal: Int) -> Int {
             savingUsed.insert(key)
-            if let n = saving[key] {
-                // Never more than half of `JUDGING_STALL` on one entry: on a Mac that slow it is left (and its covers stay).
-                guard Double(n) * msPerJudgement <= Register.JUDGING_STALL * 500 else { saving[key] = nil; return holding ? 0 : normal }
-                if bucket.available >= n { return max(normal, n) }
-                holding = true
-                return 0
-            }
-            return holding ? 0 : normal
+            // Never more than half of `JUDGING_STALL` on one entry: on a Mac that slow it is left (and its covers stay).
+            if let s = saving[key], Double(s.cost) * msPerJudgement > Register.JUDGING_STALL * 500 { saving[key] = nil }
+            guard saverReady(key), let s = saving[key] else { return normal }
+            bucket.give(saverReserve); saverReserve = 0
+            saverServed = key
+            return max(normal, s.cost)
         }
         func afterAgain(_ key: CallKey, given: Int, _ v: FrameVerdict) {
-            if v.nextCost > given { saving[key] = min(v.nextCost, Register.DETECTOR_CALL_CAP) } else { saving[key] = nil }
+            // Saving up and not served in this call: it keeps its place in line.
+            if saving[key] != nil, saverServed != key { return }
+            if v.nextCost > given {
+                // Newly short, or served and still short (cheaper entries came first in the call): to the back of the line.
+                saving[key] = Saving(cost: min(v.nextCost, Register.DETECTOR_CALL_CAP), turn: savingTurns, since: now)
+                savingTurns += 1
+            } else {
+                saving[key] = nil
+            }
         }
         // The first frame after the display was covered whole is judged within one call's worth in all.
         let firstFrame = !judged
@@ -477,6 +559,14 @@ public final class DisplayPipeline {
                   let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
             let spentMs = PipelineTimings.ms(since: tRun)
             if spentMs >= partsWallMs {
+                // At a still screen, a part only due to be judged again (the `FULL_REJUDGE` rhythm) with nothing in it left
+                // unjudged shows what was judged before, unchanged, until its turn (at most `JUDGING_STALL`): it is not
+                // blurred for want of time. Anything left unjudged before, anything new, a window that is hot, and every part
+                // of a look whose window list changed (a window moved, opened, closed or came forward) are blurred.
+                if onlyDue(p) {
+                    dueAgain += p.changed; if dueSince[p.target] == nil { dueSince[p.target] = now }
+                    timing.leftForLater += 1; continue
+                }
                 pending += p.changed
                 leftOver += p.changed.compactMap { r in
                     map.toPixels(r).map { px in
@@ -533,6 +623,26 @@ public final class DisplayPipeline {
             let callMs = PipelineTimings.ms(since: tStage)
             timing.judgeMs += callMs
             if again { afterAgain(callKey, given: budget, v) }
+            // A part is judged again only by a call with budget. At a still look one given none (the bucket was empty) waits
+            // on `dueAgain`, shown as judged before, while that may be (`onlyDue`); past it, it is blurred until judged.
+            if budget == 0 && dueSince[p.target] == nil && onlyDue(p) {
+                dueAgain += p.changed; dueSince[p.target] = now
+            } else if dueSince[p.target] != nil {
+                if budget > 0 {
+                    dueSince[p.target] = nil
+                } else if onlyDue(p) {
+                    dueAgain += p.changed
+                } else {
+                    dueSince[p.target] = nil
+                    pending += p.changed
+                    leftOver += p.changed.compactMap { r in
+                        map.toPixels(r).map { px in
+                            CoverItem(rect: CoordinateSpace.snapOutward(r, pointsPerPixel: map.pointsPerPixel),
+                                      kind: ContainBlur.make(img, px).map { .blur($0) } ?? .plain)
+                        }
+                    }
+                }
+            }
             if budget > 0 && (v.judgements > 0 || v.overloaded == 0) { served[p.target] = runSerial }
             if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
             if firstFrame { firstLeft = max(0, firstLeft - v.judgements) }
@@ -577,15 +687,27 @@ public final class DisplayPipeline {
         //     They take turns (from where the last frame stopped), within the time left; one already judged flagged on the
         //     same place is judged again only once something there has changed.
         let waiting = held.indices.filter { !talliedThisRun.contains($0) }
-        var checked = 0
-        for k in waiting.indices {
-            let i = waiting[(k + recheckTurn) % waiting.count]
+        let coverCalls = held.map { h in fullRect(h, snapshot, visible).flatMap { map.toPixels($0) }.map { CallKey(target: h.target, area: $0) } }
+        var turns = waiting.indices.map { waiting[($0 + recheckTurn) % waiting.count] }
+        // The cover whose call is first in line goes first once there is enough for it, so no look leaves it out for want of
+        // time. It is taken out of the turns: they move on only by the covers judged in turn, so none is skipped.
+        bucket.refill(now: now)
+        var movedFirst: Int?
+        if let first = nextSaver, saverReady(first), let j = turns.firstIndex(where: { coverCalls[$0] == first }) {
+            movedFirst = turns[j]; turns.insert(turns.remove(at: j), at: 0)
+        }
+        var checked = 0, inTurn = 0
+        for i in turns {
             // At least one takes its turn every frame, however long the rest took, so none waits for ever.
             let spent = PipelineTimings.ms(since: tRun)
             guard spent < callWallMs || checked == 0 else { break }
             guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
             if held[i].flaggedAt == g, !reported.contains(where: { $0.intersects(g) }), !moved.contains(where: { $0.0 == held[i].target }),
-               now - (held[i].flaggedWhen ?? now) < Register.RECHECK_FLAGGED_EVERY { continue }
+               now - (held[i].flaggedWhen ?? now) < Register.RECHECK_FLAGGED_EVERY {
+                // Not judged in this look: it gives up its place in line (it saves up again when it is next judged).
+                saving[CallKey(target: held[i].target, area: area)] = nil
+                continue
+            }
             bucket.refill(now: now)
             var budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
             budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(Double(Self.recheckFloor), (callWallMs - spent) / msPerJudgement))))
@@ -600,6 +722,7 @@ public final class DisplayPipeline {
             timing.calls += 1; timing.judgements += v.judgements; timing.overloaded += v.overloaded
             timing.rechecks += 1
             checked += 1
+            if i != movedFirst { inTurn += 1 }
             if judged { afterAgain(callKey, given: budget, v) }
             noteSecondChecks(v, now: now)
             if judged { bucket.spend(v.judgements) }
@@ -611,7 +734,7 @@ public final class DisplayPipeline {
                 held[i].flaggedAt = nil
             }
         }
-        if !waiting.isEmpty { recheckTurn = (recheckTurn + max(1, checked)) % max(1, waiting.count) }
+        if !waiting.isEmpty { recheckTurn = (recheckTurn + (movedFirst == nil ? max(1, checked) : inTurn)) % max(1, waiting.count) }
 
         // 3c. Second clean checks, as part of the looks at a still screen (`needsAnotherLook`; `VerdictCache.CLEAN_CHECKS`).
         //     On a look where nothing changed, after everything above, the pictures on show that were seen clean once are
@@ -663,7 +786,7 @@ public final class DisplayPipeline {
             secondChecksDue = left
             if !left { secondChecksUntil = nil }
         }
-        saving = saving.filter { savingUsed.contains($0.key) }
+        saving = saving.filter { savingUsed.contains($0.key) || ($0.key == nextSaver && coverCalls.contains($0.key)) }
         judged = true
         tStage = PipelineTimings.now()
         defer { timing.planMs += PipelineTimings.ms(since: tStage) }
@@ -685,6 +808,8 @@ public final class DisplayPipeline {
         let items = drawItems(snapshot, visible, map, moved: moved, lead: lead) + leftOver
         lastBounds = [:]
         for w in snapshot.windows where w.bounds.intersects(d) { lastBounds[.window(number: w.number, ownerPID: w.ownerPID)] = w.bounds }
+        lastWindows = windowsHere
+        dueSince = dueSince.filter { visible[$0.key] != nil }
         // Drawn only: what is held and judged carries on as before.
         lastPlan = guarded(CoverPlan(display: display, items: items), snapshot)
         lastAbove = lastPlan.wholeDisplay == .windowAboveCovers ? windowAbove(items, snapshot) : nil
