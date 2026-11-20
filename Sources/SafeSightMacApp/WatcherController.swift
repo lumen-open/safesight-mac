@@ -56,9 +56,15 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// report's numbers).
     @MainActor var onJudged: ((UInt32, Double, Double, CoverPlan, Bool, PipelineTimings) -> Void)?
     /// Told about every update drawn, on the main thread (every display in it).
-    @MainActor var onDrawn: (([CoverPlan]) -> Void)? {
-        get { presenter.onDrawn }
-        set { presenter.onDrawn = newValue }
+    @MainActor var onDrawn: (([CoverPlan]) -> Void)?
+    /// What the presenter reports drawn (nothing, when every canvas is taken off): logged in lab builds, then `onDrawn`.
+    @MainActor private func drawn(_ plans: [CoverPlan]) {
+        #if SAFESIGHTMAC_LAB
+        LabEventLog.shared.log(plans.isEmpty ? "draw removed" : "draw " + plans.map { p in
+            "d=\(p.display.id) items=\(p.items.count) plain=\(p.plainCount) whole=\(p.wholeDisplay?.rawValue ?? "-") covered=\(String(format: "%.3f", LabEventLog.coveredShare(p))) rects=\(p.items.prefix(12).map { LabEventLog.rect($0.rect) }.joined(separator: ";"))"
+        }.joined(separator: " | "))
+        #endif
+        onDrawn?(plans)
     }
     /// Told on every timer tick that covers changes left waiting too long to be judged.
     @MainActor var onWaitingCover: (() -> Void)?
@@ -90,6 +96,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             self?.judgeQueue.async { self?.setJudging(judged, required) }
         }
         coordinator.onShown = { [weak self] _ in self?.shownChanged() }
+        watched.onDrawn = { [weak self] plans in self?.drawn(plans) }
         coordinator.wake = { [weak self] delay in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.01) { MainActor.assumeIsolated { self?.tick() } }
         }
@@ -416,41 +423,5 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         } else {
             repairCard.hide()
         }
-    }
-}
-
-/// The presenter the coordinator draws with, watched for the Testing edition's stall watchdog: it is told before
-/// every drawing whether a cover may be up (so a hang while drawing counts), and after it whether one is; it is
-/// disarmed only once no cover is left.
-@MainActor
-final class WatchedPresenter: CoverPresenter {
-    private let inner: CoverPresenter
-    private var showing = false
-    var onCoversShown: ((Bool) -> Void)?
-    var onDrawn: (([CoverPlan]) -> Void)?
-
-    init(_ inner: CoverPresenter) { self.inner = inner }
-
-    var notice: CoverNotice? {
-        get { inner.notice }
-        set { inner.notice = newValue }
-    }
-
-    func apply(_ plans: [CoverPlan]) {
-        #if SAFESIGHTMAC_LAB
-        LabEventLog.shared.log("draw " + plans.map { "d=\($0.display.id) items=\($0.items.count) whole=\($0.wholeDisplay?.rawValue ?? "-")" }.joined(separator: " | "))
-        #endif
-        let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty }
-        if now || showing { onCoversShown?(true) }
-        inner.apply(plans)
-        showing = now
-        onCoversShown?(now)
-        onDrawn?(plans)
-    }
-
-    func removeAll() {
-        inner.removeAll()
-        showing = false
-        onCoversShown?(false)
     }
 }

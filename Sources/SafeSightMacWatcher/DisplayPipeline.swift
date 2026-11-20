@@ -260,13 +260,27 @@ public final class DisplayPipeline {
             guard let img = f.image, let map = f.map, map.pixelWidth == img.width, map.pixelHeight == img.height, map.coversDisplay else {
                 return cover(because: .badFrameMetadata)
             }
-            // The first frame of another stream is judged whole, with no motion carried over from the old stream.
+            // The first frame of another stream, or of another map (size, scale or place) on the same stream, is judged
+            // whole, with no motion carried over: what changed cannot be read against the last frame.
             let sameStream = judgedGeneration == f.generation
-            let previous = sameStream && lastMap.map { $0 == map } == true ? lastImage : nil
+            let sameMap = lastMap.map { $0 == map } == true
+            let previous = sameStream && sameMap ? lastImage : nil
+            var dirty = previous != nil ? f.dirty : nil
+            // A frame that reports nothing changed is compared with the last judged frame here too. Where no pixel changed,
+            // it is a "nothing changed" frame: what is held or waiting is judged again, as on an idle frame, and nothing
+            // else is. Where pixels changed, those places are judged (everything, when the comparison cannot say).
+            if f.dirty?.isEmpty == true, judged, let prev = previous {
+                let found = DirtyRegions.changedBlocks(old: prev, new: img)
+                if found == [] {
+                    return process(CapturedFrame(display: f.display, status: .idle, image: nil, map: nil, dirty: [], time: f.time,
+                                                 generation: f.generation, windows: f.windows),
+                                   snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
+                }
+                dirty = found
+            }
             // The reported changed areas are checked against the pixels now and then: this frame is compared with the frame
             // of the last check, outside every area reported since. A change anywhere else, in any frame between, means they
             // cannot be trusted, and the whole frame is judged.
-            var dirty = sameStream ? f.dirty : nil
             if let reported = dirty, let base = checkBase, base.map == map, base.generation == f.generation {
                 reportedSince += reported
                 if reportedSince.count > 256 { reportedSince = DirtyRegions.prepare(reportedSince, width: img.width, height: img.height) }

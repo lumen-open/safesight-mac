@@ -5,6 +5,7 @@
 // an address.
 #if SAFESIGHTMAC_LAB
 import Foundation
+import SafeSightMacWatcher
 
 final class LabEventLog: @unchecked Sendable {
     static let shared = LabEventLog()
@@ -46,6 +47,20 @@ final class LabEventLog: @unchecked Sendable {
         }
         written += data.count
         h.write(data)
+    }
+
+    /// The share of a display a plan hides (whole: 1), on an 8-point grid. Geometry only.
+    static func coveredShare(_ p: CoverPlan) -> Double {
+        if p.wholeDisplay != nil { return 1 }
+        let b = p.display.bounds, step: CGFloat = 8
+        let cols = Int((b.width / step).rounded(.up)), rows = Int((b.height / step).rounded(.up))
+        guard cols > 0, rows > 0, !p.items.isEmpty else { return 0 }
+        var hit = 0
+        for j in 0..<rows { for i in 0..<cols {
+            let c = CGPoint(x: b.minX + (CGFloat(i) + 0.5) * step, y: b.minY + (CGFloat(j) + 0.5) * step)
+            if p.items.contains(where: { $0.rect.contains(c) }) { hit += 1 }
+        } }
+        return Double(hit) / Double(cols * rows)
     }
 
     static func rect(_ r: CGRect) -> String { String(format: "%.0f,%.0f,%.0f,%.0f", r.minX, r.minY, r.width, r.height) }
