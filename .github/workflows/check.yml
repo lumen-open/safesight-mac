@@ -48,6 +48,8 @@ jobs:
         run: tools/check-no-secrets.sh
       - name: No networking code, in the sources or what is built
         run: tools/check-no-network.sh
+      - name: No score in the detector's public API
+        run: tools/check-no-score-api.sh
       - name: Dependency licences
         run: tools/check-licences.sh
       - name: Keyholder page tests

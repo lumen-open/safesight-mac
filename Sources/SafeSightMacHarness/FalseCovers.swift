@@ -37,7 +37,7 @@ final class RecordingJudger: Judging {
 }
 
 enum FalseCovers {
-    static let modelCoverReasons: Set<Reason> = [.bothFamilies, .referee, .disputed]
+    static let modelCoverReasons: Set<Reason> = [.bothFamilies, .referee, .disputed, .oneFamily]
     static let modelBlurReasons: Set<Reason> = [.containedSmall, .hotContext]
 
     /// Wilson score interval, 95%.
@@ -183,7 +183,7 @@ enum FalseCovers {
         var doc: [String: Any] = ["run": "safesightmac-falsecovers/1", "rule": rule.rawValue, "models": modelsNote,
                                   "cutoffTable": "models/thresholds.json as sealed in the build (agreement+referee/1)",
                                   "list": (list as NSString).lastPathComponent, "date": ISO8601DateFormatter().string(from: Date()),
-                                  "method": "Each harmless screen in one window filling a display; judged through DisplayPipeline (window split, every detector rule, all three models under Balanced), then re-judged until nothing is left unjudged (budget unlimited). A false cover is an entry the models covered (both families, tie-breaker, or an unanswered dispute); a false blur is a contained small picture or a hot-window blur. Overload covers are not counted. Classes only; no score recorded.",
+                                  "method": "Each harmless screen in one window filling a display; judged through DisplayPipeline (window split, every detector rule, every model in the bundle), then re-judged until nothing is left unjudged (budget unlimited). A false cover is an entry the models covered (both families, tie-breaker, or an unanswered dispute); a false blur is a contained small picture or a hot-window blur. Overload covers are not counted. Classes only; no score recorded.",
                                   "total": total.json()]
         doc["groups"] = groups.mapValues { $0.json() }
         if let j = json, let d = try? JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys]) {

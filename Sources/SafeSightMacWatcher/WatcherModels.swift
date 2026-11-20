@@ -22,6 +22,9 @@ public enum ModelCheckFailure: Error, Equatable, Sendable {
     /// The compiled models' list was made from another sealed list than this build's.
     case compiledFromOtherList
     case loadFailed(String)
+    /// The bundle's manifest (`bundle-manifest.json`) is missing from the sealed list, does not match it, cannot be
+    /// read, or disagrees with the sealed list about which model files there are.
+    case manifest(String)
 }
 
 public enum WatcherModels {
@@ -112,9 +115,31 @@ public enum WatcherModels {
         }
     }
 
-    /// Verifies, then loads the watcher's three models with the sealed cut-off table: an app's compiled models,
-    /// checked against its `compiled.sha256`, or packages, checked against the sealed list and compiled once each to
-    /// a fixed place (DetectorCore's `CompiledModels`).
+    /// Reads the bundle's manifest from `folder` and checks it against the sealed list: the list must name it, the
+    /// bytes read must match the list (the same bytes are then parsed, so nothing can change in between), and the
+    /// model files the manifest names, with the manifest itself, must be exactly the sealed list's entries.
+    public static func readManifest(folder: URL, hashList: String = committedHashList) throws -> ModelManifest {
+        let entries = try parse(hashList)
+        let name = ModelManifest.fileName
+        guard let sealed = entries.first(where: { $0.path == name })?.sha256 else { throw ModelCheckFailure.manifest("the sealed list does not name \(name)") }
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent(name)) else { throw ModelCheckFailure.missingFile(name) }
+        guard sha256(data) == sealed else { throw ModelCheckFailure.hashMismatch(name) }
+        let manifest: ModelManifest
+        do { manifest = try ModelManifest.decode(data) } catch { throw ModelCheckFailure.manifest("\(error)") }
+        var listed = Dictionary(entries.map { ($0.path, $0.sha256) }, uniquingKeysWith: { a, _ in a })
+        listed[name] = nil
+        let named = Dictionary(manifest.files.map { ($0.path, $0.sha256) }, uniquingKeysWith: { a, _ in a })
+        guard named == listed else {
+            let differ = Set(named.keys).symmetricDifference(listed.keys).union(named.keys.filter { listed[$0] != named[$0] })
+            throw ModelCheckFailure.manifest("the manifest and the sealed list name different model files: \(differ.sorted().prefix(3).joined(separator: ", "))")
+        }
+        return manifest
+    }
+
+    /// Verifies, then loads the models the sealed manifest names with the sealed cut-off table: an app's compiled
+    /// models, checked against its `compiled.sha256`, or packages, checked against the sealed list and compiled once
+    /// each to a fixed place (DetectorCore's `CompiledModels`). The manifest is checked against the sealed list either
+    /// way. Any failure throws, and the caller covers every display whole.
     public static func loadDetector(folder: URL, rule: DetectorRule, hashList: String = committedHashList) throws -> Detector {
         let compiled = FileManager.default.fileExists(atPath: folder.appendingPathComponent(compiledListName).path)
         if compiled {
@@ -122,15 +147,25 @@ public enum WatcherModels {
         } else {
             try verify(folder: folder, hashList: hashList)
         }
+        let manifest = try readManifest(folder: folder, hashList: hashList)
+        let uncut = manifest.modelsMissingCutoffs(in: committedThresholds)
+        guard uncut.isEmpty else { throw ModelCheckFailure.manifest("the sealed cut-off table has no cut-offs for \(uncut.joined(separator: ", "))") }
         let keys = compiled ? [:] : try packageKeys(hashList)
+        let detector: Detector
         do {
-            let set = try ModelSet.watcher(directory: folder, bundleVersion: "practice-" + String(sha256(Data(hashList.utf8)).prefix(12)),
-                                           compiled: compiled, keys: keys)
+            let set = try ModelSet.bundle(manifest, directory: folder, bundleVersion: "practice-" + String(sha256(Data(hashList.utf8)).prefix(12)),
+                                          compiled: compiled, keys: keys)
             var cfg = DetectorConfig(); cfg.rule = rule
-            return try Detector(models: set, thresholdsJSON: committedThresholds, config: cfg)
+            detector = try Detector(models: set, thresholdsJSON: committedThresholds, config: cfg)
         } catch {
             throw ModelCheckFailure.loadFailed(String(describing: type(of: error)))
         }
+        // Packages are read again when Core ML compiles them, after they were checked: check them once more now that
+        // they are loaded, and refuse the lot if anything changed in between. (Core ML loads from a path, not from the
+        // bytes that were hashed, so this narrows the gap rather than closing it; an app's compiled models are inside
+        // its signed bundle.)
+        if !compiled { try verify(folder: folder, hashList: hashList) }
+        return detector
     }
 
     static func sha256(of url: URL) -> String? {

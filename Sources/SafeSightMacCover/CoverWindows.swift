@@ -313,3 +313,38 @@ enum MenuBarProbe {
         return WayOut.menuBarHeight(display: display.bounds, topInset: inset, windows: bars)
     }
 }
+
+/// The presenter the coordinator draws with, watched for the Testing edition's stall watchdog and report: it is told
+/// before every drawing whether a cover may be up (so a hang while drawing counts), and after it whether one is; it is
+/// disarmed only once no cover is left. `onDrawn` hears every update drawn, and an empty list when every canvas is taken
+/// off the screen (the lock screen, a pause), so the report never says a cover is up when none is.
+@MainActor
+public final class WatchedPresenter: CoverPresenter {
+    private let inner: CoverPresenter
+    private var showing = false
+    public var onCoversShown: ((Bool) -> Void)?
+    public var onDrawn: (([CoverPlan]) -> Void)?
+
+    public init(_ inner: CoverPresenter) { self.inner = inner }
+
+    public var notice: CoverNotice? {
+        get { inner.notice }
+        set { inner.notice = newValue }
+    }
+
+    public func apply(_ plans: [CoverPlan]) {
+        let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty }
+        if now || showing { onCoversShown?(true) }
+        inner.apply(plans)
+        showing = now
+        onCoversShown?(now)
+        onDrawn?(plans)
+    }
+
+    public func removeAll() {
+        inner.removeAll()
+        showing = false
+        onCoversShown?(false)
+        onDrawn?([])
+    }
+}

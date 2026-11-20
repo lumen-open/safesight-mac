@@ -56,9 +56,15 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// report's numbers).
     @MainActor var onJudged: ((UInt32, Double, Double, CoverPlan, Bool, PipelineTimings) -> Void)?
     /// Told about every update drawn, on the main thread (every display in it).
-    @MainActor var onDrawn: (([CoverPlan]) -> Void)? {
-        get { presenter.onDrawn }
-        set { presenter.onDrawn = newValue }
+    @MainActor var onDrawn: (([CoverPlan]) -> Void)?
+    /// What the presenter reports drawn (nothing, when every canvas is taken off): logged in lab builds, then `onDrawn`.
+    @MainActor private func drawn(_ plans: [CoverPlan]) {
+        #if SAFESIGHTMAC_LAB
+        LabEventLog.shared.log(plans.isEmpty ? "draw removed" : "draw " + plans.map { p in
+            "d=\(p.display.id) items=\(p.items.count) plain=\(p.plainCount) whole=\(p.wholeDisplay?.rawValue ?? "-") covered=\(String(format: "%.3f", LabEventLog.coveredShare(p))) rects=\(p.items.prefix(12).map { LabEventLog.rect($0.rect) }.joined(separator: ";"))"
+        }.joined(separator: " | "))
+        #endif
+        onDrawn?(plans)
     }
     /// Told on every timer tick that covers changes left waiting too long to be judged.
     @MainActor var onWaitingCover: (() -> Void)?
@@ -90,21 +96,23 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             self?.judgeQueue.async { self?.setJudging(judged, required) }
         }
         coordinator.onShown = { [weak self] _ in self?.shownChanged() }
+        watched.onDrawn = { [weak self] plans in self?.drawn(plans) }
         coordinator.wake = { [weak self] delay in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.01) { MainActor.assumeIsolated { self?.tick() } }
         }
     }
 
-    /// The models folder: `SAFESIGHTMAC_MODELS`, else the app's own Resources/models (the shipped place in
-    /// the practice state, SD-223 (b)), else models/local in the working folder. The Testing edition reads its
-    /// models only from inside itself.
+    /// The models folder: the app's own Resources/models (the shipped place in the practice state, SD-223 (b)). Default
+    /// and Testing builds read models only from inside the app bundle. Lab builds only (never the Testing edition) may
+    /// name another folder with `SAFESIGHTMAC_MODELS`, or use models/local in the working folder when the app has none.
     static func modelsFolder() -> URL {
-        #if SAFESIGHTMAC_TESTING
-        return Bundle.main.resourceURL?.appendingPathComponent("models") ?? Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/models")
-        #else
+        let inside = Bundle.main.resourceURL?.appendingPathComponent("models") ?? Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/models")
+        #if SAFESIGHTMAC_LAB && !SAFESIGHTMAC_TESTING
         if let p = ProcessInfo.processInfo.environment["SAFESIGHTMAC_MODELS"] { return URL(fileURLWithPath: p) }
-        if let r = Bundle.main.resourceURL?.appendingPathComponent("models"), FileManager.default.fileExists(atPath: r.path) { return r }
+        if FileManager.default.fileExists(atPath: inside.path) { return inside }
         return URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("models/local")
+        #else
+        return inside
         #endif
     }
 
@@ -202,28 +210,54 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     func setRule(_ rule: DetectorRule) { judgeQueue.async { [weak self] in self?.detector?.setRule(rule) } }
 
+    /// Counts loads, so that only the latest one's outcome counts (main thread only).
+    private var loadToken = 0
+
+    /// Loads the detector and warms its models up before anything is judged. Every display stays covered whole until
+    /// it is ready: a load that fails, a warm-up that fails or one that runs past `Register.WARM_UP_LIMIT` is a
+    /// detector failure, and the displays stay covered whole.
     @MainActor private func loadDetector(rule: DetectorRule) {
         link.ready = false
+        loadToken += 1
+        let token = loadToken
         judgeQueue.async { [weak self] in
             guard let self else { return }
             if self.detector == nil {
+                let d: Detector
                 do {
-                    self.detector = try WatcherModels.loadDetector(folder: Self.modelsFolder(), rule: rule)
+                    d = try WatcherModels.loadDetector(folder: Self.modelsFolder(), rule: rule)
                     #if SAFESIGHTMAC_LAB
                     // Lab builds only: the synthetic stand-in (a magenta and green checker) is flagged like an explicit
                     // picture, so the cover can be seen working through the real app without any explicit material.
-                    self.detector?.standIn = CheckerStandIn()
+                    d.standIn = CheckerStandIn()
                     #endif
                 }
-                catch { DispatchQueue.main.async { self.reportDetectorFailure() }; return }
+                catch { DispatchQueue.main.async { self.loadFailed(token) }; return }
+                // A backstop on the main thread in case a model call itself does not come back.
+                DispatchQueue.main.async { self.armWarmUpDeadline(token) }
+                guard d.warmUp(limit: Register.WARM_UP_LIMIT) else { DispatchQueue.main.async { self.loadFailed(token) }; return }
+                self.detector = d
             } else {
                 self.detector?.setRule(rule)
             }
             DispatchQueue.main.async {
-                guard self.running else { return }
+                guard self.running, token == self.loadToken, !self.detectorFailed else { return }
                 self.link.ready = true
                 self.coordinator.restartNow()
             }
+        }
+    }
+
+    @MainActor private func loadFailed(_ token: Int) {
+        guard token == loadToken else { return }
+        reportDetectorFailure()
+    }
+
+    /// If the warm-up of load `token` has not finished a little after `WARM_UP_LIMIT`, the detector has failed.
+    @MainActor private func armWarmUpDeadline(_ token: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Register.WARM_UP_LIMIT + 1) { [weak self] in
+            guard let self, token == self.loadToken, !self.link.ready, !self.detectorFailed else { return }
+            self.reportDetectorFailure()
         }
     }
 
@@ -389,41 +423,5 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         } else {
             repairCard.hide()
         }
-    }
-}
-
-/// The presenter the coordinator draws with, watched for the Testing edition's stall watchdog: it is told before
-/// every drawing whether a cover may be up (so a hang while drawing counts), and after it whether one is; it is
-/// disarmed only once no cover is left.
-@MainActor
-final class WatchedPresenter: CoverPresenter {
-    private let inner: CoverPresenter
-    private var showing = false
-    var onCoversShown: ((Bool) -> Void)?
-    var onDrawn: (([CoverPlan]) -> Void)?
-
-    init(_ inner: CoverPresenter) { self.inner = inner }
-
-    var notice: CoverNotice? {
-        get { inner.notice }
-        set { inner.notice = newValue }
-    }
-
-    func apply(_ plans: [CoverPlan]) {
-        #if SAFESIGHTMAC_LAB
-        LabEventLog.shared.log("draw " + plans.map { "d=\($0.display.id) items=\($0.items.count) whole=\($0.wholeDisplay?.rawValue ?? "-")" }.joined(separator: " | "))
-        #endif
-        let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty }
-        if now || showing { onCoversShown?(true) }
-        inner.apply(plans)
-        showing = now
-        onCoversShown?(now)
-        onDrawn?(plans)
-    }
-
-    func removeAll() {
-        inner.removeAll()
-        showing = false
-        onCoversShown?(false)
     }
 }

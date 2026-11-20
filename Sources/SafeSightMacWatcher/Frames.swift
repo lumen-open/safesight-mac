@@ -129,6 +129,53 @@ public enum DirtyRegions {
         }
     }
 
+    /// The side of the blocks `changedBlocks` compares (a multiple of `grid`).
+    public static let block = 32
+    /// Above this many changed areas a frame counts as "everything changed" (nil): many small changes (blinking dots,
+    /// sparkles) would otherwise make thousands of rectangles to merge and judge one by one.
+    public static let maxAreas = 256
+
+    /// Where two frames of the same size differ, as `block`-pixel blocks merged into rectangles (prepared like reported
+    /// areas). Empty when every pixel is the same; nil when the sizes differ, or when more than `maxAreas` places changed
+    /// (judge the whole frame). A band of rows is compared whole first; only a band that differs is looked at block by block.
+    public static func changedBlocks(old: RGBAImage, new: RGBAImage) -> [PixelRect]? {
+        guard old.width == new.width, old.height == new.height, old.pixels.count == new.pixels.count else { return nil }
+        let w = new.width, h = new.height, b = block
+        var out: [PixelRect] = []
+        var tooMany = false
+        old.pixels.withUnsafeBufferPointer { a in
+            new.pixels.withUnsafeBufferPointer { c in
+                var by = 0
+                while by < h && !tooMany {
+                    let bh = min(b, h - by)
+                    defer { by += bh }
+                    // The whole band at once: most of a still screen is skipped here.
+                    let bandStart = by * w * 4
+                    if memcmp(a.baseAddress! + bandStart, c.baseAddress! + bandStart, bh * w * 4) == 0 { continue }
+                    var bx = 0
+                    // Runs of differing blocks along the band become one rectangle.
+                    var runStart: Int?
+                    while bx < w {
+                        let bw = min(b, w - bx)
+                        var differs = false
+                        for y in by..<(by + bh) where !differs {
+                            let o = (y * w + bx) * 4
+                            if memcmp(a.baseAddress! + o, c.baseAddress! + o, bw * 4) != 0 { differs = true }
+                        }
+                        if differs { if runStart == nil { runStart = bx } } else if let s = runStart {
+                            out.append(PixelRect(x: s, y: by, w: bx - s, h: bh)); runStart = nil
+                        }
+                        bx += bw
+                    }
+                    if let s = runStart { out.append(PixelRect(x: s, y: by, w: w - s, h: bh)) }
+                    if out.count > maxAreas { tooMany = true }
+                }
+            }
+        }
+        if tooMany { return nil }
+        return out.isEmpty ? [] : prepare(out, width: w, height: h)
+    }
+
     static func touches(_ a: PixelRect, _ b: PixelRect) -> Bool {
         a.x <= b.maxX && b.x <= a.maxX && a.y <= b.maxY && b.y <= a.maxY
     }
@@ -150,10 +197,15 @@ public struct FrameMailbox: Sendable {
         if f.generation < old.generation { return }
         if f.generation > old.generation { pending = f; return }
         let dirty: [PixelRect]?
-        if let a = old.dirty, let b = f.dirty, old.map?.pixelWidth == f.map?.pixelWidth, old.map?.pixelHeight == f.map?.pixelHeight {
+        if f.image == nil && f.dirty?.isEmpty == true && [.idle, .started].contains(f.status) {
+            dirty = old.dirty  // "nothing changed" adds nothing to what is waiting
+        } else if old.image == nil && old.dirty?.isEmpty == true && [.idle, .started].contains(old.status) {
+            dirty = f.dirty
+        } else if let a = old.dirty, let b = f.dirty, old.map?.pixelWidth == f.map?.pixelWidth, old.map?.pixelHeight == f.map?.pixelHeight,
+                  a.count + b.count <= DirtyRegions.maxAreas {
             dirty = a + b
         } else {
-            dirty = nil  // sizes differ or one says "everything": judge the whole frame
+            dirty = nil  // sizes differ, one says "everything", or too many areas: judge the whole frame
         }
         // The newest status wins only if it protects at least as much as the waiting one, or it is a complete frame
         // with pixels: an idle or started frame never replaces pixels still waiting to be judged, and only new pixels

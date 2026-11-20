@@ -25,6 +25,12 @@
 //            [--windows FILE] [--clean-margin M] [--clean-checks N] [--clean-sticky]
 //            (lab build only) one harmless screenshot as a still screen on a slowed-down judge: does the cover settle to
 //            nothing and stay so? See StaticScreen.swift
+//   safesightmac-harness bundlecheck --models DIR
+//            loads a models folder exactly as the app does (sealed list, manifest, shapes) and says what it holds; see
+//            Conformance.swift
+//   safesightmac-harness parity --bundle DIR [--json FILE]
+//            (lab build only) a bundle's models against the reference outputs shipped with them, with broken controls
+//            that must fail (spec/detector-contract.md); see Conformance.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
 //            --models DIR (real models, checked against the sealed hash list)  --null-models (lab build only)
@@ -53,6 +59,7 @@ struct Options {
     var rule = DetectorRule.balanced
     var window: CGRect?
     var models: String?
+    var bundle: String?
     var nullModels = false
     var out: String?
     var bench = BenchSettings()
@@ -119,6 +126,7 @@ func parse() -> Options {
         case "--rule": guard let r = DetectorRule(rawValue: v()) else { fail("--rule balanced|either") }; o.rule = r
         case "--window": let n = nums(v()); guard n.count == 4 else { fail("--window X,Y,W,H") }; o.window = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
         case "--models": o.models = v()
+        case "--bundle": o.bundle = v()
         case "--null-models": o.nullModels = true
         case "--out": o.out = v()
         case "--appearance":
@@ -228,6 +236,19 @@ if CommandLine.arguments.dropFirst().first == "vanish" {
 
 let o = parse()
 
+if o.command == "bundlecheck" {
+    guard let m = o.models else { fail("bundlecheck needs --models DIR") }
+    Conformance.bundleCheck(folder: URL(fileURLWithPath: m), rule: o.rule)
+}
+if o.command == "parity" {
+    #if SAFESIGHTMAC_LAB
+    guard let b = o.bundle else { fail("parity needs --bundle DIR") }
+    Conformance.parity(bundle: URL(fileURLWithPath: b), json: o.bench.json)
+    #else
+    fail("parity needs a lab build (scores leave the detector only there): SAFESIGHTMAC_LAB=1 swift run --scratch-path .build-lab safesightmac-harness parity --bundle DIR")
+    #endif
+}
+
 func makeDetector() -> Detector {
     if let m = o.models {
         // Packages are compiled once each, to a fixed place in this tool's Caches folder (DetectorCore's
@@ -266,7 +287,8 @@ if o.cleanMargin != nil || o.cleanChecks != nil || o.cleanSticky {
 if o.command == "falsecovers" {
     guard let list = o.list, o.models != nil else { fail("falsecovers needs --models DIR and --list FILE") }
     FalseCovers.run(detector: detector, list: list, root: o.root ?? FileManager.default.currentDirectoryPath, rule: o.rule,
-                    jsonl: o.jsonl, json: o.bench.json, modelsNote: "real models (\((o.models! as NSString).lastPathComponent)), checked against the sealed hash list: Marqo, NSFWJS and the Bumble tie-breaker")
+                    jsonl: o.jsonl, json: o.bench.json, modelsNote: "real models (\((o.models! as NSString).lastPathComponent)), checked against the sealed hash list: "
+                        + Conformance.describe(folder: URL(fileURLWithPath: o.models!)))
     exit(0)
 }
 

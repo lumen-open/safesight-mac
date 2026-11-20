@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+# The reviewed places where DetectorCore's public API names a floating-point type, read by tools/check-no-score-api.sh.
+# Each entry is "Path.to.symbol: Types" exactly as the check prints it. None may carry a score or a cut-off out.
+
+# The one way scores travel, and it is inward: a scorer hands its flag scores to the detector.
+ScoringModel.flagScores(_:): Float
+# Times, in milliseconds or seconds: how long judging took, or how long until something is judged again.
+DetectorConfig.rejudgeAfter: TimeInterval
+Detector.warmUp(limit:): TimeInterval
+JudgeProgress.found(pending:coveredByCache:estimatedMs:): Double
+JudgeTimings.cacheMs: Double
+JudgeTimings.decisionMs: Double
+JudgeTimings.finderMs: Double
+JudgeTimings.inferenceMs: Double
+JudgeTimings.modelsMs: Double
+JudgeTimings.preprocessMs: Double
+JudgeTimings.totalMs: Double
+ModelTiming.Result.loadMs: Double
+ModelTiming.Result.msPerTileBatch1: Double
+ModelTiming.Result.msPerTileBatch8: Double

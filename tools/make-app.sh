@@ -35,7 +35,7 @@ models_wanted=1
 [ "$testing" = 1 ] && [ "$models_wanted" = 1 ] && [ "${1:-}" = "--lab" ] && { lab=1; shift; }
 bundle_id="${1:?bundle identifier, for example <rd>.safesightmac.app (or <rd>.safesightmac.testing with --testing)}"
 if [ "$models_wanted" = 1 ]; then
-  models="${2:?models folder holding the three converted model packages}"
+  models="${2:?models folder holding the converted model packages the sealed list names}"
 else
   out_dir="${2:?output folder}"
 fi
@@ -95,22 +95,27 @@ if [ "$models_wanted" = 1 ]; then
   trap 'rm -rf "$packages"' EXIT
   dest="$app/Contents/Resources/models"
   mkdir -p "$dest"
-  for p in marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage \
-           bumble-private-detector/bumble-private-detector.fp32.mlpackage; do
+  # The packages are the ones the sealed list names; the manifest that says how to run them is the committed one,
+  # which the sealed list names too (models/bundle-manifest.json, spec/detector-contract.md).
+  model_packages=$(awk 'NF == 2 { print $2 }' models/watcher-models.sha256 | sed -n 's#^\(.*\.mlpackage\)/.*#\1#p' | LC_ALL=C sort -u)
+  [ -n "$model_packages" ] || { echo "models/watcher-models.sha256 names no model package"; exit 1; }
+  for p in $model_packages; do
     mkdir -p "$packages/$(dirname "$p")"
     cp -R "$models/$p" "$packages/$p"
   done
-  # The packages must hold only the files the hash list sealed in the build names, and match it, before anything is
-  # compiled from them.
+  cp models/bundle-manifest.json "$packages/bundle-manifest.json"
+  # The packages and the manifest must be only the files the hash list sealed in the build names, and match it,
+  # before anything is compiled from them.
   tools/check-model-files.sh models/watcher-models.sha256 "$packages" \
     || { echo "the model packages hold files models/watcher-models.sha256 doesn't list"; exit 1; }
   (cd "$packages" && shasum -a 256 -c "$here/models/watcher-models.sha256" >/dev/null) \
     || { echo "the model packages do not match models/watcher-models.sha256"; exit 1; }
-  for p in marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage \
-           bumble-private-detector/bumble-private-detector.fp32.mlpackage; do
+  for p in $model_packages; do
     mkdir -p "$dest/$(dirname "$p")"
     xcrun coremlcompiler compile "$packages/$p" "$dest/$(dirname "$p")" >/dev/null
   done
+  # The app checks the manifest against the sealed list itself, so it travels as it is.
+  cp "$packages/bundle-manifest.json" "$dest/bundle-manifest.json"
   # The stamp is the sealed list's entries, one "sha256  path" line each, hashed (WatcherModels.stamp does the same).
   stamp=$(awk 'NF == 2 { printf "%s  %s\n", tolower($1), $2 }' models/watcher-models.sha256 | shasum -a 256 | cut -d' ' -f1)
   (cd "$dest" && {

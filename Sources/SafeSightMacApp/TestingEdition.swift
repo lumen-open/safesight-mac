@@ -38,6 +38,9 @@ final class TestingEditionApp {
             showAlreadyRunning()
             return false
         }
+        #if SAFESIGHTMAC_LAB
+        logReportEvery30s()
+        #endif
         self.watcher = watcher
         // The way out that needs nothing else: registered first, before anything can be covered.
         let e = EmergencyQuit { [weak self] in MainActor.assumeIsolated { self?.quitNow() } }
@@ -108,6 +111,26 @@ final class TestingEditionApp {
         }
         return items
     }
+
+    #if SAFESIGHTMAC_LAB
+    /// Lab only: the Testing report's text, as the window would show it, in the lab event log every 30 s (numbers only), so
+    /// a test can compare it with what was drawn without reading the screen.
+    private var reportLogTimer: Timer?
+    func logReportEvery30s() {
+        let facts = TestingReportWindow.facts(shortcut: shortcutWorks)
+        let t = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let w = self.watcher { self.stats.setCaptured(w.capturedCounts()) }
+                let text = TestingReport.text(facts: facts, stats: self.stats, running: ProcessInfo.processInfo.systemUptime - self.startedAt,
+                                              cpu: TestingFacts.cpuSeconds() - self.cpuAtStart, note: "", power: TestingFacts.power())
+                LabEventLog.shared.log("report " + text.replacingOccurrences(of: "\n", with: " // "))
+            }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        reportLogTimer = t
+    }
+    #endif
 
     /// The Testing report window: numbers to copy by hand, and the helper's note.
     func showReport() {
