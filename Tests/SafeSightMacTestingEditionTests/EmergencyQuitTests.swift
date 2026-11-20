@@ -76,6 +76,36 @@ import Testing
         #expect(AppText.testingPieces(shortcut: false).allSatisfy { !$0.isKey })
     }
 
+    /// A copy that asked while something else held the shortcut (an older copy still ending after an update) gets it
+    /// once that lets go, by asking again; the report says why it did not have it meanwhile.
+    @Test func aShortcutTakenAtLaunchIsHadOnceItIsFree() {
+        let odd = EmergencyQuit.Shortcut(character: "\u{E000}", modifiers: UInt32(controlKey | optionKey | shiftKey | cmdKey),
+                                         fallbackKeyCode: UInt32(kVK_F17))
+        let first = EmergencyQuit(shortcut: odd, id: 92) {}
+        let second = EmergencyQuit(shortcut: odd, id: 93) {}
+        defer { first.unregister(); second.unregister() }
+        guard first.register().works else { Issue.record("could not register the test shortcut: \(first.state)"); return }
+        #expect(!second.register().works)
+        #expect(ShortcutStatus.from(second.state, otherCopyRunning: false) == .takenByAnotherApp)
+        #expect(ShortcutStatus.from(second.state, otherCopyRunning: true) == .takenByAnotherCopy)
+        #expect(!second.retryIfNeeded(), "still held")
+        first.unregister()
+        #expect(second.retryIfNeeded(), "free now: had on the next try")
+        #expect(second.state.works)
+        #expect(!second.retryIfNeeded(), "nothing to do once it works")
+        #expect(ShortcutStatus.from(second.state, otherCopyRunning: false) == .registered)
+    }
+
+    @Test func theReportSaysWhyTheShortcutIsNotThisCopys() {
+        #expect(ShortcutStatus.from(.notRegistered, otherCopyRunning: false) == .notYet)
+        #expect(ShortcutStatus.from(.failed(-50), otherCopyRunning: true) == .failed(-50), "another error is not blamed on anyone")
+        #expect(ShortcutStatus.registered.reportText == "registered")
+        #expect(ShortcutStatus.takenByAnotherCopy.reportText.contains("another copy"))
+        #expect(ShortcutStatus.takenByAnotherApp.reportText.contains("another app"))
+        #expect(ShortcutStatus.failed(-50).reportText.contains("-50"))
+        #expect(!ShortcutStatus.notYet.reportText.contains("another"))
+    }
+
     @Test func registeringAgainForANewLayoutReplacesTheOldRegistration() {
         let odd = EmergencyQuit.Shortcut(character: "\u{E000}", modifiers: UInt32(controlKey | optionKey | shiftKey | cmdKey),
                                          fallbackKeyCode: UInt32(kVK_F17))

@@ -11,7 +11,7 @@ import Testing
                              executableSHA: String(repeating: "a", count: 64), modelsStamp: String(repeating: "b", count: 64),
                              displays: [.init(width: 1512, height: 982, scale: 2, builtIn: true, mirrored: false),
                                         .init(width: 2560, height: 1440, scale: 1, builtIn: false, mirrored: false)],
-                             shortcutRegistered: true)
+                             shortcut: .registered)
 
     @Test func percentilesAndCounts() {
         #expect(TestingStats.percentile([], 0.5) == nil)

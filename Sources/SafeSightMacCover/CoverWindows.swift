@@ -19,6 +19,179 @@ public enum CoverLevels {
     public static let canvas = NSWindow.Level(rawValue: CoverLevel.canvas)
     /// The app's own windows, its menu and the repair card sit one level above the canvas (SD-229).
     public static let appAbove = NSWindow.Level(rawValue: CoverLevel.appAbove)
+    /// The plain cover behind a password prompt's hole sits one level below the prompt (`CoverLevel.behindPrompt`).
+    public static let behindPrompt = NSWindow.Level(rawValue: CoverLevel.behindPrompt)
+}
+
+/// When a password prompt's hole may open: only once the plain cover behind it is on screen. A hole is drawn in two
+/// steps: first its backing is ordered in and drawn while the covers still cover the hole's rectangle; only a later
+/// drawing, once that exact backing was drawn, cuts the hole. A hole that moves or changes size is a new hole: covered
+/// again until its backing stands at its new place. Pure, so it is tested without windows.
+public struct HoleGate: Sendable {
+    public struct Hole: Hashable, Sendable {
+        public var display: UInt32, rect: CGRect
+        public init(display: UInt32, rect: CGRect) { self.display = display; self.rect = rect }
+        public func hash(into h: inout Hasher) {
+            h.combine(display); h.combine(rect.minX); h.combine(rect.minY); h.combine(rect.width); h.combine(rect.height)
+        }
+    }
+    /// Holes whose backing was drawn by an earlier drawing and is still up.
+    public private(set) var backed: Set<Hole> = []
+    public init() {}
+
+    /// Every hole the plans ask for.
+    public static func holes(_ plans: [CoverPlan]) -> [Hole] {
+        plans.flatMap { p in CoverLayout.behindPromptRects(p).map { Hole(display: p.display.id, rect: $0) } }
+    }
+
+    /// The plans as they may be drawn now: a hole whose backing was not drawn before stays covered (taken out of a
+    /// whole-display cover's holes; a plain cover over it otherwise), and still has its backing drawn.
+    public func gate(_ plans: [CoverPlan]) -> (plans: [CoverPlan], heldBack: Bool) {
+        var held = false
+        let out = plans.map { plan -> CoverPlan in
+            var p = plan
+            let closed = CoverLayout.behindPromptRects(plan).filter { !backed.contains(Hole(display: plan.display.id, rect: $0)) }
+            guard !closed.isEmpty else { return p }
+            held = true
+            if p.wholeDisplay != nil {
+                p.promptHoles = p.promptHoles.filter { r in !closed.contains { $0 == r.intersection(plan.display.bounds) } }
+            } else {
+                p.items += closed.map { CoverItem(rect: $0, kind: .plain) }
+            }
+            return p
+        }
+        return (out, held)
+    }
+
+    /// The backings drawn now (and only these) count as up for the next drawing.
+    public mutating func drew(_ holes: Set<Hole>) { backed = holes }
+}
+
+/// One plain cover behind a password prompt: a click-through panel below the prompt's level (`CoverPanel` in the app; a
+/// stand-in in tests, so the order of drawing can be checked without windows).
+@MainActor
+protocol BackingPanel: AnyObject {
+    /// Puts the panel at `frame` (Cocoa points), draws it plain and orders it in. True only when it then stands at
+    /// exactly that frame and is on screen.
+    func place(_ frame: CGRect, theme: CoverTheme) -> Bool
+    func hide()
+}
+
+extension CoverPanel: BackingPanel {
+    func place(_ frame: CGRect, theme: CoverTheme) -> Bool {
+        if level != CoverLevels.behindPrompt { level = CoverLevels.behindPrompt }
+        if self.frame != frame { setFrame(frame, display: false) }
+        // Without a layer nothing is drawn: the hole then stays covered.
+        guard let root = contentView?.layer else { return false }
+        root.frame = CGRect(origin: .zero, size: frame.size)
+        root.sublayers = [LayerFactory.layer(root.frame, .plain, theme)]
+        orderFrontRegardless()
+        display()
+        return isVisible && self.frame == frame
+    }
+
+    func hide() { orderOut(nil) }
+}
+
+/// The plain covers drawn behind password prompts (`CoverPlan.promptHoles`), one panel per hole, below the prompt's
+/// level, so the prompt shows over it and nothing behind the prompt shows through it. Shared by both forms. The order of
+/// drawing is what keeps a hole from ever showing without its backing:
+/// - opening: the backing is drawn first, the covers still over the hole; the hole is cut only on a later drawing,
+///   once that backing stood at exactly its place (`HoleGate`); a plan held back is drawn again on the next turn of the
+///   main loop;
+/// - closing or moving: the covers are drawn first (the hole covered, or cut at its new place only once that place has
+///   its own backing), and the backing of a hole that went is taken down only on the next turn of the main loop;
+/// - each hole keeps its own panel for as long as it lasts, so two holes never swap panels while either is cut.
+@MainActor
+final class BehindPrompt {
+    private var assigned: [HoleGate.Hole: BackingPanel] = [:]
+    private var spare: [BackingPanel] = []
+    private var gate = HoleGate()
+    private var serial = 0
+    typealias Turn = @MainActor () -> Void
+    private let make: @MainActor () -> BackingPanel
+    private let nextTurn: @MainActor (@escaping Turn) -> Void
+    private let toCocoa: @MainActor (CGRect) -> CGRect
+    private let later: @MainActor (TimeInterval, @escaping Turn) -> Void
+    /// Tries left, for a backing that could not be drawn, before the next change on screen: a few, further apart each
+    /// time (0.25, 0.5, 1 and 2 seconds), never a tight loop. Back to the full count once every backing is up.
+    static let retries = 4
+    private var retriesLeft = BehindPrompt.retries
+    private var retryPending = false
+    /// The latest plans: a retry draws these, not the ones it was scheduled with.
+    private var latest: [CoverPlan] = []
+
+    init(make: @escaping @MainActor () -> BackingPanel = { CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1)) },
+         nextTurn: @escaping @MainActor (@escaping Turn) -> Void = { f in DispatchQueue.main.async { MainActor.assumeIsolated { f() } } },
+         toCocoa: @escaping @MainActor (CGRect) -> CGRect = { CoordinateSpace.toCocoa($0, primaryHeight: CoverCanvas.primaryHeight) },
+         later: @escaping @MainActor (TimeInterval, @escaping Turn) -> Void = { d, f in
+             DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } }) {
+        self.make = make; self.nextTurn = nextTurn; self.toCocoa = toCocoa; self.later = later
+    }
+
+    /// Draws the backings `plans` want, then the covers by `draw`, with every hole still closed whose backing was not up
+    /// before this drawing; then, on the next turn of the main loop, takes down the backings of holes that went and draws
+    /// `plans` again by `again` if a hole was held back (unless newer plans came first).
+    func apply(_ plans: [CoverPlan], theme: CoverTheme, draw: ([CoverPlan]) -> Void, again: @escaping ([CoverPlan]) -> Void) {
+        serial += 1
+        latest = plans
+        let wanted = HoleGate.holes(plans)
+        for h in wanted where assigned[h] == nil { assigned[h] = spare.popLast() ?? make() }
+        var up: Set<HoleGate.Hole> = []
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        // Backings of holes still wanted only; those of holes that went stay where they are until the covers are drawn.
+        for h in wanted where assigned[h]?.place(toCocoa(h.rect), theme: theme) == true { up.insert(h) }
+        CATransaction.commit()
+        // A hole opens only when its backing was up before this drawing and still is.
+        gate.drew(gate.backed.intersection(up))
+        let open = gate.backed
+        let (plansNow, _) = gate.gate(plans)
+        draw(plansNow)
+        gate.drew(up)
+        // Drawn again only for a hole held back whose backing is up now (it opens then); one whose backing could not be
+        // drawn stays covered, and is not retried in a loop.
+        let held = up.contains { !open.contains($0) }
+        // A backing that could not be drawn: its hole stays covered, and the same plans are tried again a few times
+        // (so an idle screen recovers without waiting for a change), then no more until the next plans.
+        if wanted.allSatisfy(up.contains) {
+            retriesLeft = Self.retries
+        } else if retriesLeft > 0, !retryPending {
+            let delay = 0.25 * Double(1 << (Self.retries - retriesLeft))
+            retriesLeft -= 1
+            retryPending = true
+            later(delay) { [weak self] in
+                guard let self else { return }
+                self.retryPending = false
+                again(self.latest)
+            }
+        }
+        let going = Set(assigned.keys).subtracting(wanted)
+        guard held || !going.isEmpty else { return }
+        let mine = serial
+        nextTurn { [weak self] in
+            guard let self, self.serial == mine else { return }
+            self.takeDown(keeping: Set(wanted))
+            if held { again(plans) }
+        }
+    }
+
+    /// Takes down every backing whose hole is not in `keeping` (the covers over it are drawn by now).
+    private func takeDown(keeping: Set<HoleGate.Hole>) {
+        for (h, panel) in assigned where !keeping.contains(h) {
+            panel.hide()
+            assigned[h] = nil
+            spare.append(panel)
+        }
+    }
+
+    /// After every cover is gone.
+    func removeAll() {
+        serial += 1
+        latest = []
+        takeDown(keeping: [])
+        gate.drew([])
+    }
 }
 
 public enum CoverForm: String, Sendable {
@@ -192,6 +365,7 @@ public final class CoverCanvas: CoverPresenter {
     private struct Drawn: Equatable { var plan: CoverPlan; var theme: CoverTheme; var notice: CoverNotice?; var menuBar: CGFloat; var scale: CGFloat; var frame: CGRect }
     /// When each canvas was last brought to the front of its level.
     private var frontedAt: [UInt32: TimeInterval] = [:]
+    private let behind = BehindPrompt()
     public var notice: CoverNotice?
     public init(notice: CoverNotice? = nil) { self.notice = notice }
 
@@ -203,6 +377,10 @@ public final class CoverCanvas: CoverPresenter {
     }
 
     public func apply(_ plans: [CoverPlan]) {
+        behind.apply(plans, theme: CoverTheme.current, draw: { draw($0) }, again: { [weak self] in self?.apply($0) })
+    }
+
+    private func draw(_ plans: [CoverPlan]) {
         let ids = Set(plans.map(\.display.id))
         for (id, p) in panels where !ids.contains(id) { p.orderOut(nil); panels[id] = nil; drawn[id] = nil }
         let now = ProcessInfo.processInfo.systemUptime
@@ -239,6 +417,7 @@ public final class CoverCanvas: CoverPresenter {
         for p in panels.values { p.orderOut(nil) }
         panels = [:]
         drawn = [:]
+        behind.removeAll()
     }
 }
 
@@ -249,9 +428,14 @@ public final class OverlayCovers: CoverPresenter {
     public var notice: CoverNotice?
     /// When every panel was last brought to the front: at most four times a second, besides each panel newly shown.
     private var frontedAt: TimeInterval = -.infinity
+    private let behind = BehindPrompt()
     public init(notice: CoverNotice? = nil) { self.notice = notice }
 
     public func apply(_ plans: [CoverPlan]) {
+        behind.apply(plans, theme: CoverTheme.current, draw: { draw($0) }, again: { [weak self] in self?.apply($0) })
+    }
+
+    private func draw(_ plans: [CoverPlan]) {
         let theme = CoverTheme.current
         let frames = plans.flatMap { plan in
             let screen = CoverCanvas.screen(plan.display.id)
@@ -284,6 +468,7 @@ public final class OverlayCovers: CoverPresenter {
 
     public func removeAll() {
         for p in pool { p.orderOut(nil) }
+        behind.removeAll()
     }
 }
 
@@ -333,7 +518,7 @@ public final class WatchedPresenter: CoverPresenter {
     }
 
     public func apply(_ plans: [CoverPlan]) {
-        let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty }
+        let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty || !$0.promptHoles.isEmpty }
         if now || showing { onCoversShown?(true) }
         inner.apply(plans)
         showing = now

@@ -17,10 +17,16 @@ public struct WindowInfo: Equatable, Hashable, Sendable {
     /// indicator in the menu bar. They sit above every cover, show nothing of any app's, and are never "another app's
     /// window in front of the covers". Set only when the window list proves it (`isSystemOverlay`).
     public let systemOverlay: Bool
-    public init(number: UInt32, ownerPID: Int32, layer: Int, bounds: CGRect, alpha: Double = 1, systemOverlay: Bool = false) {
+    /// macOS's own password prompt, its owner checked (`PasswordPrompt`, `PromptOwners`): the one window whose rectangle
+    /// the covers leave clear, once it has been judged (`DisplayPipeline.promptHoles`). Set only when the window list and
+    /// the owner's checks prove it, never from a name.
+    public let passwordPrompt: Bool
+    public init(number: UInt32, ownerPID: Int32, layer: Int, bounds: CGRect, alpha: Double = 1, systemOverlay: Bool = false,
+                passwordPrompt: Bool = false) {
         self.number = number; self.ownerPID = ownerPID; self.layer = layer; self.bounds = bounds
         self.alpha = alpha.isFinite ? alpha : 1
         self.systemOverlay = systemOverlay
+        self.passwordPrompt = passwordPrompt
     }
 
     /// The cursor's window level (`CGWindowLevelForKey(.cursorWindow)`), where the window server puts the pointer and the
