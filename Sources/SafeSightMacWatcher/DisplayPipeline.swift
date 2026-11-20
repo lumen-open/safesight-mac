@@ -169,11 +169,11 @@ public final class DisplayPipeline {
     public private(set) var budgetShare: Double
     /// How hard the looks at a still screen may work (`EnergyMode`). Only the looks that let covers lift slow down.
     public var energy = EnergyMode.full
-    /// Judgements a second for the looks that only let covers lift: the mode's share of the budget, and no more than the
-    /// mode's duty cycle allows at the measured cost of a judgement here.
-    public var settleRate: Double {
-        min(budgetShare * energy.settleRateScale, energy.settleDuty * 1000 / max(msPerJudgement, 0.01))
-    }
+    /// Judgements a second for the looks that only let covers lift: the mode's share of the budget.
+    public var settleRate: Double { budgetShare * energy.settleRateScale }
+    /// Work left over from new pictures (or parts of a full re-judge a look had no time for): the watcher then looks every
+    /// tick, not every `energy.lookEvery`, as it is new content waiting (blurred or shown as judged before meanwhile).
+    public var hasLeftOverWork: Bool { !pending.isEmpty || !dueAgain.isEmpty }
 
     /// What the pipeline holds now, in counts only (for the lab event log and tests; nothing about screen content).
     public struct Diagnostics: Sendable, Equatable {
@@ -266,8 +266,6 @@ public final class DisplayPipeline {
                   !(held.isEmpty && pending.isEmpty && dueAgain.isEmpty && !secondChecksWanted) else { return lastPlan }
             // Saving energy slows only the settling: with nothing new left to judge, the budget comes in at the mode's
             // share, so covers already up lift later (never sooner). Work left over from new pictures keeps the full rate.
-            // And on a slow Mac (no Neural Engine, a virtual Mac) the settling takes at most `energy.settleDuty` of the
-            // judging time, by the measured cost of a judgement: the same evidence, at a lower duty cycle.
             bucket.rate = pending.isEmpty ? settleRate : budgetShare
             return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer,
                        idle: true, provisional: provisional)

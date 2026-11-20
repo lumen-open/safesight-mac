@@ -38,7 +38,32 @@ struct EnergySettings {
     var check = false
 }
 
+/// The detector, counting judgements made beyond the budget each call was given (counts only).
+final class BudgetWatch: Judging {
+    let inner: Detector
+    var calls = 0, overCalls = 0, overJudgements = 0, secondCheckOver = 0, units = 0
+    init(_ d: Detector) { inner = d }
+    func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                   progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+        let v = inner.judgeArea(frame, context: context, within: area, budget: budget, progress: progress)
+        calls += 1; units += v.judgements
+        if v.judgements > budget { overCalls += 1; overJudgements += v.judgements - budget }
+        return v
+    }
+    func setRule(_ rule: DetectorRule) { inner.setRule(rule) }
+    func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { inner.pictureRegions(frame, within: area) }
+    func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? {
+        let v = inner.checkAgainInBackground(frame, context: context, within: area, budget: budget)
+        if let v { units += v.judgements }
+        if let v, v.judgements > budget { secondCheckOver += v.judgements - budget }
+        return v
+    }
+    var summary: [String: Any] { ["calls": calls, "callsOverBudget": overCalls, "judgementsOverBudget": overJudgements,
+                                  "secondCheckJudgementsOverBudget": secondCheckOver] }
+}
+
 enum Energy {
+    static var watch: BudgetWatch?
     // MARK: Process figures
 
     /// CPU seconds used by this process so far (user and system, every thread).
@@ -76,13 +101,16 @@ enum Energy {
 
     /// A simulated clock and the CPU time spent inside the watcher's work.
     struct Meter {
-        var cpu = 0.0, judgements = 0, frames = 0, looks = 0
+        var cpu = 0.0, judgements = 0, frames = 0, looks = 0, secondChecks = 0, budgetUnits = 0
         mutating func measure<T>(_ d: Detector, _ body: () -> T) -> T {
             d.resetTimings()
+            let u0 = Energy.watch?.units ?? 0
             let c0 = Energy.cpuSeconds()
             let out = body()
             cpu += Energy.cpuSeconds() - c0
             judgements += Energy.judgements(d)
+            secondChecks += d.timings.secondCheckJudgements
+            budgetUnits += Energy.watch.map { $0.units - u0 } ?? 0
             return out
         }
         func perMinute(_ seconds: Double) -> [String: Any] {
@@ -90,7 +118,9 @@ enum Energy {
             return ["simulatedSeconds": Energy.r2(seconds), "cpuSeconds": Energy.r2(cpu), "cpuSecondsPerMinute": Energy.r2(cpu / m),
                     "cpuShareOfOneCore": Energy.r2(cpu / max(seconds, 1e-9)), "judgements": judgements,
                     "judgementsPerMinute": Energy.r2(Double(judgements) / m), "framesJudged": frames, "looks": looks,
-                    "looksPerMinute": Energy.r2(Double(looks) / m)]
+                    "looksPerMinute": Energy.r2(Double(looks) / m), "secondCheckJudgements": secondChecks,
+                    "budgetUnitsSpent": budgetUnits, "budgetUnitsPerSecond": Energy.r2(Double(budgetUnits) / max(seconds, 1e-9)),
+                    "note": "judgements: model runs counted by the detector (tie-breaker runs included); budgetUnits: what the judge calls charged to the budget"]
         }
     }
 
@@ -106,7 +136,8 @@ enum Energy {
             // The next tick at least `lookEvery` after the last look.
             let tick = Register.TICK
             var next = (t / tick).rounded(.up) * tick
-            if next < lastLook + mode.lookEvery - 1e-9 { next = ((lastLook + mode.lookEvery) / tick - 1e-9).rounded(.up) * tick }
+            let every = p.hasLeftOverWork ? Register.TICK : mode.lookEvery
+            if next < lastLook + every - 1e-9 { next = ((lastLook + every) / tick - 1e-9).rounded(.up) * tick }
             t = next
             lastLook = t
             let f = CapturedFrame(display: display, status: .idle, image: nil, map: nil, dirty: [], time: t)
@@ -119,7 +150,9 @@ enum Energy {
     }
 
     static func makePipeline(_ display: DisplayDescriptor, _ d: Detector, mode: EnergyMode) -> DisplayPipeline {
-        let p = DisplayPipeline(display: display, judger: d, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+        let w = BudgetWatch(d)
+        watch = w
+        let p = DisplayPipeline(display: display, judger: w, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
         p.energy = mode
         return p
     }
@@ -136,12 +169,15 @@ enum Energy {
         let display = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: CGFloat(img.width) / scale, height: CGFloat(img.height) / scale))
         let snap = windows.map { StaticScreen.windows($0, display: display.bounds) } ?? WindowSnapshot(windows: [WindowInfo(number: 1, ownerPID: 500, layer: 0, bounds: display.bounds)], time: 0)
         let p = makePipeline(display, d, mode: s.power)
+        // The first frame of a display is judged before anything is shown (covered whole until then), at the per-call cap and
+        // outside the budget: counted apart from the settling that follows.
+        var firstFrame = Meter()
         var settling = Meter()
-        var plan = settling.measure(d) {
+        var plan = firstFrame.measure(d) {
             p.process(CapturedFrame(display: display, status: .complete, image: img, map: map(display, img, scale: scale), dirty: nil, time: 0),
                       snapshot: snap, now: 0, date: Date(timeIntervalSinceReferenceDate: 800_000_000))
         }
-        settling.frames = 1
+        firstFrame.frames = 1
         let settledAt = rest(p, d, display: display, snapshot: snap, from: 0, until: s.maxSettleSeconds, mode: s.power, meter: &settling, plan: &plan)
         // At rest: the watcher asks for no look, and a frame that says nothing changed (were the capture to send one)
         // judges nothing.
@@ -160,17 +196,22 @@ enum Energy {
         settlingOut["settledAtSeconds"] = settledAt.map(r2) ?? -1
         var restOut = resting.perMinute(s.restSeconds)
         restOut["note"] = "a 'nothing changed' frame every tick, as if the capture sent one; the watcher itself asks for none at rest"
-        out["still"] = ["file": (file as NSString).lastPathComponent, "power": s.power.rawValue,
+        out["still"] = ["file": (file as NSString).lastPathComponent, "power": s.power.rawValue, "budgetWatch": watch?.summary ?? [:],
+                        "firstFrame": ["judgements": firstFrame.judgements, "cpuSeconds": r2(firstFrame.cpu)],
                         "settling": settlingOut, "rest": restOut, "footprintMB": r2(footprintMB())]
+        print("still: judge calls over their budget: \(watch?.summary ?? [:])")
+        print(String(format: "still (%@): first frame %d judgements, %.2f CPU-s", s.power.rawValue, firstFrame.judgements, firstFrame.cpu))
+        print(String(format: "still (%@): settling charged %d to the budget (%.1f a second); %d of the model runs were second clean checks", s.power.rawValue,
+                     settling.budgetUnits, Double(settling.budgetUnits) / max(settledAt ?? s.maxSettleSeconds, 1), settling.secondChecks))
         print(String(format: "still (%@): settled at %@ s; settling %d judgements, %.1f a minute, %.2f CPU-s a simulated minute; at rest %d judgements, %d looks wanted",
                      s.power.rawValue, settledAt.map { String(format: "%.1f", $0) } ?? "never", settling.judgements,
                      Double(settling.judgements) / max(settledAt ?? s.maxSettleSeconds, 1) * 60,
                      settling.cpu / max(settledAt ?? s.maxSettleSeconds, 1) * 60, resting.judgements, wanted))
         let b = s.power == .full ? EnergyBudget.SETTLE_WITHIN : EnergyBudget.SETTLE_WITHIN / s.power.settleRateScale
         if settledAt == nil || settledAt! > b { over.append("still: settled at \(settledAt.map { "\($0) s" } ?? "never"), budget \(b) s") }
-        let perMin = Double(settling.judgements - 0) / max(settledAt ?? s.maxSettleSeconds, 1) * 60
+        let perMin = Double(settling.budgetUnits) / max(settledAt ?? s.maxSettleSeconds, 1) * 60
         let ceiling = EnergyBudget.settlingJudgementsPerMinute(s.power)
-        if perMin > ceiling { over.append("still: \(Int(perMin)) judgements a minute while settling, budget \(Int(ceiling))") }
+        if perMin > ceiling { over.append("still: \(Int(perMin)) budget units a minute while settling, budget \(Int(ceiling))") }
         if resting.judgements > EnergyBudget.SETTLED_JUDGEMENTS_PER_MINUTE { over.append("still: \(resting.judgements) judgements at rest") }
         if Double(wanted) / s.restSeconds * 60 > Double(EnergyBudget.SETTLED_LOOKS_PER_MINUTE) { over.append("still: \(wanted) looks wanted at rest") }
         let cpuMin = settling.cpu / max(settledAt ?? s.maxSettleSeconds, 1) * 60

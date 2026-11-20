@@ -81,6 +81,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// in Low Power Mode or when the Mac is hot, the looks that let covers lift come less often and use less of the
     /// budget: covers stay up longer, and nothing is shown sooner.
     @MainActor private(set) var energy = EnergyMode.full
+    /// Displays with new pictures left over to judge: looked at every tick, whatever the mode (main thread only).
+    private var leftOver: Set<UInt32> = []
     private var energyOnJudging = EnergyMode.full
     /// What every display shows now: one plan per display the OS lists.
     @MainActor var plans: [CoverPlan] { coordinator.shown }
@@ -172,7 +174,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         running = false
         frames.close()
         seenLock.withLock { lastFrame = [:] }
-        wantsLook = []
+        wantsLook = []; leftOver = []
         // Not waited for: anything the old streams still send carries a generation outranked when covering starts again.
         link.detach()
         judgeQueue.async { [weak self] in
@@ -363,7 +365,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             DispatchQueue.main.async { self?.coordinator.deliver(early, generation: generation) }
         }
         let ended = ProcessInfo.processInfo.systemUptime
-        let wants = p.needsAnotherLook, timings = p.lastTimings, idle = f.status == .idle
+        let wants = p.needsAnotherLook, leftOver = p.hasLeftOverWork, timings = p.lastTimings, idle = f.status == .idle
         #if SAFESIGHTMAC_LAB
         do {
             let t = p.lastTimings, g = p.diagnostics
@@ -375,6 +377,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         DispatchQueue.main.async {
             self.busySince[id] = nil; self.busyAreas[id] = nil
             if wants { self.wantsLook.insert(id) } else { self.wantsLook.remove(id) }
+            if leftOver { self.leftOver.insert(id) } else { self.leftOver.remove(id) }
             self.coordinator.deliver(plan, generation: generation)
             self.onJudged?(id, judgeMs, latencyMs, plan, idle, timings)
         }
@@ -424,7 +427,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         let waiting = frames.waiting(now: now)
         for id in wantsLook {
             let last: (display: DisplayDescriptor, generation: Int, at: TimeInterval)? = seenLock.withLock {
-                guard let l = lastFrame[id], now - l.at >= energy.lookEvery - 0.01 else { return nil }
+                let every = leftOver.contains(id) ? Register.TICK : energy.lookEvery
+                guard let l = lastFrame[id], now - l.at >= every - 0.01 else { return nil }
                 lastFrame[id]?.at = now
                 return l
             }

@@ -28,14 +28,12 @@ public enum EnergyMode: String, Sendable, CaseIterable {
         switch self { case .full: return 1; case .battery: return 0.5; case .low: return 0.25 }
     }
 
-    /// The share of the judging queue's time the looks that let covers lift may take (by the measured cost of a judgement):
-    /// a quarter at full power. On a Mac with a Neural Engine the budget's share comes first; on a slow Mac this one does,
-    /// so a still screen settles more slowly there instead of keeping a core busy for minutes.
-    public var settleDuty: Double { 0.25 * settleRateScale }
-
-    /// How long the watcher waits between looks at a still screen while covers wait to lift.
+    /// How long the watcher waits between looks at a still screen while only covers wait to lift (no new pictures left
+    /// to judge). Each look has a fixed cost besides its judgements (the window split, finding pictures, hashing every
+    /// picture for the cache), measured at most of a look's CPU time in the lab, so fewer, larger looks make the same
+    /// judgements for less: at full power a look a second gets the 40 judgements four quarter-second looks got.
     public var lookEvery: TimeInterval {
-        switch self { case .full: return Register.TICK; case .battery: return 2 * Register.TICK; case .low: return 4 * Register.TICK }
+        switch self { case .full: return 4 * Register.TICK; case .battery: return 8 * Register.TICK; case .low: return 16 * Register.TICK }
     }
 }
 

@@ -21,7 +21,7 @@ import Testing
     struct Run { var settledAt: Double?; var judgements: Int; var looks: Int; var judgementsWhenSettled: Int; var plans: [CoverPlan] }
 
     /// One complete frame at t = 0, then a look every `mode.lookEvery` while the pipeline wants one (as the watcher asks),
-    /// for `seconds`; and after it settles, a "nothing changed" frame every tick anyway (as if the capture sent them).
+    /// (every tick while new pictures are left over), for `seconds`; and after it settles, a "nothing changed" frame every tick anyway (as if the capture sent them).
     func still(_ p: DisplayPipeline, _ judge: CostJudge, _ snap: WindowSnapshot, mode: EnergyMode, seconds: Double) -> Run {
         p.energy = mode
         // The fake judge's clock times the looks, as in StillScreenSettlesTests: the same on any machine.
@@ -37,7 +37,8 @@ import Testing
                 plans.append(p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t), snapshot: snap, now: t))
                 continue
             }
-            guard p.needsAnotherLook, t - lastLook >= mode.lookEvery - 1e-9 else { continue }
+            let every = p.hasLeftOverWork ? Register.TICK : mode.lookEvery
+            guard p.needsAnotherLook, t - lastLook >= every - 1e-9 else { continue }
             lastLook = t; looks += 1
             plans.append(p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t), snapshot: snap, now: t))
         }
@@ -82,8 +83,8 @@ import Testing
         // Judgements over the whole settling, against the mode's rate for that long, plus the bucket's first burst.
         let allowed = (Register.JUDGEMENT_BUDGET * mode.settleRateScale) * at + Register.JUDGEMENT_BURST
         #expect(Double(run.judgements) <= allowed, "\(run.judgements) judgements in \(at) s, budget \(allowed)")
-        // Looks: at most one per `lookEvery`.
-        #expect(Double(run.looks) <= at / mode.lookEvery + 1)
+        // Looks: at most one a tick, and far fewer than that once only covers wait to lift.
+        #expect(Double(run.looks) <= at / Register.TICK + 1)
     }
 
     @Test func savingEnergySettlesLaterNeverSooner() {
@@ -136,30 +137,13 @@ import Testing
         #expect(p.bucket.rate == Register.JUDGEMENT_BUDGET, "new pixels again: full rate")
     }
 
-    /// On a slow Mac the settling takes at most a quarter of the judging time (by the measured cost of a judgement), and less
-    /// when saving: never a larger share than the budget's.
-    @Test func settlingOnASlowMacKeepsToItsDutyCycle() {
-        let judge = CostJudge(entries: [], blindCalls: 0)
-        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
-        p.msPerJudgement = 25    // a virtual Mac with no Neural Engine
-        #expect(abs(p.settleRate - 10) < 1e-9, "a quarter of the time at 25 ms a judgement: 10 a second, not 40")
-        p.energy = .low
-        #expect(abs(p.settleRate - 0.25 * 0.25 * 1000 / 25) < 1e-9)
-        p.energy = .full
-        p.msPerJudgement = 2     // a Mac with a Neural Engine: the budget's share decides
-        #expect(p.settleRate == Register.JUDGEMENT_BUDGET)
-    }
-
-    /// The same four clean rounds on a slow judge at the duty cycle: the screen still settles, later, never sooner.
-    @Test func aSlowMacStillSettlesWithTheSameEvidence() {
-        let judge = CostJudge(entries: StillScreenSettlesTests.grid(PixelRect(x: 0, y: 30, w: 600, h: 370), side: 16, step: 90), blindCalls: 1)
-        judge.msPerJudgement = 10
-        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
-        let run = still(p, judge, WindowSnapshot(windows: [desktop], time: 0), mode: .full, seconds: 600)
+    /// Fewer, larger looks while only covers wait to lift: each look's fixed cost (the window split, finding pictures,
+    /// hashing) is paid less often for the same judgements, and never less often than a second at full power.
+    @Test func lookingLessOftenWhileOnlyCoversWait() {
+        #expect(EnergyMode.full.lookEvery == 1)
+        let (run, _, _) = desktopRun(.full, seconds: 900)
         let at = try! #require(run.settledAt)
-        #expect(judge.judgedCount.values.allSatisfy { $0 >= Register.VIDEO_VOTE }, "every picture judged clean four times")
-        #expect(p.settleRate < Register.JUDGEMENT_BUDGET, "the duty cycle decides here: \(p.settleRate) a second")
-        #expect(at > 0)
+        #expect(Double(run.looks) < at / Register.TICK / 2, "\(run.looks) looks in \(at) s")
     }
 
     /// At a settled screen, frames whose every pixel is the last judged frame's judge nothing, however long it lasts; a frame
