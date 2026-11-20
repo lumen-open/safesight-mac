@@ -129,6 +129,43 @@ public enum DirtyRegions {
         }
     }
 
+    /// The side of the blocks `changedBlocks` compares (a multiple of `grid`).
+    public static let block = 32
+
+    /// Where two frames of the same size differ, as `block`-pixel blocks merged into rectangles (prepared like reported
+    /// areas). Empty when every pixel is the same; nil when the sizes differ (judge the whole frame).
+    public static func changedBlocks(old: RGBAImage, new: RGBAImage) -> [PixelRect]? {
+        guard old.width == new.width, old.height == new.height, old.pixels.count == new.pixels.count else { return nil }
+        let w = new.width, h = new.height, b = block
+        var out: [PixelRect] = []
+        old.pixels.withUnsafeBufferPointer { a in
+            new.pixels.withUnsafeBufferPointer { c in
+                var by = 0
+                while by < h {
+                    let bh = min(b, h - by)
+                    var bx = 0
+                    // Runs of differing blocks along a band of rows become one rectangle.
+                    var runStart: Int?
+                    while bx < w {
+                        let bw = min(b, w - bx)
+                        var differs = false
+                        for y in by..<(by + bh) where !differs {
+                            let o = (y * w + bx) * 4
+                            if memcmp(a.baseAddress! + o, c.baseAddress! + o, bw * 4) != 0 { differs = true }
+                        }
+                        if differs { if runStart == nil { runStart = bx } } else if let s = runStart {
+                            out.append(PixelRect(x: s, y: by, w: bx - s, h: bh)); runStart = nil
+                        }
+                        bx += bw
+                    }
+                    if let s = runStart { out.append(PixelRect(x: s, y: by, w: w - s, h: bh)) }
+                    by += bh
+                }
+            }
+        }
+        return out.isEmpty ? [] : prepare(out, width: w, height: h)
+    }
+
     static func touches(_ a: PixelRect, _ b: PixelRect) -> Bool {
         a.x <= b.maxX && b.x <= a.maxX && a.y <= b.maxY && b.y <= a.maxY
     }
@@ -150,7 +187,11 @@ public struct FrameMailbox: Sendable {
         if f.generation < old.generation { return }
         if f.generation > old.generation { pending = f; return }
         let dirty: [PixelRect]?
-        if let a = old.dirty, let b = f.dirty, old.map?.pixelWidth == f.map?.pixelWidth, old.map?.pixelHeight == f.map?.pixelHeight {
+        if f.image == nil && f.dirty?.isEmpty == true && [.idle, .started].contains(f.status) {
+            dirty = old.dirty  // "nothing changed" adds nothing to what is waiting
+        } else if old.image == nil && old.dirty?.isEmpty == true && [.idle, .started].contains(old.status) {
+            dirty = f.dirty
+        } else if let a = old.dirty, let b = f.dirty, old.map?.pixelWidth == f.map?.pixelWidth, old.map?.pixelHeight == f.map?.pixelHeight {
             dirty = a + b
         } else {
             dirty = nil  // sizes differ or one says "everything": judge the whole frame

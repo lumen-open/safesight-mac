@@ -256,6 +256,13 @@ public final class DisplayPipeline {
             guard let img = f.image, let map = f.map, map.pixelWidth == img.width, map.pixelHeight == img.height, map.coversDisplay else {
                 return cover(because: .badFrameMetadata)
             }
+            // A complete frame of the same stream in which no pixel changed (the capture compares them) is a "nothing
+            // changed" frame: what is held or waiting is judged again, as on an idle frame, and nothing else is.
+            if f.dirty?.isEmpty == true, judged, judgedGeneration == f.generation, let last = lastMap, last == map {
+                return process(CapturedFrame(display: f.display, status: .idle, image: nil, map: nil, dirty: [], time: f.time,
+                                             generation: f.generation, windows: f.windows),
+                               snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
+            }
             // The first frame of another stream is judged whole, with no motion carried over from the old stream.
             let sameStream = judgedGeneration == f.generation
             let previous = sameStream && lastMap.map { $0 == map } == true ? lastImage : nil
