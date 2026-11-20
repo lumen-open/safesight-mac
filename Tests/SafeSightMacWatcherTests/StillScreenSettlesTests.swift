@@ -34,8 +34,12 @@ final class CostJudge: Judging {
     /// How often each picture has been judged (freshly), and model faults so far.
     var judgedCount: [PixelRect: Int] = [:]
     var faults = 0
-    /// Real time each judgement takes (a slow Mac), so a call's time limit caps what it can judge, as it does there.
+    /// Real time each judgement takes (a slow Mac), so a call's time limit caps what it can judge, as it does there; and
+    /// real time each call takes whatever it judges (finding pictures, hashing).
     var msPerJudgement = 0.0
+    var msPerCall = 0.0
+    /// Every call: its area and the budget it was given.
+    var log: [(area: PixelRect, budget: Int)] = []
 
     init(entries: [Entry], blindCalls: Int = 2, wholeCost: @escaping (PixelRect) -> Int = { _ in 2 }) {
         self.entries = entries; self.blindCalls = blindCalls; self.wholeCost = wholeCost
@@ -44,6 +48,8 @@ final class CostJudge: Judging {
     func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
                    progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
         serial += 1
+        log.append((area, budget))
+        if msPerCall > 0 { usleep(useconds_t(msPerCall * 1000)) }
         let inside = entries.filter { $0.rect.intersection(area) == $0.rect }
         var tasks: [(Key, Int)] = [(Key(pass: .whole, rect: area), wholeCost(area))] + inside.map { (Key(pass: .region, rect: $0.rect), $0.cost) }
         if blindCalls > 0 {
@@ -140,8 +146,8 @@ final class CostJudge: Judging {
     /// The menu bar's whole-window cover. Its window's call holds one entry, the whole pass over the thin strip, that costs
     /// 42 judgements, more than any call is given while the desktop's covers take the budget as it comes (40 a second).
     /// On main the judgements saved up for it were spent first by the calls before it in every look, so that pass was
-    /// never judged and the cover never had a clean round while the desktop had anything left to judge. Now a call saving
-    /// up is served in turn: no call that only judges again spends anything until it has been.
+    /// never judged and the cover never had a clean round while the desktop had anything left to judge. Now a share of what
+    /// comes in is set aside for the first call in line, and it is served once that reaches its cost.
     @Test func theMenuBarsDearWholePassIsJudgedWhileTheDesktopStillHasWork() {
         let deskArea = PixelRect(x: 0, y: 30, w: 600, h: 370)
         let judge = CostJudge(entries: Self.grid(deskArea), wholeCost: Self.wholeCost)
@@ -267,5 +273,132 @@ final class CostJudge: Judging {
         #expect(after >= 0 && after < before && after <= 1, "the change started the count again: \(before) before, \(after) after")
         // Four new rounds take far longer than the next few looks: still covered just after.
         #expect(plans[changeAt...(changeAt + 8)].allSatisfy { $0.covers(g) }, "still covered right after the change")
+    }
+
+    // MARK: The line for saved-up judgements never holds other work back
+
+    /// A window whose content keeps changing (a video, typing) spends more than comes in at every look, while a cover
+    /// elsewhere saves up for a dear line of text. New-change calls are never held back, and neither is anything else:
+    /// pictures left unjudged by a model failure (first judgements, judged again over the same area) are judged, a flagged
+    /// picture is judged again on its rhythm, and the cover saving up is still served, from the share set aside for it.
+    @Test func busyWindowElsewhereNeverStarvesPendingWorkFlaggedRechecksOrTheSaver() {
+        // The busy window, and two quiet ones well clear of it (so its changes never reach them).
+        let busy = PixelRect(x: 0, y: 0, w: 240, h: 400)
+        let busyEntries = Self.grid(busy, side: 14, step: 18)
+        let line = PixelRect(x: 370, y: 180, w: 220, h: 12)
+        let failing = Self.grid(PixelRect(x: 360, y: 210, w: 120, h: 190))
+        let bad = PixelRect(x: 520, y: 300, w: 40, h: 40)
+        let judge = CostJudge(entries: busyEntries + Self.grid(PixelRect(x: 360, y: 0, w: 240, h: 170)) + [.init(rect: line, cost: 48)]
+                                  + failing + [.init(rect: bad, cost: 2)], blindCalls: 0)
+        judge.flagged = [bad]
+        judge.failNext = Set(failing.map(\.rect))
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = WindowSnapshot(windows: [WindowInfo(number: 1, ownerPID: 501, layer: 0, bounds: CGRect(x: 0, y: 0, width: 240, height: 400)),
+                                            WindowInfo(number: 2, ownerPID: 502, layer: 0, bounds: CGRect(x: 360, y: 0, width: 240, height: 200)),
+                                            WindowInfo(number: 3, ownerPID: 503, layer: 0, bounds: CGRect(x: 360, y: 200, width: 240, height: 200))], time: 0)
+        let t2 = JudgeTarget.window(number: 2, ownerPID: 502)
+        _ = still(p, Fixtures.blank(600, 400), snap, seconds: 90) { k, img in
+            if k == 1 {
+                p.held.append(DisplayPipeline.Held(target: t2, rel: CGRect(x: 0, y: 0, width: 240, height: 200), whole: false, kind: .plain, clean: 0))
+            }
+            // The busy window's content changes at every look: all of it is new, and wants more than comes in.
+            for e in busyEntries { judge.lastJudged[CostJudge.Key(pass: .region, rect: e.rect)] = nil }
+            judge.lastJudged[CostJudge.Key(pass: .whole, rect: busy)] = nil
+            img.pixels[(5 * 600 + 5) * 4] = UInt8(k % 200)
+            return [PixelRect(x: 0, y: 0, w: 200, h: 400)]
+        }
+        #expect(judge.faults > 0, "the first judgements in the third window failed")
+        #expect(failing.allSatisfy { (judge.judgedCount[$0.rect] ?? 0) >= 1 }, "pictures left unjudged by a failure were judged again: \(failing.filter { judge.judgedCount[$0.rect] == nil }.count) never")
+        let badChecks = judge.log.filter { $0.area.intersection(bad) != nil && $0.budget > 0 }.count
+        #expect(badChecks >= 10, "the flagged picture was judged again with budget: \(badChecks) times")
+        #expect((judge.judgedCount[line] ?? 0) >= 1, "the cover saving up was served")
+        let g = CGRect(x: bad.x, y: bad.y, width: bad.w, height: bad.h)
+        #expect(p.lastPlan.covers(g, kind: .plain), "the flagged picture is still covered")
+    }
+
+    /// A flagged picture's cover due to be judged again (`RECHECK_FLAGGED_EVERY`) is judged with budget while another cover
+    /// saves up for a dear entry: on main every call but the first in line was given nothing until it had been served.
+    @Test func aDueFlaggedRecheckIsNeverHeldBackForASaver() {
+        let line = PixelRect(x: 320, y: 380, w: 260, h: 12)
+        let bad = PixelRect(x: 40, y: 40, w: 40, h: 40)
+        let judge = CostJudge(entries: [.init(rect: line, cost: 400), .init(rect: bad, cost: 2)], blindCalls: 0)
+        judge.flagged = [bad]
+        // The dear line was judged clean before (shown as judged earlier meanwhile): its cover saves up to judge it again.
+        judge.lastJudged[CostJudge.Key(pass: .region, rect: line)] = 0
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        let t = JudgeTarget.window(number: 10, ownerPID: 500)
+        _ = still(p, Fixtures.blank(600, 400), Fixtures.oneWindow(d.bounds), seconds: 30) { k, _ in
+            if k == 1 {
+                p.bucket.spend(Int(Register.JUDGEMENT_BURST))
+                p.held.append(DisplayPipeline.Held(target: t, rel: CGRect(x: 300, y: 200, width: 300, height: 200), whole: false, kind: .plain, clean: 0))
+                judge.log = []
+            }
+            return nil
+        }
+        let rechecks = judge.log.dropFirst(8).filter { $0.area == bad }
+        #expect(rechecks.count >= 5, "the flagged cover was judged again on its rhythm: \(rechecks.count) times")
+        #expect(rechecks.filter { $0.budget > 0 }.count >= rechecks.count - 1, "with budget, not held back for the cover saving up: \(rechecks.map(\.budget))")
+    }
+
+    /// Covers take turns when a look has time for only two (or one): the cover first in line goes first only once there is
+    /// enough for it, and is not counted in the turns, so every other cover still gets its turn. Before, it went first at
+    /// every look and the turns moved on by two: with covers A, B, C, D and C first in line, B never had a turn.
+    @Test func theFirstInLineNeverTakesAnotherCoversTurn() {
+        let areas = [PixelRect(x: 0, y: 0, w: 290, h: 190), PixelRect(x: 310, y: 0, w: 290, h: 190),
+                     PixelRect(x: 0, y: 210, w: 290, h: 190), PixelRect(x: 310, y: 210, w: 290, h: 190)]
+        let line = PixelRect(x: 10, y: 380, w: 270, h: 12)
+        let judge = CostJudge(entries: areas.flatMap { Self.grid($0, step: 40) } + [.init(rect: line, cost: 100)], blindCalls: 0)
+        // The line was judged clean before; the first look judges the rest in full, and leaves nothing over.
+        judge.lastJudged[CostJudge.Key(pass: .region, rect: line)] = 0
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        let t = JudgeTarget.window(number: 10, ownerPID: 500)
+        let snap = Fixtures.oneWindow(d.bounds)
+        _ = still(p, Fixtures.blank(600, 400), snap, seconds: 30) { k, _ in
+            if k == 1 {
+                // From now on each call takes 3 ms against a 4 ms limit: two covers are judged a look (one, when slower).
+                judge.msPerCall = 3
+                p.callWallMs = 4
+                p.bucket.spend(Int(Register.JUDGEMENT_BURST))
+                judge.log = []
+                p.held = areas.map { DisplayPipeline.Held(target: t, rel: CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h), whole: false, kind: .plain, clean: 0) }
+            }
+            // One picture under each cover fails every time it is judged: no cover lifts, so they keep taking turns.
+            for a in areas { judge.failNext.insert(Self.grid(a, step: 40)[0].rect) }
+            return nil
+        }
+        let perCover = areas.map { a in judge.log.filter { $0.area == a }.count }
+        #expect(perCover.allSatisfy { $0 >= 15 }, "every cover had its turns: \(perCover)")
+        #expect((judge.judgedCount[line] ?? 0) >= 1, "the cover first in line was served too")
+    }
+
+    /// The `FULL_REJUDGE` pass at a still screen judges every window again. When a look has no time for some of them, they
+    /// show what was judged before, unchanged, until their turn: nothing is blurred or covered for want of time or budget,
+    /// so a still screen cannot flicker at every pass. The looks go on here (a flagged picture stays covered).
+    @Test func fullPassesAtAStillScreenDoNotFlicker() {
+        var windows: [WindowInfo] = [], entries: [CostJudge.Entry] = []
+        for k in 0..<6 {
+            let r = PixelRect(x: k * 100, y: 0, w: 100, h: 400)
+            windows.append(WindowInfo(number: UInt32(1 + k), ownerPID: Int32(600 + k), layer: 0, bounds: CGRect(x: r.x, y: r.y, width: r.w, height: r.h)))
+            entries += Self.grid(r, step: 30)
+        }
+        let bad = entries[3].rect
+        let judge = CostJudge(entries: entries, blindCalls: 0)
+        judge.flagged = [bad]
+        judge.msPerCall = 2
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: 5)
+        let plans = still(p, Fixtures.blank(600, 400), WindowSnapshot(windows: windows, time: 0), seconds: 300)
+        let g = CGRect(x: bad.x, y: bad.y, width: bad.w, height: bad.h)
+        #expect(plans.last!.covers(g, kind: .plain), "the flagged picture stays covered")
+        // The flagged picture's window stays covered (its first looks left it unjudged too long, and the flag keeps every
+        // cover over it). Everything else settles once judged, and then nothing else is drawn, through every full pass
+        // after it (one every 30 s).
+        let flaggedWindow = CGRect(x: 0, y: 0, width: 100, height: 400).insetBy(dx: 1, dy: 1)
+        func calm(_ plan: CoverPlan) -> Bool { plan.wholeDisplay == nil && plan.items.allSatisfy { flaggedWindow.contains($0.rect.insetBy(dx: 1, dy: 1)) } }
+        let lastStray = plans.lastIndex { !calm($0) } ?? -1
+        let settled = Double(lastStray + 1) / 4
+        #expect(settled <= 150, "the rest settled at \(settled) s, leaving at least five full passes after it")
+        let strays = plans.indices.filter { !calm(plans[$0]) }.map { Double($0) / 4 }
+        #expect(strays.allSatisfy { $0 < settled }, "nothing else drawn after \(settled) s")
+        #expect(p.needsAnotherLook, "the looks go on, so the full passes do")
     }
 }
