@@ -1,0 +1,156 @@
+{
+  "budget": {
+    "frameCopyMs2880x1800": 4,
+    "reloadCpuSeconds": 15,
+    "settleWithinSeconds": 300,
+    "settledJudgementsPerMinute": 0,
+    "settledLooksPerMinute": 0,
+    "settledTimerWakeupsPerMinute": 240,
+    "settlingCpuSecondsPerMinute": 30,
+    "settlingJudgementsPerMinute": {
+      "battery": 1600,
+      "full": 2800,
+      "low": 1000
+    },
+    "videoCpuShareOfOneCore": 1
+  },
+  "copy": {
+    "2880x1800": {
+      "coreShareAt120fps": 0.51,
+      "coreShareAt60fps": 0.25,
+      "cpuMsPerFrame": 4.23,
+      "ms": 4.22,
+      "worstMs": 4.55
+    },
+    "5120x2880": {
+      "coreShareAt120fps": 1.44,
+      "coreShareAt60fps": 0.72,
+      "cpuMsPerFrame": 12.27,
+      "ms": 11.97,
+      "worstMs": 17.3
+    }
+  },
+  "footprintAfterModelsMB": 659.03,
+  "label": "main at df457a6 with only the energy command added",
+  "machine": "Apple M1 Max, macOS Version 26.3 (Build 25D125)",
+  "overBudget": [
+    "copy: 4.22 ms a 2880x1800 frame, budget 4.0 ms"
+  ],
+  "peakFootprintMB": 929.29,
+  "postProcessed": "judgements corrected: this harness build counted second clean checks twice; judgements = the detector's count, second checks included once",
+  "reuse": {
+    "firstShowing": {
+      "budgetUnitsPerSecond": 42.05,
+      "budgetUnitsSpent": 4692,
+      "cpuSeconds": 48,
+      "cpuSecondsPerMinute": 25.81,
+      "cpuShareOfOneCore": 0.43,
+      "framesJudged": 1,
+      "judgements": 4692,
+      "judgementsPerMinute": 2523.03,
+      "looks": 254,
+      "looksPerMinute": 136.58,
+      "note": "judgements: model runs counted by the detector (tie-breaker runs included); budgetUnits: what the judge calls charged to the budget",
+      "restedAfterSeconds": 111.58,
+      "secondCheckJudgements": 1296,
+      "simulatedSeconds": 111.58
+    },
+    "footprintMB": 742.36,
+    "page": "busiest held-out page",
+    "power": "full",
+    "reload": {
+      "budgetUnitsPerSecond": 12000000000,
+      "budgetUnitsSpent": 12,
+      "cpuSeconds": 0.08,
+      "cpuSecondsPerMinute": 4936620000,
+      "cpuShareOfOneCore": 82277000,
+      "framesJudged": 1,
+      "judgements": 12,
+      "judgementsPerMinute": 720000000000.0,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "note": "judgements: model runs counted by the detector (tie-breaker runs included); budgetUnits: what the judge calls charged to the budget",
+      "restedAfterSeconds": 0,
+      "secondCheckJudgements": 0,
+      "simulatedSeconds": 0
+    }
+  },
+  "sharedMac": "the developer Mac was shared with other work while this ran (load average about 4 to 16); CPU times are the process's own",
+  "simulatedClock": true,
+  "still": {
+    "budgetWatch": {
+      "calls": 18982,
+      "callsOverBudget": 0,
+      "judgementsOverBudget": 0,
+      "secondCheckJudgementsOverBudget": 0
+    },
+    "file": "04-lab-start.png",
+    "firstFrame": {
+      "cpuSeconds": 0.37,
+      "judgements": 36
+    },
+    "footprintMB": 757.47,
+    "power": "full",
+    "rest": {
+      "budgetUnitsPerSecond": 0,
+      "budgetUnitsSpent": 0,
+      "cpuSeconds": 0,
+      "cpuSecondsPerMinute": 0,
+      "cpuShareOfOneCore": 0,
+      "framesJudged": 0,
+      "judgements": 0,
+      "judgementsPerMinute": 0.0,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "note": "a 'nothing changed' frame every tick, as if the capture sent one; the watcher itself asks for none at rest",
+      "secondCheckJudgements": 0,
+      "simulatedSeconds": 60
+    },
+    "settling": {
+      "budgetUnitsPerSecond": 41.18,
+      "budgetUnitsSpent": 6580,
+      "cpuSeconds": 78.27,
+      "cpuSecondsPerMinute": 29.39,
+      "cpuShareOfOneCore": 0.49,
+      "framesJudged": 0,
+      "judgements": 6580,
+      "judgementsPerMinute": 2470.59,
+      "looks": 337,
+      "looksPerMinute": 126.53,
+      "note": "judgements: model runs counted by the detector (tie-breaker runs included); budgetUnits: what the judge calls charged to the budget",
+      "secondCheckJudgements": 1924,
+      "settledAtSeconds": 159.8,
+      "simulatedSeconds": 159.8
+    }
+  },
+  "tick": {
+    "cpuMsPerTick": 0.13,
+    "cpuSecondsPerMinute": 0.03,
+    "msPerTick": 0.21,
+    "note": "the OS reads the quarter-second tick makes at a settled screen (display lists, session state); the stall and wait checks besides are arithmetic",
+    "ticksPerSecond": 4
+  },
+  "video": {
+    "area": "1280x720 px at 30 fps over a 2880x1800 page",
+    "footprintMB": 795.8,
+    "judged": {
+      "budgetUnitsPerSecond": 14.53,
+      "budgetUnitsSpent": 872,
+      "cpuSeconds": 55.17,
+      "cpuSecondsPerMinute": 55.17,
+      "cpuShareOfOneCore": 0.92,
+      "framesCapturedPerMinute": 1800,
+      "framesJudged": 150,
+      "judgements": 872,
+      "judgementsPerMinute": 872.0,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "note": "judgements: model runs counted by the detector (tie-breaker runs included); budgetUnits: what the judge calls charged to the budget",
+      "secondCheckJudgements": 0,
+      "simulatedSeconds": 60,
+      "videoCoveredOrBlurredShareAtEnd": 1
+    },
+    "power": "full"
+  },
+  "what": "safesightmac-harness energy"
+}

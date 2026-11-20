@@ -164,6 +164,10 @@ public final class DisplayPipeline {
     }
 
     public func setBudgetShare(_ rate: Double) { bucket.rate = rate }
+    /// Work that must not wait for the slower pace of looks: new pictures left over, parts of a full re-judge a look had
+    /// no time for, and the background clean checks of pictures shown clear (a check that flags must cover as soon as on
+    /// main). The app then looks every tick, not every `EnergyMode.lookEvery`.
+    public var hasLeftOverWork: Bool { !pending.isEmpty || !dueAgain.isEmpty || secondChecksWanted }
 
     /// What the pipeline holds now, in counts only (for the lab event log and tests; nothing about screen content).
     public struct Diagnostics: Sendable, Equatable {
