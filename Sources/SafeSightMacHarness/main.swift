@@ -6,7 +6,7 @@
 //   safesightmac-harness demo [--out DIR]                         scripted synthetic scenes (lab build: with the stand-in)
 //   safesightmac-harness frames FILE... [--models DIR] [--out DIR] image files as successive frames of one display
 //   safesightmac-harness bench [--models DIR] [--pages DIR] [--json FILE] [--trials N] [--cases single,grid,busy,scroll]
-//            [--no-background-checks]
+//            [--no-background-checks] [--fresh-four]
 //            (lab build only) times the chain from frame to cover plan to cover layer update, by stage; see Bench.swift
 //   safesightmac-harness falsecovers --models DIR --list FILE [--root DIR] [--rule R] [--jsonl FILE] [--json FILE]
 //            false covers on harmless screens through the whole pipeline; see FalseCovers.swift
@@ -22,7 +22,7 @@
 //            [--every K] [--seed S] [--bands B,...] [--json FILE]
 //            (lab build only) how far jitter moves each model's score on harmless screens; see JitterSpread.swift
 //   safesightmac-harness static FILE --models DIR [--slow-ms MS] [--seconds S] [--fps F] [--frames idle|empty|none]
-//            [--windows FILE]
+//            [--windows FILE] [--fresh-four]
 //            (lab build only) one harmless screenshot as a still screen on a slowed-down judge: does the cover settle to
 //            nothing and stay so? See StaticScreen.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
@@ -71,6 +71,7 @@ struct StillOptions {
     var fps = 4.0
     var frames = "idle"
     var windows: String?
+    var freshFour = false
 }
 
 /// Bench options, parsed in every build so that a release build can refuse `bench` plainly.
@@ -84,6 +85,8 @@ struct BenchSettings {
     var scrollSpeeds = [8, 32, 96]
     /// False with --no-background-checks: second clean checks happen only when a picture comes back.
     var backgroundChecks = true
+    /// True with --fresh-four: a cover's round counts only entries judged afresh in it (`Register.FRESH_FOUR`).
+    var freshFour = false
 }
 
 /// Jitter-measurement options, parsed in every build so that a release build can refuse `jitter` plainly.
@@ -128,6 +131,7 @@ func parse() -> Options {
         case "--label": o.bench.label = v()
         case "--busy-pages": o.bench.busyPages = Int(v()) ?? 6
         case "--no-background-checks": o.bench.backgroundChecks = false
+        case "--fresh-four": o.bench.freshFour = true; o.still.freshFour = true
         case "--scroll-speeds": o.bench.scrollSpeeds = v().split(separator: ",").compactMap { Int($0) }
         case "--draws": o.jitter.draws = max(2, Int(v()) ?? 24)
         case "--per-band": o.jitter.perBand = max(0, Int(v()) ?? 3000)
@@ -282,7 +286,7 @@ if o.command == "static" {
     #if SAFESIGHTMAC_LAB
     guard let f = o.files.first, o.models != nil else { fail("static needs FILE and --models DIR") }
     StaticScreen.run(detector: detector, file: f, scale: o.scale,
-                     s: .init(slowMs: o.still.slowMs, seconds: o.still.seconds, fps: o.still.fps, frames: o.still.frames, windows: o.still.windows))
+                     s: .init(slowMs: o.still.slowMs, seconds: o.still.seconds, fps: o.still.fps, frames: o.still.frames, windows: o.still.windows, freshFour: o.still.freshFour))
     exit(0)
     #else
     fail("static needs a lab build: SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness static")
@@ -295,6 +299,7 @@ if o.command == "bench" {
     b.trials = o.bench.trials; b.pages = o.bench.pages; b.json = o.bench.json; b.cases = Set(o.bench.cases)
     b.label = o.bench.label; b.busyPages = o.bench.busyPages; b.scrollSpeeds = o.bench.scrollSpeeds
     b.backgroundChecks = o.bench.backgroundChecks
+    b.freshFour = o.bench.freshFour
     b.modelsNote = o.models.map { "real models (\(($0 as NSString).lastPathComponent)), checked against the sealed hash list; sealed cut-off table" } ?? "null models (lab): every model scores 0, only the stand-in covers"
     Bench(detector: detector, options: b).run()
     exit(0)

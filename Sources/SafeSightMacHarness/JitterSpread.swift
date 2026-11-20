@@ -17,6 +17,9 @@
 // judgements it would get each time it comes back. With one check, an entry is cached clean on its first draw under
 // half its action cut-off; with two, only on two draws in a row under it. Both are counted per model and band, among
 // the borderline entries that also had a draw at or over the action cut-off (the crossings).
+//
+// Fresh four (`Register.FRESH_FOUR`): the same draws as the rounds of a cover over the entry. Today a cover lifts once two
+// draws in a row were under half (the cache answers the rest) or after four clean draws; fresh four needs four clean draws.
 #if SAFESIGHTMAC_LAB
 import DetectorCore
 import Foundation
@@ -44,6 +47,10 @@ enum JitterSpread {
         var selected: Bool, background: Bool
         /// Of the draws, in the order made: how many were under half the action cut-off, and whether two in a row were.
         var underHalf = 0, draws = 0, twoInARowUnderHalf = false
+        /// Under a cover that needs `VIDEO_VOTE` (4) clean rounds, the draws in order standing for its rounds (`lifts`): from
+        /// the first draw, whether it lifts with today's rule and with fresh four; over every start, the share of starts that
+        /// lift; with the draws taken as independent, the chance it lifts (`liftChance`).
+        var liftsToday = false, liftsFresh = false, liftShareToday = 0.0, liftShareFresh = 0.0, pLiftToday = 0.0, pLiftFresh = 0.0
         var range: Float { hi - lo }
         /// The lowest cut-off at which this entry's outcome changes: containment where a blur can apply.
         var action: Float { containable ? min(cover, clean) : cover }
@@ -51,6 +58,29 @@ enum JitterSpread {
 
     /// A small deterministic generator for the sample (jitter itself comes from the system random source).
     struct SplitMix { var s: UInt64; mutating func next() -> UInt64 { s &+= 0x9E37_79B9_7F4A_7C15; var z = s; z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9; z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB; return z ^ (z >> 31) } }
+
+    /// A cover over this entry, its rounds judged in the order of `d`. A draw at or over `action` flags it, and a flag is
+    /// cached as a cover, so it never lifts after that. Today: from two draws in a row under `half` on, the cache hands
+    /// back the clean verdict and the remaining rounds count unjudged. Fresh four: four fresh draws. Nil: too few draws.
+    static func lifts(_ d: ArraySlice<Float>, half: Float, action: Float, fresh: Bool) -> Bool? {
+        var low = 0, k = 0
+        for x in d {
+            k += 1
+            if x >= action { return false }
+            low = x < half ? low + 1 : 0
+            if k == 4 || (!fresh && low >= 2) { return true }
+        }
+        return nil
+    }
+
+    /// The chance `lifts` is true with independent draws, each under half with `pl`, between with `pm` (else a flag).
+    static func liftChance(pl: Double, pm: Double, fresh: Bool) -> Double {
+        func go(_ k: Int, _ low: Int) -> Double {
+            if k == 4 || (!fresh && low >= 2) { return 1 }
+            return pl * go(k + 1, low + 1) + pm * go(k + 1, 0)
+        }
+        return go(0, 0)
+    }
 
     static func quantile(_ a: [Float], _ q: Double) -> Float {
         guard !a.isEmpty else { return .nan }
@@ -146,6 +176,18 @@ enum JitterSpread {
                     sp.underHalf = under.filter { $0 }.count
                     sp.draws = under.count
                     sp.twoInARowUnderHalf = zip(under, under.dropFirst()).contains { $0 && $1 }
+                    let d = inOrder[...]
+                    sp.liftsToday = lifts(d, half: half, action: sp.action, fresh: false) ?? false
+                    sp.liftsFresh = lifts(d, half: half, action: sp.action, fresh: true) ?? false
+                    let starts = max(0, inOrder.count - 3)
+                    if starts > 0 {
+                        sp.liftShareToday = Double((0..<starts).filter { lifts(inOrder[$0...], half: half, action: sp.action, fresh: false) == true }.count) / Double(starts)
+                        sp.liftShareFresh = Double((0..<starts).filter { lifts(inOrder[$0...], half: half, action: sp.action, fresh: true) == true }.count) / Double(starts)
+                    }
+                    let n = Double(max(1, inOrder.count))
+                    let pl = Double(inOrder.filter { $0 < half }.count) / n, pm = Double(inOrder.filter { $0 >= half && $0 < sp.action }.count) / n
+                    sp.pLiftToday = liftChance(pl: pl, pm: pm, fresh: false)
+                    sp.pLiftFresh = liftChance(pl: pl, pm: pm, fresh: true)
                     spreads.append(sp)
                 }
                 done += 1
@@ -194,8 +236,18 @@ enum JitterSpread {
                     "stillCachedWithTwoInARow": crossing.filter(\.twoInARowUnderHalf).count,
                     "expectedCachedOnFirstJudgementOneCheck": (crossing.reduce(0.0) { $0 + share($1) } * 100).rounded() / 100,
                     "expectedCachedOnFirstTwoJudgementsTwoChecks": (crossing.reduce(0.0) { $0 + share($1) * share($1) } * 100).rounded() / 100]
+                // Fresh four (`Register.FRESH_FOUR`): the same crossings under a cover, today against four fresh rounds.
+                func sum(_ f: (Spread) -> Double) -> Double { (crossing.reduce(0.0) { $0 + f($1) } * 100).rounded() / 100 }
+                let freshFour: [String: Any] = [
+                    "crossings": crossing.count,
+                    "liftFromFirstDrawToday": crossing.filter(\.liftsToday).count,
+                    "liftFromFirstDrawFresh": crossing.filter(\.liftsFresh).count,
+                    "liftFromSomeStartToday": crossing.filter { $0.liftShareToday > 0 }.count,
+                    "liftFromSomeStartFresh": crossing.filter { $0.liftShareFresh > 0 }.count,
+                    "expectedLiftsOverStartsToday": sum(\.liftShareToday), "expectedLiftsOverStartsFresh": sum(\.liftShareFresh),
+                    "expectedLiftsIndependentToday": sum(\.pLiftToday), "expectedLiftsIndependentFresh": sum(\.pLiftFresh)]
                 let c = mine[0]
-                bands[b.rawValue] = ["twoChecks": twoChecks, "cutoffs": ["cover": r4(c.cover), "clean": r4(c.clean)],
+                bands[b.rawValue] = ["twoChecks": twoChecks, "freshFour": freshFour, "cutoffs": ["cover": r4(c.cover), "clean": r4(c.clean)],
                                      "candidatesNearACutoff": candidates["\(m)|\(b.rawValue)"] ?? 0,
                                      "borderline": summary(border), "borderlineByPass": byPass, "borderlineByMedian": byLevel,
                                      "background": summary(bg), "allSampled": summary(mine),
@@ -207,7 +259,7 @@ enum JitterSpread {
                                      "crossingsAtToday0.5": crossings { 0.5 * $0.action },
                                      "crossingsAtMeasuredLevel": crossings { $0.action - gap },
                                      "borderlineEntriesWithRangeOverGap": border.filter { $0.range > gap }.count]
-                print("\(m) \(b.rawValue): borderline \(border.count), range p999 \(r4(spread)), max \(r4(border.map(\.range).max() ?? .nan)), gap \(r4(gap)); background \(bg.count) p999 \(r4(quantile(bg.map(\.range), 0.999))); crossings \(crossing.count), still cached with two checks \(crossing.filter(\.twoInARowUnderHalf).count)")
+                print("\(m) \(b.rawValue): borderline \(border.count), range p999 \(r4(spread)), max \(r4(border.map(\.range).max() ?? .nan)), gap \(r4(gap)); background \(bg.count) p999 \(r4(quantile(bg.map(\.range), 0.999))); crossings \(crossing.count), still cached with two checks \(crossing.filter(\.twoInARowUnderHalf).count); under a cover \(freshFour)")
             }
             table[m] = bands
         }

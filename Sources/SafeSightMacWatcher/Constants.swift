@@ -50,4 +50,9 @@ public enum Register {
     /// A cover judged on its own and found flagged on a place that has not changed is judged again this often (a
     /// borderline place is not covered for good). Not in the register; a working value.
     public static let RECHECK_FLAGGED_EVERY: TimeInterval = 3
+    /// `FRESH_FOUR`: measurement switch, off (today's rule). On, a cover's round counts towards its `VIDEO_VOTE` only
+    /// when every entry in it was judged afresh by the models, with fresh jitter, in that round: an outcome handed back
+    /// by the verdict cache never joins a round, and a cover's own calls (step 3b) take no clean outcome from the cache
+    /// (a cached cover is still reused). Not in the register; open founder decision, measured before it is decided.
+    public static let FRESH_FOUR = false
 }

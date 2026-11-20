@@ -315,7 +315,7 @@ public final class Detector {
             if secondChecksOnly {
                 // Only pictures seen clean once; nothing else is looked up, judged or reported.
                 guard cache.seenCleanOnce(tasks[i].key) else { continue }
-            } else if let o = cache.get(tasks[i].key), o.settledForBlur || !blurCanApply(tasks[i]) {
+            } else if let o = cache.get(tasks[i].key), o.settledForBlur || !blurCanApply(tasks[i]), o.covering || !ctx.freshClean {
                 tasks[i].outcome = o; tasks[i].judged = true; tasks[i].fromCache = true; timings.cacheHits += 1; continue
             }
             timings.cacheMisses += 1
@@ -465,7 +465,7 @@ public final class Detector {
                 else if (wasHot || becameHot) && t.rect.shortSide < config.hotBelow { display = .contain; reason = .hotContext }
             }
             _ = band
-            out.append(RegionVerdict(rect: t.rect, display: display, reason: reason, pass: t.pass))
+            out.append(RegionVerdict(rect: t.rect, display: display, reason: reason, pass: t.pass, fromCache: t.fromCache))
         }
         if becameHot { hot.mark(ctx.windowID, ctx.now); wasHot = true }
         // A hot window with very many picture tiles blurs its whole picture area.

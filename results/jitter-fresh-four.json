@@ -1,0 +1,1049 @@
+{
+  "backgroundPerBand" : 500,
+  "bands" : "32-63,64-127,128+",
+  "batchParity" : {
+    "draws" : 8,
+    "entries" : 40,
+    "largestDifference" : {
+      "marqo-vit-tiny-384" : 0,
+      "nsfwjs-mobilenet-v2" : 0
+    }
+  },
+  "byModel" : {
+    "marqo-vit-tiny-384" : {
+      "32-63" : {
+        "allSampled" : {
+          "deviationFromMedian" : {
+            "max" : 0.3271,
+            "p99" : 0.1535,
+            "p999" : 0.25240000000000001
+          },
+          "entries" : 2434,
+          "range" : {
+            "max" : 0.46260000000000001,
+            "p50" : 0.0207,
+            "p90" : 0.10929999999999999,
+            "p99" : 0.23380000000000001,
+            "p999" : 0.37019999999999997
+          }
+        },
+        "background" : {
+          "deviationFromMedian" : {
+            "max" : 0.25240000000000001,
+            "p99" : 0.1348,
+            "p999" : 0.25240000000000001
+          },
+          "entries" : 500,
+          "range" : {
+            "max" : 0.37619999999999998,
+            "p50" : 0.014800000000000001,
+            "p90" : 0.077899999999999997,
+            "p99" : 0.21879999999999999,
+            "p999" : 0.37619999999999998
+          }
+        },
+        "backgroundBorderlineNotSelectable" : {
+          "deviationFromMedian" : {
+            "max" : -1,
+            "p99" : -1,
+            "p999" : -1
+          },
+          "entries" : 0,
+          "range" : {
+            "max" : -1,
+            "p50" : -1,
+            "p90" : -1,
+            "p99" : -1,
+            "p999" : -1
+          }
+        },
+        "borderline" : {
+          "deviationFromMedian" : {
+            "max" : 0.3271,
+            "p99" : 0.19950000000000001,
+            "p999" : 0.3271
+          },
+          "entries" : 658,
+          "range" : {
+            "max" : 0.46260000000000001,
+            "p50" : 0.087900000000000006,
+            "p90" : 0.1895,
+            "p99" : 0.28589999999999999,
+            "p999" : 0.46260000000000001
+          }
+        },
+        "borderlineByMedian" : {
+          "0.5to0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.25890000000000002,
+              "p99" : 0.19950000000000001,
+              "p999" : 0.25890000000000002
+            },
+            "entries" : 308,
+            "range" : {
+              "max" : 0.37019999999999997,
+              "p50" : 0.080600000000000005,
+              "p90" : 0.16320000000000001,
+              "p99" : 0.27200000000000002,
+              "p999" : 0.37019999999999997
+            }
+          },
+          "atLeast0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.3271,
+              "p99" : 0.2069,
+              "p999" : 0.3271
+            },
+            "entries" : 200,
+            "range" : {
+              "max" : 0.46260000000000001,
+              "p50" : 0.12379999999999999,
+              "p90" : 0.2195,
+              "p99" : 0.31009999999999999,
+              "p999" : 0.46260000000000001
+            }
+          },
+          "under0.5xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.1855,
+              "p99" : 0.1535,
+              "p999" : 0.1855
+            },
+            "entries" : 150,
+            "range" : {
+              "max" : 0.23380000000000001,
+              "p50" : 0.078700000000000006,
+              "p90" : 0.14430000000000001,
+              "p99" : 0.17960000000000001,
+              "p999" : 0.23380000000000001
+            }
+          }
+        },
+        "borderlineByPass" : {
+          "region" : {
+            "deviationFromMedian" : {
+              "max" : 0.3271,
+              "p99" : 0.19950000000000001,
+              "p999" : 0.3271
+            },
+            "entries" : 658,
+            "range" : {
+              "max" : 0.46260000000000001,
+              "p50" : 0.087900000000000006,
+              "p90" : 0.1895,
+              "p99" : 0.28589999999999999,
+              "p999" : 0.46260000000000001
+            }
+          }
+        },
+        "borderlineEntriesWithRangeOverGap" : 0,
+        "candidatesNearACutoff" : 1019,
+        "crossingsAtMeasuredLevel" : 0,
+        "crossingsAtToday0.5" : 3,
+        "cutoffs" : {
+          "clean" : 0.4612,
+          "cover" : 0.85799999999999998
+        },
+        "freshFour" : {
+          "crossings" : 3,
+          "expectedLiftsIndependentFresh" : 1.8600000000000001,
+          "expectedLiftsIndependentToday" : 1.9399999999999999,
+          "expectedLiftsOverStartsFresh" : 1.6499999999999999,
+          "expectedLiftsOverStartsToday" : 1.71,
+          "liftFromFirstDrawFresh" : 1,
+          "liftFromFirstDrawToday" : 1,
+          "liftFromSomeStartFresh" : 3,
+          "liftFromSomeStartToday" : 3
+        },
+        "gap2xSpread" : 0.92530000000000001,
+        "levelAtClean" : -0.46410000000000001,
+        "levelAtCover" : -0.067299999999999999,
+        "shareOfClean" : -1.0063,
+        "shareOfCover" : -0.078399999999999997,
+        "spreadP999" : 0.46260000000000001,
+        "twoChecks" : {
+          "crossings" : 3,
+          "expectedCachedOnFirstJudgementOneCheck" : 1,
+          "expectedCachedOnFirstTwoJudgementsTwoChecks" : 0.40000000000000002,
+          "stillCachedWithTwoInARow" : 3
+        }
+      },
+      "64-127" : {
+        "allSampled" : {
+          "deviationFromMedian" : {
+            "max" : 0.48110000000000003,
+            "p99" : 0.19409999999999999,
+            "p999" : 0.33979999999999999
+          },
+          "entries" : 2705,
+          "range" : {
+            "max" : 0.59460000000000002,
+            "p50" : 0.034500000000000003,
+            "p90" : 0.1295,
+            "p99" : 0.31790000000000002,
+            "p999" : 0.46100000000000002
+          }
+        },
+        "background" : {
+          "deviationFromMedian" : {
+            "max" : 0.2195,
+            "p99" : 0.1215,
+            "p999" : 0.2195
+          },
+          "entries" : 500,
+          "range" : {
+            "max" : 0.36120000000000002,
+            "p50" : 0.019900000000000001,
+            "p90" : 0.078700000000000006,
+            "p99" : 0.19850000000000001,
+            "p999" : 0.36120000000000002
+          }
+        },
+        "backgroundBorderlineNotSelectable" : {
+          "deviationFromMedian" : {
+            "max" : 0.12809999999999999,
+            "p99" : 0.12809999999999999,
+            "p999" : 0.12809999999999999
+          },
+          "entries" : 4,
+          "range" : {
+            "max" : 0.1656,
+            "p50" : 0.13400000000000001,
+            "p90" : 0.1656,
+            "p99" : 0.1656,
+            "p999" : 0.1656
+          }
+        },
+        "borderline" : {
+          "deviationFromMedian" : {
+            "max" : 0.48110000000000003,
+            "p99" : 0.2429,
+            "p999" : 0.48110000000000003
+          },
+          "entries" : 836,
+          "range" : {
+            "max" : 0.59460000000000002,
+            "p50" : 0.099699999999999997,
+            "p90" : 0.21290000000000001,
+            "p99" : 0.38159999999999999,
+            "p999" : 0.59460000000000002
+          }
+        },
+        "borderlineByMedian" : {
+          "0.5to0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.3422,
+              "p99" : 0.2697,
+              "p999" : 0.3422
+            },
+            "entries" : 377,
+            "range" : {
+              "max" : 0.51870000000000005,
+              "p50" : 0.0964,
+              "p90" : 0.19189999999999999,
+              "p99" : 0.37080000000000002,
+              "p999" : 0.51870000000000005
+            }
+          },
+          "atLeast0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.48110000000000003,
+              "p99" : 0.28970000000000001,
+              "p999" : 0.48110000000000003
+            },
+            "entries" : 191,
+            "range" : {
+              "max" : 0.59460000000000002,
+              "p50" : 0.1479,
+              "p90" : 0.31130000000000002,
+              "p99" : 0.43819999999999998,
+              "p999" : 0.59460000000000002
+            }
+          },
+          "under0.5xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.18210000000000001,
+              "p99" : 0.1741,
+              "p999" : 0.18210000000000001
+            },
+            "entries" : 268,
+            "range" : {
+              "max" : 0.26269999999999999,
+              "p50" : 0.086199999999999999,
+              "p90" : 0.15049999999999999,
+              "p99" : 0.23019999999999999,
+              "p999" : 0.26269999999999999
+            }
+          }
+        },
+        "borderlineByPass" : {
+          "region" : {
+            "deviationFromMedian" : {
+              "max" : 0.48110000000000003,
+              "p99" : 0.2429,
+              "p999" : 0.48110000000000003
+            },
+            "entries" : 836,
+            "range" : {
+              "max" : 0.59460000000000002,
+              "p50" : 0.099699999999999997,
+              "p90" : 0.21290000000000001,
+              "p99" : 0.38159999999999999,
+              "p999" : 0.59460000000000002
+            }
+          }
+        },
+        "borderlineEntriesWithRangeOverGap" : 0,
+        "candidatesNearACutoff" : 1253,
+        "crossingsAtMeasuredLevel" : 0,
+        "crossingsAtToday0.5" : 15,
+        "cutoffs" : {
+          "clean" : 0.45240000000000002,
+          "cover" : 0.82350000000000001
+        },
+        "freshFour" : {
+          "crossings" : 15,
+          "expectedLiftsIndependentFresh" : 7.6600000000000001,
+          "expectedLiftsIndependentToday" : 7.9500000000000002,
+          "expectedLiftsOverStartsFresh" : 6.8200000000000003,
+          "expectedLiftsOverStartsToday" : 7.2400000000000002,
+          "liftFromFirstDrawFresh" : 6,
+          "liftFromFirstDrawToday" : 6,
+          "liftFromSomeStartFresh" : 13,
+          "liftFromSomeStartToday" : 14
+        },
+        "gap2xSpread" : 1.1892,
+        "levelAtClean" : -0.73680000000000001,
+        "levelAtCover" : -0.36570000000000003,
+        "shareOfClean" : -1.6287,
+        "shareOfCover" : -0.44409999999999999,
+        "spreadP999" : 0.59460000000000002,
+        "twoChecks" : {
+          "crossings" : 15,
+          "expectedCachedOnFirstJudgementOneCheck" : 3,
+          "expectedCachedOnFirstTwoJudgementsTwoChecks" : 0.77000000000000002,
+          "stillCachedWithTwoInARow" : 7
+        }
+      },
+      "128+" : {
+        "allSampled" : {
+          "deviationFromMedian" : {
+            "max" : 0.53779999999999994,
+            "p99" : 0.32300000000000001,
+            "p999" : 0.5272
+          },
+          "entries" : 1008,
+          "range" : {
+            "max" : 0.6351,
+            "p50" : 0.031899999999999998,
+            "p90" : 0.2319,
+            "p99" : 0.4723,
+            "p999" : 0.61080000000000001
+          }
+        },
+        "background" : {
+          "deviationFromMedian" : {
+            "max" : 0.47889999999999999,
+            "p99" : 0.22919999999999999,
+            "p999" : 0.47889999999999999
+          },
+          "entries" : 500,
+          "range" : {
+            "max" : 0.6351,
+            "p50" : 0.0201,
+            "p90" : 0.098799999999999999,
+            "p99" : 0.35070000000000001,
+            "p999" : 0.6351
+          }
+        },
+        "backgroundBorderlineNotSelectable" : {
+          "deviationFromMedian" : {
+            "max" : 0.47889999999999999,
+            "p99" : 0.47889999999999999,
+            "p999" : 0.47889999999999999
+          },
+          "entries" : 5,
+          "range" : {
+            "max" : 0.6351,
+            "p50" : 0.46970000000000001,
+            "p90" : 0.6351,
+            "p99" : 0.6351,
+            "p999" : 0.6351
+          }
+        },
+        "borderline" : {
+          "deviationFromMedian" : {
+            "max" : 0.53779999999999994,
+            "p99" : 0.5272,
+            "p999" : 0.53779999999999994
+          },
+          "entries" : 143,
+          "range" : {
+            "max" : 0.6351,
+            "p50" : 0.28639999999999999,
+            "p90" : 0.45650000000000002,
+            "p99" : 0.61080000000000001,
+            "p999" : 0.6351
+          }
+        },
+        "borderlineByMedian" : {
+          "0.5to0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.36670000000000003,
+              "p99" : 0.36670000000000003,
+              "p999" : 0.36670000000000003
+            },
+            "entries" : 61,
+            "range" : {
+              "max" : 0.57889999999999997,
+              "p50" : 0.29880000000000001,
+              "p90" : 0.4299,
+              "p99" : 0.57889999999999997,
+              "p999" : 0.57889999999999997
+            }
+          },
+          "atLeast0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.53779999999999994,
+              "p99" : 0.53779999999999994,
+              "p999" : 0.53779999999999994
+            },
+            "entries" : 22,
+            "range" : {
+              "max" : 0.59570000000000001,
+              "p50" : 0.1963,
+              "p90" : 0.40210000000000001,
+              "p99" : 0.59570000000000001,
+              "p999" : 0.59570000000000001
+            }
+          },
+          "under0.5xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.5272,
+              "p99" : 0.5272,
+              "p999" : 0.5272
+            },
+            "entries" : 60,
+            "range" : {
+              "max" : 0.6351,
+              "p50" : 0.29020000000000001,
+              "p90" : 0.4723,
+              "p99" : 0.6351,
+              "p999" : 0.6351
+            }
+          }
+        },
+        "borderlineByPass" : {
+          "region" : {
+            "deviationFromMedian" : {
+              "max" : 0.36670000000000003,
+              "p99" : 0.36670000000000003,
+              "p999" : 0.36670000000000003
+            },
+            "entries" : 22,
+            "range" : {
+              "max" : 0.57889999999999997,
+              "p50" : 0.2616,
+              "p90" : 0.45019999999999999,
+              "p99" : 0.57889999999999997,
+              "p999" : 0.57889999999999997
+            }
+          },
+          "slice" : {
+            "deviationFromMedian" : {
+              "max" : 0.53779999999999994,
+              "p99" : 0.5272,
+              "p999" : 0.53779999999999994
+            },
+            "entries" : 104,
+            "range" : {
+              "max" : 0.6351,
+              "p50" : 0.29020000000000001,
+              "p90" : 0.46970000000000001,
+              "p99" : 0.61080000000000001,
+              "p999" : 0.6351
+            }
+          },
+          "whole" : {
+            "deviationFromMedian" : {
+              "max" : 0.37369999999999998,
+              "p99" : 0.37369999999999998,
+              "p999" : 0.37369999999999998
+            },
+            "entries" : 17,
+            "range" : {
+              "max" : 0.4723,
+              "p50" : 0.28639999999999999,
+              "p90" : 0.4032,
+              "p99" : 0.4723,
+              "p999" : 0.4723
+            }
+          }
+        },
+        "borderlineEntriesWithRangeOverGap" : 0,
+        "candidatesNearACutoff" : 201,
+        "crossingsAtMeasuredLevel" : 0,
+        "crossingsAtToday0.5" : 7,
+        "cutoffs" : {
+          "clean" : 0.34439999999999998,
+          "cover" : 0.75829999999999997
+        },
+        "freshFour" : {
+          "crossings" : 7,
+          "expectedLiftsIndependentFresh" : 4.7300000000000004,
+          "expectedLiftsIndependentToday" : 4.8499999999999996,
+          "expectedLiftsOverStartsFresh" : 4.71,
+          "expectedLiftsOverStartsToday" : 4.8200000000000003,
+          "liftFromFirstDrawFresh" : 3,
+          "liftFromFirstDrawToday" : 3,
+          "liftFromSomeStartFresh" : 6,
+          "liftFromSomeStartToday" : 6
+        },
+        "gap2xSpread" : 1.2703,
+        "levelAtClean" : null,
+        "levelAtCover" : -0.51200000000000001,
+        "shareOfClean" : null,
+        "shareOfCover" : -0.67510000000000003,
+        "spreadP999" : 0.6351,
+        "twoChecks" : {
+          "crossings" : 7,
+          "expectedCachedOnFirstJudgementOneCheck" : 1.75,
+          "expectedCachedOnFirstTwoJudgementsTwoChecks" : 1.1000000000000001,
+          "stillCachedWithTwoInARow" : 2
+        }
+      }
+    },
+    "nsfwjs-mobilenet-v2" : {
+      "32-63" : {
+        "allSampled" : {
+          "deviationFromMedian" : {
+            "max" : 0.60029999999999994,
+            "p99" : 0.31630000000000003,
+            "p999" : 0.44640000000000002
+          },
+          "entries" : 2434,
+          "range" : {
+            "max" : 0.73750000000000004,
+            "p50" : 0.092399999999999996,
+            "p90" : 0.24979999999999999,
+            "p99" : 0.45090000000000002,
+            "p999" : 0.63619999999999999
+          }
+        },
+        "background" : {
+          "deviationFromMedian" : {
+            "max" : 0.60029999999999994,
+            "p99" : 0.31180000000000002,
+            "p999" : 0.60029999999999994
+          },
+          "entries" : 500,
+          "range" : {
+            "max" : 0.62590000000000001,
+            "p50" : 0.076399999999999996,
+            "p90" : 0.23630000000000001,
+            "p99" : 0.46500000000000002,
+            "p999" : 0.62590000000000001
+          }
+        },
+        "backgroundBorderlineNotSelectable" : {
+          "deviationFromMedian" : {
+            "max" : 0.60029999999999994,
+            "p99" : 0.60029999999999994,
+            "p999" : 0.60029999999999994
+          },
+          "entries" : 10,
+          "range" : {
+            "max" : 0.62590000000000001,
+            "p50" : 0.38490000000000002,
+            "p90" : 0.50570000000000004,
+            "p99" : 0.62590000000000001,
+            "p999" : 0.62590000000000001
+          }
+        },
+        "borderline" : {
+          "deviationFromMedian" : {
+            "max" : 0.60029999999999994,
+            "p99" : 0.34399999999999997,
+            "p999" : 0.4476
+          },
+          "entries" : 1517,
+          "range" : {
+            "max" : 0.73750000000000004,
+            "p50" : 0.1115,
+            "p90" : 0.2843,
+            "p99" : 0.50570000000000004,
+            "p999" : 0.64739999999999998
+          }
+        },
+        "borderlineByMedian" : {
+          "0.5to0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.4476,
+              "p99" : 0.28760000000000002,
+              "p999" : 0.4476
+            },
+            "entries" : 767,
+            "range" : {
+              "max" : 0.59160000000000001,
+              "p50" : 0.12429999999999999,
+              "p90" : 0.28339999999999999,
+              "p99" : 0.44159999999999999,
+              "p999" : 0.59160000000000001
+            }
+          },
+          "atLeast0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.34079999999999999,
+              "p99" : 0.1825,
+              "p999" : 0.34079999999999999
+            },
+            "entries" : 529,
+            "range" : {
+              "max" : 0.41549999999999998,
+              "p50" : 0.072499999999999995,
+              "p90" : 0.16889999999999999,
+              "p99" : 0.26229999999999998,
+              "p999" : 0.41549999999999998
+            }
+          },
+          "under0.5xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.60029999999999994,
+              "p99" : 0.43380000000000002,
+              "p999" : 0.60029999999999994
+            },
+            "entries" : 221,
+            "range" : {
+              "max" : 0.73750000000000004,
+              "p50" : 0.22639999999999999,
+              "p90" : 0.43049999999999999,
+              "p99" : 0.63619999999999999,
+              "p999" : 0.73750000000000004
+            }
+          }
+        },
+        "borderlineByPass" : {
+          "region" : {
+            "deviationFromMedian" : {
+              "max" : 0.60029999999999994,
+              "p99" : 0.34399999999999997,
+              "p999" : 0.4476
+            },
+            "entries" : 1515,
+            "range" : {
+              "max" : 0.73750000000000004,
+              "p50" : 0.11169999999999999,
+              "p90" : 0.2843,
+              "p99" : 0.50570000000000004,
+              "p999" : 0.64739999999999998
+            }
+          },
+          "slice" : {
+            "deviationFromMedian" : {
+              "max" : 0.023,
+              "p99" : 0.023,
+              "p999" : 0.023
+            },
+            "entries" : 2,
+            "range" : {
+              "max" : 0.043299999999999998,
+              "p50" : 0.033300000000000003,
+              "p90" : 0.043299999999999998,
+              "p99" : 0.043299999999999998,
+              "p999" : 0.043299999999999998
+            }
+          }
+        },
+        "borderlineEntriesWithRangeOverGap" : 0,
+        "candidatesNearACutoff" : 2090,
+        "crossingsAtMeasuredLevel" : 0,
+        "crossingsAtToday0.5" : 0,
+        "cutoffs" : {
+          "clean" : 0.92649999999999999,
+          "cover" : 0.99480000000000002
+        },
+        "freshFour" : {
+          "crossings" : 0,
+          "expectedLiftsIndependentFresh" : 0,
+          "expectedLiftsIndependentToday" : 0,
+          "expectedLiftsOverStartsFresh" : 0,
+          "expectedLiftsOverStartsToday" : 0,
+          "liftFromFirstDrawFresh" : 0,
+          "liftFromFirstDrawToday" : 0,
+          "liftFromSomeStartFresh" : 0,
+          "liftFromSomeStartToday" : 0
+        },
+        "gap2xSpread" : 1.2948999999999999,
+        "levelAtClean" : -0.36840000000000001,
+        "levelAtCover" : -0.30009999999999998,
+        "shareOfClean" : -0.39760000000000001,
+        "shareOfCover" : -0.30170000000000002,
+        "spreadP999" : 0.64739999999999998,
+        "twoChecks" : {
+          "crossings" : 0,
+          "expectedCachedOnFirstJudgementOneCheck" : 0,
+          "expectedCachedOnFirstTwoJudgementsTwoChecks" : 0,
+          "stillCachedWithTwoInARow" : 0
+        }
+      },
+      "64-127" : {
+        "allSampled" : {
+          "deviationFromMedian" : {
+            "max" : 0.46189999999999998,
+            "p99" : 0.32040000000000002,
+            "p999" : 0.41170000000000001
+          },
+          "entries" : 2705,
+          "range" : {
+            "max" : 0.6321,
+            "p50" : 0.11940000000000001,
+            "p90" : 0.29089999999999999,
+            "p99" : 0.4728,
+            "p999" : 0.59019999999999995
+          }
+        },
+        "background" : {
+          "deviationFromMedian" : {
+            "max" : 0.35399999999999998,
+            "p99" : 0.27639999999999998,
+            "p999" : 0.35399999999999998
+          },
+          "entries" : 500,
+          "range" : {
+            "max" : 0.54220000000000002,
+            "p50" : 0.1162,
+            "p90" : 0.27729999999999999,
+            "p99" : 0.40789999999999998,
+            "p999" : 0.54220000000000002
+          }
+        },
+        "backgroundBorderlineNotSelectable" : {
+          "deviationFromMedian" : {
+            "max" : 0.30659999999999998,
+            "p99" : 0.30659999999999998,
+            "p999" : 0.30659999999999998
+          },
+          "entries" : 9,
+          "range" : {
+            "max" : 0.41689999999999999,
+            "p50" : 0.30459999999999998,
+            "p90" : 0.41689999999999999,
+            "p99" : 0.41689999999999999,
+            "p999" : 0.41689999999999999
+          }
+        },
+        "borderline" : {
+          "deviationFromMedian" : {
+            "max" : 0.46189999999999998,
+            "p99" : 0.32390000000000002,
+            "p999" : 0.41170000000000001
+          },
+          "entries" : 2163,
+          "range" : {
+            "max" : 0.6321,
+            "p50" : 0.127,
+            "p90" : 0.3044,
+            "p99" : 0.48139999999999999,
+            "p999" : 0.59019999999999995
+          }
+        },
+        "borderlineByMedian" : {
+          "0.5to0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.40200000000000002,
+              "p99" : 0.32150000000000001,
+              "p999" : 0.40200000000000002
+            },
+            "entries" : 922,
+            "range" : {
+              "max" : 0.6321,
+              "p50" : 0.1479,
+              "p90" : 0.31590000000000001,
+              "p99" : 0.48509999999999998,
+              "p999" : 0.6321
+            }
+          },
+          "atLeast0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.40010000000000001,
+              "p99" : 0.27029999999999998,
+              "p999" : 0.40010000000000001
+            },
+            "entries" : 989,
+            "range" : {
+              "max" : 0.50829999999999997,
+              "p50" : 0.097600000000000006,
+              "p90" : 0.20960000000000001,
+              "p99" : 0.3795,
+              "p999" : 0.50829999999999997
+            }
+          },
+          "under0.5xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.46189999999999998,
+              "p99" : 0.41170000000000001,
+              "p999" : 0.46189999999999998
+            },
+            "entries" : 252,
+            "range" : {
+              "max" : 0.61009999999999998,
+              "p50" : 0.23619999999999999,
+              "p90" : 0.43280000000000002,
+              "p99" : 0.59009999999999996,
+              "p999" : 0.61009999999999998
+            }
+          }
+        },
+        "borderlineByPass" : {
+          "region" : {
+            "deviationFromMedian" : {
+              "max" : 0.46189999999999998,
+              "p99" : 0.32390000000000002,
+              "p999" : 0.41170000000000001
+            },
+            "entries" : 2163,
+            "range" : {
+              "max" : 0.6321,
+              "p50" : 0.127,
+              "p90" : 0.3044,
+              "p99" : 0.48139999999999999,
+              "p999" : 0.59019999999999995
+            }
+          }
+        },
+        "borderlineEntriesWithRangeOverGap" : 0,
+        "candidatesNearACutoff" : 4012,
+        "crossingsAtMeasuredLevel" : 0,
+        "crossingsAtToday0.5" : 1,
+        "cutoffs" : {
+          "clean" : 0.85709999999999997,
+          "cover" : 0.99629999999999996
+        },
+        "freshFour" : {
+          "crossings" : 1,
+          "expectedLiftsIndependentFresh" : 0.52000000000000002,
+          "expectedLiftsIndependentToday" : 0.52000000000000002,
+          "expectedLiftsOverStartsFresh" : 0.46999999999999997,
+          "expectedLiftsOverStartsToday" : 0.46999999999999997,
+          "liftFromFirstDrawFresh" : 0,
+          "liftFromFirstDrawToday" : 0,
+          "liftFromSomeStartFresh" : 1,
+          "liftFromSomeStartToday" : 1
+        },
+        "gap2xSpread" : 1.1805000000000001,
+        "levelAtClean" : -0.32340000000000002,
+        "levelAtCover" : -0.1842,
+        "shareOfClean" : -0.37730000000000002,
+        "shareOfCover" : -0.18490000000000001,
+        "spreadP999" : 0.59019999999999995,
+        "twoChecks" : {
+          "crossings" : 1,
+          "expectedCachedOnFirstJudgementOneCheck" : 0.050000000000000003,
+          "expectedCachedOnFirstTwoJudgementsTwoChecks" : 0,
+          "stillCachedWithTwoInARow" : 0
+        }
+      },
+      "128+" : {
+        "allSampled" : {
+          "deviationFromMedian" : {
+            "max" : 0.59619999999999995,
+            "p99" : 0.42599999999999999,
+            "p999" : 0.55049999999999999
+          },
+          "entries" : 1008,
+          "range" : {
+            "max" : 0.75880000000000003,
+            "p50" : 0.064899999999999999,
+            "p90" : 0.38929999999999998,
+            "p99" : 0.62560000000000004,
+            "p999" : 0.71870000000000001
+          }
+        },
+        "background" : {
+          "deviationFromMedian" : {
+            "max" : 0.59619999999999995,
+            "p99" : 0.34389999999999998,
+            "p999" : 0.59619999999999995
+          },
+          "entries" : 500,
+          "range" : {
+            "max" : 0.71870000000000001,
+            "p50" : 0.015100000000000001,
+            "p90" : 0.22309999999999999,
+            "p99" : 0.49730000000000002,
+            "p999" : 0.71870000000000001
+          }
+        },
+        "backgroundBorderlineNotSelectable" : {
+          "deviationFromMedian" : {
+            "max" : 0.42599999999999999,
+            "p99" : 0.42599999999999999,
+            "p999" : 0.42599999999999999
+          },
+          "entries" : 8,
+          "range" : {
+            "max" : 0.4985,
+            "p50" : 0.39460000000000001,
+            "p90" : 0.4985,
+            "p99" : 0.4985,
+            "p999" : 0.4985
+          }
+        },
+        "borderline" : {
+          "deviationFromMedian" : {
+            "max" : 0.59619999999999995,
+            "p99" : 0.51539999999999997,
+            "p999" : 0.59619999999999995
+          },
+          "entries" : 351,
+          "range" : {
+            "max" : 0.75880000000000003,
+            "p50" : 0.30170000000000002,
+            "p90" : 0.4945,
+            "p99" : 0.70479999999999998,
+            "p999" : 0.75880000000000003
+          }
+        },
+        "borderlineByMedian" : {
+          "0.5to0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.59619999999999995,
+              "p99" : 0.46850000000000003,
+              "p999" : 0.59619999999999995
+            },
+            "entries" : 168,
+            "range" : {
+              "max" : 0.71870000000000001,
+              "p50" : 0.3145,
+              "p90" : 0.52859999999999996,
+              "p99" : 0.71230000000000004,
+              "p999" : 0.71870000000000001
+            }
+          },
+          "atLeast0.8xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.29720000000000002,
+              "p99" : 0.29720000000000002,
+              "p999" : 0.29720000000000002
+            },
+            "entries" : 57,
+            "range" : {
+              "max" : 0.37140000000000001,
+              "p50" : 0.12520000000000001,
+              "p90" : 0.25569999999999998,
+              "p99" : 0.37140000000000001,
+              "p999" : 0.37140000000000001
+            }
+          },
+          "under0.5xAction" : {
+            "deviationFromMedian" : {
+              "max" : 0.55049999999999999,
+              "p99" : 0.53400000000000003,
+              "p999" : 0.55049999999999999
+            },
+            "entries" : 126,
+            "range" : {
+              "max" : 0.75880000000000003,
+              "p50" : 0.35120000000000001,
+              "p90" : 0.50749999999999995,
+              "p99" : 0.70479999999999998,
+              "p999" : 0.75880000000000003
+            }
+          }
+        },
+        "borderlineByPass" : {
+          "region" : {
+            "deviationFromMedian" : {
+              "max" : 0.59619999999999995,
+              "p99" : 0.51539999999999997,
+              "p999" : 0.59619999999999995
+            },
+            "entries" : 202,
+            "range" : {
+              "max" : 0.75880000000000003,
+              "p50" : 0.27200000000000002,
+              "p90" : 0.48249999999999998,
+              "p99" : 0.71230000000000004,
+              "p999" : 0.75880000000000003
+            }
+          },
+          "slice" : {
+            "deviationFromMedian" : {
+              "max" : 0.53400000000000003,
+              "p99" : 0.46850000000000003,
+              "p999" : 0.53400000000000003
+            },
+            "entries" : 101,
+            "range" : {
+              "max" : 0.69930000000000003,
+              "p50" : 0.31790000000000002,
+              "p90" : 0.49730000000000002,
+              "p99" : 0.69330000000000003,
+              "p999" : 0.69930000000000003
+            }
+          },
+          "whole" : {
+            "deviationFromMedian" : {
+              "max" : 0.43880000000000002,
+              "p99" : 0.43880000000000002,
+              "p999" : 0.43880000000000002
+            },
+            "entries" : 48,
+            "range" : {
+              "max" : 0.68069999999999997,
+              "p50" : 0.32029999999999997,
+              "p90" : 0.53129999999999999,
+              "p99" : 0.68069999999999997,
+              "p999" : 0.68069999999999997
+            }
+          }
+        },
+        "borderlineEntriesWithRangeOverGap" : 0,
+        "candidatesNearACutoff" : 385,
+        "crossingsAtMeasuredLevel" : 0,
+        "crossingsAtToday0.5" : 1,
+        "cutoffs" : {
+          "clean" : 0.78669999999999995,
+          "cover" : 0.93400000000000005
+        },
+        "freshFour" : {
+          "crossings" : 1,
+          "expectedLiftsIndependentFresh" : 0.81000000000000005,
+          "expectedLiftsIndependentToday" : 0.81999999999999995,
+          "expectedLiftsOverStartsFresh" : 0.76000000000000001,
+          "expectedLiftsOverStartsToday" : 0.76000000000000001,
+          "liftFromFirstDrawFresh" : 1,
+          "liftFromFirstDrawToday" : 1,
+          "liftFromSomeStartFresh" : 1,
+          "liftFromSomeStartToday" : 1
+        },
+        "gap2xSpread" : 1.5175000000000001,
+        "levelAtClean" : null,
+        "levelAtCover" : -0.58350000000000002,
+        "shareOfClean" : null,
+        "shareOfCover" : -0.62470000000000003,
+        "spreadP999" : 0.75880000000000003,
+        "twoChecks" : {
+          "crossings" : 1,
+          "expectedCachedOnFirstJudgementOneCheck" : 0.10000000000000001,
+          "expectedCachedOnFirstTwoJudgementsTwoChecks" : 0.01,
+          "stillCachedWithTwoInARow" : 0
+        }
+      }
+    }
+  },
+  "date" : "2026-11-20T07:40:28Z",
+  "draws" : 20,
+  "entriesJudgedOnce" : 54727,
+  "entriesSampled" : 6147,
+  "every" : 2,
+  "jitter" : "safesightmac-jitter\/1",
+  "list" : "tiles-heldout.txt",
+  "method" : "Harmless held-out screens only. Every entry of the detector's first call over each screen (finder regions, the whole pass, the slices; no anchor) judged once per scoring model with fresh jitter. Sampled: per model and band, up to perBand entries whose first score reached 0.35 of the entry's lowest action cut-off (containment for picture regions under 128 detail pixels, else cover), plus backgroundPerBand at random; each judged `draws` more times with fresh jitter on every piece (spec section 5), top score over the pieces per draw, as topScore. Range: highest minus lowest draw of an entry. deviationFromMedian: the largest distance of a draw from the entry's median. Borderline: entries whose highest draw reached half the entry's lowest action cut-off; the gap is twice the 99.9th percentile of their range (the largest range on fewer than 1,000 entries). Crossings: borderline entries with one draw below the level and another at or above the action cut-off.",
+  "modelFailures" : 0,
+  "models" : "real models (converted), checked against the sealed hash list; sealed cut-off table",
+  "perBand" : 1500,
+  "screens" : 466,
+  "seconds" : 1436,
+  "select" : 0.34999999403953552
+}

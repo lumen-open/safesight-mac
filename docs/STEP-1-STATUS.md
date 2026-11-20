@@ -426,6 +426,22 @@ SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-h
 - **What it means.** Two checks cut the chance a borderline picture is cached clean by about three at each showing. They do not close the gap: a picture shown many times can still get two low scores in a row. Closing it would need a stricter share where crossings were found, which is still open.
 - **Limits:** the same as the first measurement: harmless pictures only, 20 draws, half the screens and only the bands named.
 
+### Fresh four: a measurement, not a decision (20 November 2026)
+
+Today a cover's round counts entries the verdict cache hands back, so a cover over a picture can lift after two real judgements and two cache hits. The founder is deciding whether all four rounds should be fresh judgements, each with fresh jitter. To measure the cost, `Register.FRESH_FOUR` (off, today's rule) and the harness's `--fresh-four` switch it on: an outcome from the cache never joins a cover's round, and a cover's own calls take no clean outcome from the cache (a cached cover is still reused). Tests: `FreshFourTests`.
+
+| Case | Off (today) | On (fresh four) |
+|---|---|---|
+| Still screen (`static`, 10 ms a judgement, 3 runs of 360 s) | settled at 204.2, 202.4, 192.3 s; 8,090 to 8,582 judgements | not settled: 273, 313, 329 covers at 360 s; about 14,750 judgements (the budget, all the time) |
+| Still screen, 900 s (3 runs, on only) | | not settled: 281, 218, 208 covers at 900 s; about 36,350 judgements |
+| `reuse` (detector only, no covers) | reload 230, move 174 | reload 238, move 174 (jitter noise; no cover is involved) |
+| `capped` | 3 or 4 calls, 1,200 to 1,600 judgements | the same |
+| `pending` | all judged after 23.3, 27.8, 26.8 s | 23.3, 27.5, 27.0 s |
+
+The still screen holds about 360 covers made at the start for want of time; with fresh four each must have every entry it hides judged afresh four times, out of 40 judgements a second, so they lift at about one every 5 to 10 seconds. It fails closed: they stay blurred.
+
+What it buys, from the jitter re-run with `lifts` added (`results/jitter-fresh-four.json`, same settings as before, harmless entries, single model, action cut-off): of 27 crossings (entries with one draw under half the cut-off and another at or over it), taking each entry's 20 draws as the rounds of a cover over it, the expected number that lift is 15.0 today and 14.4 with fresh four (16.1 and 15.6 with the draws taken as independent); 11 lift from the first draw under both. Fresh four closes only one sequence: two draws in a row under half, then a flag in rounds three or four. It does not touch a picture that was never under a cover, which is cached clean after two checks either way.
+
 ## False covers through the whole pipeline: ST-040 re-run (18 November 2026)
 
 `safesightmac-harness falsecovers` (release build, no lab hook) shows each harmless screen in one window filling a display and runs it through the cover layer: the window split, every detector rule including the three of 18 November, all three models (Marqo, NSFWJS and the Bumble tie-breaker, checked against the sealed hash list) and the sealed cut-off table, unedited. The cover layer then keeps judging what it left unjudged (budget unlimited) until every entry is judged, plus four more clean judgements, so lasting covers can be told from covers for load. A false cover is an entry the models covered. Harmless pictures only. Results: `results/false-covers-heldout.json`.

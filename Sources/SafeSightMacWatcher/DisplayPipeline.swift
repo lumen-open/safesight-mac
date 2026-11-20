@@ -137,6 +137,9 @@ public final class DisplayPipeline {
     /// Whether step 3c runs. Off, a picture seen clean once gets its second check only when it comes back (the lab
     /// bench measures both).
     public var backgroundSecondChecks = true
+    /// `Register.FRESH_FOUR`, per pipeline (the lab harness sets it). Off by default: entries from the verdict cache count
+    /// towards a cover's round, as before.
+    public var freshVotesOnly = Register.FRESH_FOUR
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
     public private(set) var judged = false
     /// Frames from streams older than this generation are never judged here: the display has changed since they
@@ -713,7 +716,8 @@ public final class DisplayPipeline {
             budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(Double(Self.recheckFloor), (callWallMs - spent) / msPerJudgement))))
             let callKey = CallKey(target: held[i].target, area: area)
             if judged { budget = againBudget(callKey, normal: budget) }
-            let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
+            var ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
+            ctx.freshClean = freshVotesOnly
             tStage = PipelineTimings.now()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: nil)
             let callMs = PipelineTimings.ms(since: tStage)
@@ -1056,9 +1060,15 @@ public final class DisplayPipeline {
                     held[i].clean = 0; held[i].round = []
                     break
                 }
-                if ![.overload, .judgedEarlier, .rejudgeDue].contains(e.reason) { held[i].round.insert(EntryKey(pass: e.pass, rect: e.rect)) }
+                if counts(e) { held[i].round.insert(EntryKey(pass: e.pass, rect: e.rect)) }
             }
         }
+    }
+
+    /// Whether a clean entry joins a cover's round: never one left unjudged or only shown as judged earlier, and with
+    /// `freshVotesOnly` on, never one the verdict cache handed back.
+    func counts(_ e: RegionVerdict) -> Bool {
+        ![.overload, .judgedEarlier, .rejudgeDue].contains(e.reason) && !(freshVotesOnly && e.fromCache)
     }
 
     /// One judge call that included all of held cover `i` (standing at `g`). Any flag over it starts its count again.
@@ -1073,7 +1083,7 @@ public final class DisplayPipeline {
             return .flagged
         }
         guard !over.isEmpty else { return .none }
-        for e in over where ![.overload, .judgedEarlier, .rejudgeDue].contains(e.reason) { held[i].round.insert(EntryKey(pass: e.pass, rect: e.rect)) }
+        for e in over where counts(e) { held[i].round.insert(EntryKey(pass: e.pass, rect: e.rect)) }
         guard over.allSatisfy({ held[i].round.contains(EntryKey(pass: $0.pass, rect: $0.rect)) }),
               !(map.toPixels(g).map { OwnCoverColours.shown(in: img, $0) } ?? true) else { return .partial }
         held[i].clean += 1

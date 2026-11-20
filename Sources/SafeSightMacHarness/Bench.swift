@@ -29,6 +29,8 @@ struct BenchOptions {
     var scrollSpeeds = [8, 32, 96]
     var modelsNote = "null models (lab)"
     var backgroundChecks = true
+    /// A cover's round counts only entries judged afresh in it (`Register.FRESH_FOUR`; --fresh-four).
+    var freshFour = false
 }
 
 // MARK: Small helpers
@@ -99,7 +101,7 @@ final class Bench {
 
     func pipeline(unlimited: Bool) -> DisplayPipeline {
         let p = DisplayPipeline(display: display, judger: detector, budgetShare: unlimited ? 1e9 : Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
-        p.backgroundSecondChecks = o.backgroundChecks
+        p.backgroundSecondChecks = o.backgroundChecks; p.freshVotesOnly = o.freshFour
         return p
     }
 
@@ -713,7 +715,7 @@ final class Bench {
             if left > 0 {
                 detector.removeCachedVerdicts()
                 let p = DisplayPipeline(display: display, judger: detector, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
-                p.backgroundSecondChecks = o.backgroundChecks
+                p.backgroundSecondChecks = o.backgroundChecks; p.freshVotesOnly = o.freshFour
                 var t = 0.0
                 var plan = p.process(frame(page.img, dirty: nil, t: t), snapshot: snapshot, now: t)
                 var looks = 0, judged = 0, restAt: Double?
@@ -746,7 +748,7 @@ final class Bench {
         for k in 0..<min(3, max(0, pages.count - 1)) {
             detector.removeCachedVerdicts()
             let p = DisplayPipeline(display: display, judger: detector, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
-            p.backgroundSecondChecks = o.backgroundChecks
+            p.backgroundSecondChecks = o.backgroundChecks; p.freshVotesOnly = o.freshFour
             var t = 0.0
             _ = p.process(frame(pages[k].img, dirty: nil, t: t), snapshot: snapshot, now: t)
             var background = 0
@@ -783,6 +785,7 @@ final class Bench {
         doc["models"] = o.modelsNote
         doc["rule"] = detector.config.rule.rawValue
         doc["backgroundSecondChecks"] = o.backgroundChecks
+        doc["freshFour"] = o.freshFour
         doc["display"] = "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it"
         doc["notIncluded"] = "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window)."
         frameCopy()

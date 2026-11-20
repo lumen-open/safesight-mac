@@ -6,7 +6,7 @@
 // every second, what the final plan and the provisional plans drew, and when the screen settled to no cover at all.
 //
 //   safesightmac-harness static FILE --models DIR [--slow-ms 25] [--seconds 60] [--fps 4] [--frames idle|empty|none]
-//                                     [--windows FILE] [--scale 2]
+//                                     [--windows FILE] [--scale 2] [--fresh-four]
 //   (--windows: one window per line, front to back: "layer pid x,y,w,h" in global points)
 // Lab switches, by environment: STATIC_BUDGET (judgements a second; default the register's), STATIC_WALL (ms a frame may
 // judge for), STATIC_CALLS=1 (every judge call: area, budget, judgements, entries), STATIC_HELD=1 (every held cover, each
@@ -55,6 +55,7 @@ enum StaticScreen {
         var fps = 4.0
         var frames = "idle"
         var windows: String?
+        var freshFour = false
     }
 
     static func windows(_ path: String?, display: CGRect) -> WindowSnapshot {
@@ -81,6 +82,8 @@ enum StaticScreen {
         let env = ProcessInfo.processInfo.environment
         let p = DisplayPipeline(display: display, judger: judge, budgetShare: env["STATIC_BUDGET"].flatMap(Double.init) ?? Register.JUDGEMENT_BUDGET,
                                 ignoredPIDs: [], callWallMs: env["STATIC_WALL"].flatMap(Double.init) ?? Register.JUDGE_CALL_WALL * 1000)
+        p.freshVotesOnly = s.freshFour
+        print("fresh four: \(s.freshFour ? "on" : "off")")
         let start = ProcessInfo.processInfo.systemUptime
         var provisional: [CoverPlan] = [], finals = 0, settledAt: Double?, unsettled = 0
         var lastPrint = -1

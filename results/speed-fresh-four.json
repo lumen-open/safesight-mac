@@ -1,0 +1,342 @@
+{
+ "freshFourOff": {
+  "backgroundSecondChecks": true,
+  "bench": "safesightmac-bench/1",
+  "capped": {
+   "pages": [
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0058.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 2,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0048.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 2,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0057.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0040.png"
+    },
+    {
+     "calls": 4,
+     "dearestNotReached": 6,
+     "judgements": 1600,
+     "leftUnjudged": 0,
+     "page": "synthetic-0025.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0013.png"
+    }
+   ]
+  },
+  "chip": "Apple M1 Max",
+  "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+  "frameCopy": {
+   "frame": "2880x1800",
+   "ms": {
+    "median": 4.2,
+    "n": 10,
+    "worst": 5.7
+   },
+   "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+  },
+  "freshFour": false,
+  "label": "fresh-off",
+  "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+  "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+  "os": "Version 26.3 (Build 25D125)",
+  "pending": {
+   "runs": [
+    {
+     "allJudgedAfterS": 23.3,
+     "backgroundJudgementsBefore": 112,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0058.png then synthetic-0048.png",
+     "tokensWhenOpened": 0
+    },
+    {
+     "allJudgedAfterS": 27.8,
+     "backgroundJudgementsBefore": 110,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0048.png then synthetic-0057.png",
+     "tokensWhenOpened": 0
+    },
+    {
+     "allJudgedAfterS": 26.8,
+     "backgroundJudgementsBefore": 148,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0057.png then synthetic-0040.png",
+     "tokensWhenOpened": 22
+    }
+   ]
+  },
+  "reuse": {
+   "backgroundJudgements": {
+    "median": 772,
+    "n": 6,
+    "total": 4638,
+    "worst": 896
+   },
+   "firstJudgements": {
+    "median": 1082,
+    "n": 6,
+    "total": 6264,
+    "worst": 1238
+   },
+   "firstMs": {
+    "median": 8303.9,
+    "n": 6,
+    "total": 49072.8,
+    "worst": 9282.2
+   },
+   "moveBackgroundJudgements": {
+    "median": 556,
+    "n": 6,
+    "total": 3376,
+    "worst": 676
+   },
+   "moveJudgements": {
+    "median": 174,
+    "n": 6,
+    "total": 1268,
+    "worst": 408
+   },
+   "moveMs": {
+    "median": 1278.1,
+    "n": 6,
+    "total": 9221.3,
+    "worst": 2667.4
+   },
+   "reloadCalls": {
+    "median": 1,
+    "n": 6,
+    "total": 6,
+    "worst": 1
+   },
+   "reloadJudgements": {
+    "median": 230,
+    "n": 6,
+    "total": 1704,
+    "worst": 542
+   },
+   "reloadMs": {
+    "median": 1759.2,
+    "n": 6,
+    "total": 12167.9,
+    "worst": 3432.4
+   },
+   "scrollBack-otherOffsets": {
+    "backJudgementsTotal": 234,
+    "backMsTotal": 4700.3,
+    "backgroundJudgementsTotal": 546
+   },
+   "scrollBack-sameOffsets": {
+    "backJudgementsTotal": 6,
+    "backMsTotal": 375.6,
+    "backgroundJudgementsTotal": 356
+   },
+   "thirdShowJudgements": {
+    "median": 230,
+    "n": 6,
+    "total": 1704,
+    "worst": 542
+   },
+   "thirdShowMs": {
+    "median": 1718.7,
+    "n": 6,
+    "total": 12114.3,
+    "worst": 3432.3
+   }
+  },
+  "rule": "balanced"
+ },
+ "freshFourOn": {
+  "backgroundSecondChecks": true,
+  "bench": "safesightmac-bench/1",
+  "capped": {
+   "pages": [
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0058.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 2,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0048.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 2,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0057.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0040.png"
+    },
+    {
+     "calls": 4,
+     "dearestNotReached": 6,
+     "judgements": 1600,
+     "leftUnjudged": 0,
+     "page": "synthetic-0025.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0013.png"
+    }
+   ]
+  },
+  "chip": "Apple M1 Max",
+  "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+  "frameCopy": {
+   "frame": "2880x1800",
+   "ms": {
+    "median": 5.2,
+    "n": 10,
+    "worst": 8.6
+   },
+   "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+  },
+  "freshFour": true,
+  "label": "fresh-on",
+  "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+  "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+  "os": "Version 26.3 (Build 25D125)",
+  "pending": {
+   "runs": [
+    {
+     "allJudgedAfterS": 23.3,
+     "backgroundJudgementsBefore": 110,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0058.png then synthetic-0048.png",
+     "tokensWhenOpened": 0
+    },
+    {
+     "allJudgedAfterS": 27.5,
+     "backgroundJudgementsBefore": 114,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0048.png then synthetic-0057.png",
+     "tokensWhenOpened": 0
+    },
+    {
+     "allJudgedAfterS": 27,
+     "backgroundJudgementsBefore": 112,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0057.png then synthetic-0040.png",
+     "tokensWhenOpened": 1.5
+    }
+   ]
+  },
+  "reuse": {
+   "backgroundJudgements": {
+    "median": 766,
+    "n": 6,
+    "total": 4644,
+    "worst": 916
+   },
+   "firstJudgements": {
+    "median": 1082,
+    "n": 6,
+    "total": 6264,
+    "worst": 1238
+   },
+   "firstMs": {
+    "median": 8434.2,
+    "n": 6,
+    "total": 50667.8,
+    "worst": 10284.6
+   },
+   "moveBackgroundJudgements": {
+    "median": 562,
+    "n": 6,
+    "total": 3392,
+    "worst": 678
+   },
+   "moveJudgements": {
+    "median": 174,
+    "n": 6,
+    "total": 1266,
+    "worst": 408
+   },
+   "moveMs": {
+    "median": 1285.6,
+    "n": 6,
+    "total": 9213,
+    "worst": 2676.5
+   },
+   "reloadCalls": {
+    "median": 1,
+    "n": 6,
+    "total": 6,
+    "worst": 1
+   },
+   "reloadJudgements": {
+    "median": 238,
+    "n": 6,
+    "total": 1692,
+    "worst": 550
+   },
+   "reloadMs": {
+    "median": 1622.7,
+    "n": 6,
+    "total": 12065.8,
+    "worst": 3411.5
+   },
+   "scrollBack-otherOffsets": {
+    "backJudgementsTotal": 232,
+    "backMsTotal": 4696.6,
+    "backgroundJudgementsTotal": 544
+   },
+   "scrollBack-sameOffsets": {
+    "backJudgementsTotal": 12,
+    "backMsTotal": 434.8,
+    "backgroundJudgementsTotal": 362
+   },
+   "thirdShowJudgements": {
+    "median": 238,
+    "n": 6,
+    "total": 1692,
+    "worst": 550
+   },
+   "thirdShowMs": {
+    "median": 1637.6,
+    "n": 6,
+    "total": 11798.8,
+    "worst": 3444.9
+   }
+  },
+  "rule": "balanced"
+ }
+}

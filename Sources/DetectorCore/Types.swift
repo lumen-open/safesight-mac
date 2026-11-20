@@ -46,6 +46,9 @@ public struct RegionVerdict: Sendable, Equatable {
     public var reason: Reason
     /// The scale that produced this entry.
     public var pass: JudgePass = .region
+    /// The outcome was handed back by the verdict cache in this call, not judged by the models in it. Read only when a
+    /// cover counts fresh judgements alone towards lifting (`DisplayPipeline.freshVotesOnly`, off by default).
+    public var fromCache = false
 }
 
 public struct FrameVerdict: Sendable {
@@ -105,6 +108,10 @@ public struct JudgeContext: Sendable {
     public var sliceAnchor: SliceAnchor?
     /// Where the owner is looking (the pointer), in frame pixels: pictures nearest it are judged first.
     public var focus: PixelRect?
+    /// Measurement switch (off by default): a clean outcome is never taken from the verdict cache in this call, so every
+    /// clean entry is judged afresh, with fresh jitter. A cached covering outcome is still reused (it only covers). Set by
+    /// the cover layer for a cover's own calls when `DisplayPipeline.freshVotesOnly` is on.
+    public var freshClean = false
     public init(windowID: UInt64, startsCovered: Bool, display: DisplayTrust = .trusted, isVideo: Bool = false, now: Date = Date(),
                 sliceAnchor: SliceAnchor? = nil, focus: PixelRect? = nil) {
         self.windowID = windowID; self.startsCovered = startsCovered; self.display = display; self.isVideo = isVideo; self.now = now
