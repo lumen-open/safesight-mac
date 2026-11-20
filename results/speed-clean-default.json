@@ -1,0 +1,340 @@
+{
+ "bench": "safesightmac-clean-default/1",
+ "code": "branch clean-margin-measure merged with main at df457a6, lab release build",
+ "date": "2026-11-20",
+ "default": {
+  "capped": {
+   "pages": [
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0058.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 2,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0048.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 2,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0057.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0040.png"
+    },
+    {
+     "calls": 4,
+     "dearestNotReached": 6,
+     "judgements": 1600,
+     "leftUnjudged": 0,
+     "page": "synthetic-0025.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0013.png"
+    }
+   ]
+  },
+  "pending": {
+   "runs": [
+    {
+     "allJudgedAfterS": 23.3,
+     "backgroundJudgementsBefore": 102,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0058.png then synthetic-0048.png",
+     "tokensWhenOpened": 0
+    },
+    {
+     "allJudgedAfterS": 27.5,
+     "backgroundJudgementsBefore": 92,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0048.png then synthetic-0057.png",
+     "tokensWhenOpened": 0
+    },
+    {
+     "allJudgedAfterS": 27,
+     "backgroundJudgementsBefore": 106,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0057.png then synthetic-0040.png",
+     "tokensWhenOpened": 0
+    }
+   ]
+  },
+  "reuse": {
+   "backgroundJudgements": {
+    "median": 1024,
+    "n": 6,
+    "total": 6348,
+    "worst": 1318
+   },
+   "firstJudgements": {
+    "median": 1082,
+    "n": 6,
+    "total": 6264,
+    "worst": 1238
+   },
+   "firstMs": {
+    "median": 7057.7,
+    "n": 6,
+    "total": 41260.3,
+    "worst": 7926.3
+   },
+   "moveBackgroundJudgements": {
+    "median": 768,
+    "n": 6,
+    "total": 4466,
+    "worst": 916
+   },
+   "moveJudgements": {
+    "median": 376,
+    "n": 6,
+    "total": 2412,
+    "worst": 594
+   },
+   "moveMs": {
+    "median": 2259.3,
+    "n": 6,
+    "total": 14670.6,
+    "worst": 3467.6
+   },
+   "reloadCalls": {
+    "median": 1,
+    "n": 6,
+    "total": 6,
+    "worst": 1
+   },
+   "reloadJudgements": {
+    "median": 496,
+    "n": 6,
+    "total": 3194,
+    "worst": 780
+   },
+   "reloadMs": {
+    "median": 2981.2,
+    "n": 6,
+    "total": 19153.4,
+    "worst": 4605.1
+   },
+   "scrollBack-otherOffsets": {
+    "backJudgementsTotal": 324,
+    "backMsTotal": 6232,
+    "backgroundJudgementsTotal": 886
+   },
+   "scrollBack-sameOffsets": {
+    "backJudgementsTotal": 112,
+    "backMsTotal": 1998.5,
+    "backgroundJudgementsTotal": 578
+   },
+   "thirdShowJudgements": {
+    "median": 496,
+    "n": 6,
+    "total": 3194,
+    "worst": 780
+   },
+   "thirdShowMs": {
+    "median": 2970.3,
+    "n": 6,
+    "total": 19208.9,
+    "worst": 4520.2
+   }
+  },
+  "static": {
+   "run1": {
+    "judgementsTotal": 10482,
+    "settledAtS": 251.9
+   },
+   "run2": {
+    "judgementsTotal": 11896,
+    "settledAtS": 287.3
+   }
+  }
+ },
+ "method": "safesightmac-harness bench --cases reuse,pending,capped (the six busy pages of harmless photos, finder-bench-heldout), one run; safesightmac-harness static impl/v3-testing-edition-vm/run2/shots/04-lab-start.png --windows run2/logs/static-windows-noind.txt --slow-ms 10 --seconds 360, two runs. Load average about 23 to 27 from other work on the Mac.",
+ "models": "the sealed packages and bundle-manifest.json only (a folder holding just the files models/watcher-models.sha256 lists, copied from v3-detector/models/converted), checked against the sealed hash list",
+ "oldRule": {
+  "capped": {
+   "pages": [
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0058.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 2,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0048.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 2,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0057.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0040.png"
+    },
+    {
+     "calls": 4,
+     "dearestNotReached": 6,
+     "judgements": 1600,
+     "leftUnjudged": 0,
+     "page": "synthetic-0025.png"
+    },
+    {
+     "calls": 3,
+     "dearestNotReached": 4,
+     "judgements": 1200,
+     "leftUnjudged": 0,
+     "page": "synthetic-0013.png"
+    }
+   ]
+  },
+  "note": "restart, margin 0.5, two checks, measured earlier the same day before the merge with main (results/speed-clean-margin-grid.json, m0.5-c2-s0, and its static runs). A re-run of main at df457a6 was started for a same-code comparison; its capped case had not finished after almost four hours of wall time, during which the Mac appears to have slept, and it was stopped, so it gave no figures.",
+  "pending": {
+   "runs": [
+    {
+     "allJudgedAfterS": 23.3,
+     "backgroundJudgementsBefore": 80,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0058.png then synthetic-0048.png",
+     "tokensWhenOpened": 0
+    },
+    {
+     "allJudgedAfterS": 27.5,
+     "backgroundJudgementsBefore": 82,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0048.png then synthetic-0057.png",
+     "tokensWhenOpened": 0
+    },
+    {
+     "allJudgedAfterS": 27,
+     "backgroundJudgementsBefore": 84,
+     "firstCallJudgements": 8,
+     "pages": "synthetic-0057.png then synthetic-0040.png",
+     "tokensWhenOpened": 0
+    }
+   ]
+  },
+  "reuse": {
+   "backgroundJudgements": {
+    "median": 766,
+    "n": 6,
+    "total": 4648,
+    "worst": 906
+   },
+   "firstJudgements": {
+    "median": 1082,
+    "n": 6,
+    "total": 6264,
+    "worst": 1238
+   },
+   "firstMs": {
+    "median": 6920.5,
+    "n": 6,
+    "total": 40111.5,
+    "worst": 7610.6
+   },
+   "moveBackgroundJudgements": {
+    "median": 558,
+    "n": 6,
+    "total": 3384,
+    "worst": 676
+   },
+   "moveJudgements": {
+    "median": 172,
+    "n": 6,
+    "total": 1250,
+    "worst": 396
+   },
+   "moveMs": {
+    "median": 1126.8,
+    "n": 6,
+    "total": 8142.5,
+    "worst": 2341.9
+   },
+   "reloadCalls": {
+    "median": 1,
+    "n": 6,
+    "total": 6,
+    "worst": 1
+   },
+   "reloadJudgements": {
+    "median": 238,
+    "n": 6,
+    "total": 1692,
+    "worst": 552
+   },
+   "reloadMs": {
+    "median": 1420.5,
+    "n": 6,
+    "total": 10087.1,
+    "worst": 3020.9
+   },
+   "scrollBack-otherOffsets": {
+    "backJudgementsTotal": 236,
+    "backMsTotal": 3704.9,
+    "backgroundJudgementsTotal": 550
+   },
+   "scrollBack-sameOffsets": {
+    "backJudgementsTotal": 8,
+    "backMsTotal": 319.3,
+    "backgroundJudgementsTotal": 360
+   },
+   "thirdShowJudgements": {
+    "median": 238,
+    "n": 6,
+    "total": 1692,
+    "worst": 552
+   },
+   "thirdShowMs": {
+    "median": 1444.2,
+    "n": 6,
+    "total": 10076.8,
+    "worst": 3001.5
+   }
+  },
+  "static": {
+   "m0.5-c2-s0-run1": {
+    "cameBack": 0,
+    "judgementsTotal": 8210,
+    "looksLastWantedAtS": 200.0,
+    "settledAtS": 195.2
+   },
+   "m0.5-c2-s0-run2": {
+    "cameBack": 0,
+    "judgementsTotal": 8864,
+    "looksLastWantedAtS": 213.5,
+    "settledAtS": 212.3
+   }
+  }
+ },
+ "rule": {
+  "checks": 3,
+  "how": "the default as shipped (VerdictCache.CleanRule.standard), no switch",
+  "margin": 0.25,
+  "sticky": true
+ }
+}
