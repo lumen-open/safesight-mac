@@ -21,9 +21,11 @@
 //   see-through or rounded part of the prompt never shows what lies behind.
 // - Its own content is still judged. The prompt shows the requesting app's name and icon, and an app can choose that
 //   icon (its own, or a picture it names when it asks), drawn at about 64 by 64 points. So the hole opens only once the
-//   prompt's own pixels have been judged since it appeared, moved or last changed (it is judged first, with a small
-//   budget of its own; any change inside it, a new request in the same window included, covers it again until
-//   judged), and its own covers and blurs (a flagged picture in it) are drawn inside the hole like any window's.
+//   prompt's own pixels have been judged since it appeared or moved (it is judged first, with a small budget of its
+//   own), and its own covers and blurs (a flagged picture in it) are drawn inside the hole like any window's. Once
+//   open, a small change in it (typing, the caret) is covered block by block until judged, within the normal budget;
+//   a large one (a quarter of it, or reaching a picture in it, its icon), a new request in the same window included,
+//   closes the whole hole until it is judged again (`DisplayPipeline.promptCoverFirst`).
 // - Any doubt covers, as today: an owner that cannot be read or checked, a process that changed, a window too large
 //   or not opaque, another window at or above the backing level behind it, or a display that cannot be judged.
 //
@@ -166,16 +168,12 @@ public final class PromptOwners: @unchecked Sendable {
 /// macOS 26). With either turned off, the system snapshot need not be Apple's sealed one, and code can be injected into
 /// SecurityAgent, so no window is the prompt. A configuration that cannot be read counts as off.
 public enum SystemIntegrity {
-    /// The relaxations that would let the rule be fooled: unsigned or unapproved kernel extensions (0x1, 0x200),
-    /// unrestricted file system (0x2), `task_for_pid` (0x4), the kernel debugger (0x8), unrestricted DTrace (0x20),
-    /// the executable policy override (0x400) and unauthenticated root (0x800). Any one of them set: not intact.
-    public static let relaxations: UInt32 = 0x1 | 0x2 | 0x4 | 0x8 | 0x20 | 0x200 | 0x400 | 0x800
-
-    /// True when the kernel's configuration was read and none of `relaxations` is set.
+    /// True when the kernel's configuration was read and is exactly 0: System Integrity Protection fully on, authenticated
+    /// root on, nothing relaxed. Any bit set, a bit unknown today included, is not intact.
     public static func intact(read: (UnsafeMutablePointer<UInt32>) -> Int32 = csrActiveConfig) -> Bool {
         var config: UInt32 = .max
         guard read(&config) == 0 else { return false }
-        return config & relaxations == 0
+        return config == 0
     }
 
     public static let csrActiveConfig: (UnsafeMutablePointer<UInt32>) -> Int32 = { csr_get_active_config($0) }

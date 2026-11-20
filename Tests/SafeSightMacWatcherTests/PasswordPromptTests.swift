@@ -277,6 +277,85 @@ final class PerWindowScript: Judging {
         #expect(fullyCovered(plan, promptRect))
     }
 
+    // MARK: Changes inside an open hole
+
+    /// A frame with a small block inside the prompt (a caret, a password dot) drawn or not.
+    func caret(_ on: Bool, at x: Int = 260, t: TimeInterval, extra: ((inout RGBAImage) -> Void)? = nil) -> CapturedFrame {
+        var img = Fixtures.blank(600, 400)
+        if on { for y in 200..<214 { for xx in x..<(x + 2) { let p = (y * 600 + xx) * 4; img.pixels[p] = 20; img.pixels[p + 1] = 20; img.pixels[p + 2] = 20 } } }
+        extra?(&img)
+        return Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: x - 8, y: 192, w: 24, h: 32)], t: t)
+    }
+    let caretRect = CGRect(x: 260, y: 200, width: 2, height: 14)
+
+    @Test func aBlinkingCaretKeepsTheHoleOpenAndIsJudgedWithinTheBudget() {
+        let above = WindowInfo(number: 9, ownerPID: 700, layer: CoverLevel.canvas, bounds: CGRect(x: 0, y: 0, width: 100, height: 100))
+        for windows in [[prompt(), app], [above, prompt(), app]] {
+            let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [42], callWallMs: .infinity)
+            #expect(clear(coveredBehind(p, windows), promptRect), "open first")
+            var judgements = 0, closed = 0
+            // Two seconds at 30 frames a second, the caret on and off every frame.
+            for k in 0..<60 {
+                let t = 0.2 + Double(k) / 30
+                let plan = p.process(caret(k % 2 == 0, t: t), snapshot: WindowSnapshot(windows: windows, time: t), now: t)
+                judgements += p.lastTimings.judgements
+                if plan.promptHoles.isEmpty { closed += 1 }
+                // The rest of the prompt, the field typed into included, stays in sight.
+                #expect(clear(plan, CGRect(x: 200, y: 120, width: 50, height: 160)) && clear(plan, CGRect(x: 280, y: 120, width: 120, height: 160)),
+                        "\(windows.count) windows, frame \(k)")
+            }
+            #expect(closed == 0, "the hole never closes for a caret")
+            #expect(Double(judgements) <= Register.JUDGEMENT_BURST + 2 * Register.JUDGEMENT_BUDGET + 1, "\(judgements) judgements in 2 s: within the budget")
+        }
+    }
+
+    @Test func aPreviewPlanCoversOnlyTheChangedBlocksInsideTheHole() {
+        let above = WindowInfo(number: 9, ownerPID: 700, layer: CoverLevel.canvas, bounds: CGRect(x: 0, y: 0, width: 100, height: 100))
+        for top in [[WindowInfo](), [above]] {
+            let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [42], callWallMs: .infinity)
+            let other = WindowInfo(number: 3, ownerPID: 600, layer: 0, bounds: CGRect(x: 450, y: 300, width: 100, height: 80))
+            #expect(clear(coveredBehind(p, top + [prompt(), other, app]), promptRect))
+            // Another window moves (an early plan is drawn for it) while the caret appears in the prompt.
+            let moved = WindowInfo(number: 3, ownerPID: 600, layer: 0, bounds: CGRect(x: 460, y: 300, width: 100, height: 80))
+            var early: [CoverPlan] = []
+            let final = p.process(caret(true, t: 0.3), snapshot: WindowSnapshot(windows: top + [prompt(), moved, app], time: 0.3), now: 0.3) { early.append($0) }
+            #expect(!early.isEmpty, "an early plan was drawn")
+            for e in early {
+                #expect(fullyCovered(e, caretRect), "the changed block is covered until judged")
+                #expect(e.promptHoles == [promptRect] && clear(e, CGRect(x: 200, y: 120, width: 30, height: 160)) && clear(e, CGRect(x: 300, y: 120, width: 100, height: 160)), "and only it (its 32-pixel block)")
+            }
+            #expect(clear(final, promptRect), "judged: its cover goes")
+        }
+    }
+
+    @Test func aLargeChangeClosesTheWholeHole() {
+        let j = PerWindowScript()
+        let p = pipeline(j)
+        #expect(clear(coveredBehind(p, [prompt(), app]), promptRect))
+        j.unjudged = [JudgeTarget.window(number: 50, ownerPID: 900).contextID]
+        // Most of the prompt changes (another request in the same window): closed, judged whole again.
+        var img = Fixtures.blank(600, 400)
+        Fixtures.paint(&img, PixelRect(x: 200, y: 120, w: 200, h: 120), channel: nil, seed: 3)
+        let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 200, y: 120, w: 200, h: 120)], t: 0.2),
+                             snapshot: WindowSnapshot(windows: [prompt(), app], time: 0.2), now: 0.2)
+        #expect(fullyCovered(plan, promptRect) && plan.promptHoles.isEmpty)
+    }
+
+    @Test func aPromptDroppedOnALookWithNothingToJudgeAsksForALook() {
+        let p = pipeline()
+        #expect(clear(coveredBehind(p, [prompt(), app]), promptRect))
+        p.held = []
+        let shifted = promptRect.offsetBy(dx: 40, dy: 0)
+        let snap = WindowSnapshot(windows: [prompt(bounds: shifted), app], time: 0.3)
+        let started = CapturedFrame(display: d, status: .started, image: nil, map: nil, dirty: nil, time: 0.3)
+        _ = p.process(started, snapshot: snap, now: 0.3)
+        #expect(p.needsAnotherLook, "a look is asked for")
+        let idle = CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 0.4)
+        _ = p.process(idle, snapshot: snap, now: 0.4)
+        #expect(p.promptJudged.contains(.window(number: 50, ownerPID: 900)), "judged at its new place on that look")
+        #expect(!p.needsAnotherLook)
+    }
+
     @Test func coversLeftOverByTheWatcherAreNeverCut() {
         // A cover added after the pipeline (no source) is drawn whole, over the hole too.
         var plan = coveredBehind(pipeline(), [prompt(), app])
@@ -350,7 +429,8 @@ final class PerWindowScript: Judging {
         // The configuration as the kernel reports it: unreadable, or any relaxation set, is not intact.
         #expect(SystemIntegrity.intact(read: { $0.pointee = 0; return 0 }))
         #expect(!SystemIntegrity.intact(read: { $0.pointee = 0; return -1 }), "unreadable")
-        for bit: UInt32 in [0x1, 0x2, 0x4, 0x8, 0x20, 0x200, 0x400, 0x800] {
+        // Every known relaxation, unrestricted NVRAM (0x40) among them, and a bit unknown today.
+        for bit: UInt32 in [0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80, 0x100, 0x200, 0x400, 0x800, 0x1000, 0x8000_0000] {
             #expect(!SystemIntegrity.intact(read: { $0.pointee = bit; return 0 }), "relaxation \(bit)")
         }
         // The real call can be made here (whatever this Mac's answer).

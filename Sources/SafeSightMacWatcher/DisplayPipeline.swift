@@ -161,6 +161,18 @@ public final class DisplayPipeline {
     /// The judgements a password prompt not yet judged is given even when the budget is spent, so its hole opens soon
     /// after it appears on a slow Mac too (the dialog holds one small icon and some text: a handful of entries).
     static let promptFloor = 16
+    /// Blocks (global points) inside an open prompt hole whose pixels changed since the prompt was judged and are not
+    /// judged yet: each is covered plainly, as the prompt's own cover, until a call judges it (cover first). A small change
+    /// (typing, the caret) keeps the hole open this way and is judged within the normal budget.
+    var promptCoverFirst: [JudgeTarget: [CGRect]] = [:]
+    /// The pictures the finder saw in each prompt when it was last judged whole (global points; its icon). A change that
+    /// reaches one, or that the finder could not be asked about, closes the whole hole until the prompt is judged again.
+    var promptPictures: [JudgeTarget: [CGRect]] = [:]
+    /// A change above this share of a prompt's visible area closes its whole hole (a new request in the same window).
+    static let promptLargeChange: CGFloat = 0.25
+    /// A prompt on screen whose hole is not open yet (dropped by a look with nothing to judge, or left unjudged): another
+    /// look is wanted, so the prompt becomes usable without waiting for a pixel to change.
+    var promptLookDue = false
     /// The last plan before its prompt holes were made: when the window list changes without a new look (a prompt goes),
     /// the holes are made again from it, so a hole never outlives its prompt.
     var lastBase: CoverPlan?
@@ -186,7 +198,9 @@ public final class DisplayPipeline {
     /// frame itself (an idle frame); without one a still screen would never settle.
     /// Pictures seen clean once waiting for their second clean check count as something left (step 3c), until they have
     /// had it or until `secondChecksFor` has passed.
-    public var needsAnotherLook: Bool { judged && (!(held.isEmpty && pending.isEmpty && dueAgain.isEmpty) || secondChecksWanted) }
+    public var needsAnotherLook: Bool {
+        judged && (!(held.isEmpty && pending.isEmpty && dueAgain.isEmpty) || secondChecksWanted || promptLookDue)
+    }
     var secondChecksWanted: Bool { secondChecksDue && backgroundSecondChecks }
 
     /// A judge call left pictures seen clean once: the looks at a still screen give them their second check, for at most
@@ -234,7 +248,7 @@ public final class DisplayPipeline {
         saving = [:]; saverReserve = 0; reserveAt = nil
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
         judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []; secondChecksDue = false; secondChecksUntil = nil
-        promptJudged = []; lastBase = nil
+        promptJudged = []; lastBase = nil; promptCoverFirst = [:]; promptPictures = [:]; promptLookDue = false
         cover(because: .notYetJudged)
     }
 
@@ -266,7 +280,9 @@ public final class DisplayPipeline {
             // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels (of this stream only).
             // Pictures seen clean once get their second clean check meanwhile (step 3c).
             guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap,
-                  !(held.isEmpty && pending.isEmpty && dueAgain.isEmpty && !secondChecksWanted) else { return judged ? refreshHoles(snapshot) : lastPlan }
+                  !(held.isEmpty && pending.isEmpty && dueAgain.isEmpty && !secondChecksWanted && !promptLookDue) else {
+                return judged ? refreshHoles(snapshot) : lastPlan
+            }
             return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer,
                        idle: true, provisional: provisional)
         case .complete:
@@ -382,12 +398,32 @@ public final class DisplayPipeline {
             }
         }
 
-        // Password prompts on this display. One that left the list, moved, or whose pixels changed (typing, or a new request
-        // shown in the same window) is judged again before its hole opens again: until then it is covered as before.
+        // Password prompts on this display. One that appeared, left the list, moved or changed size is judged whole again
+        // before its hole opens again: until then it is covered as before. Where only its pixels changed: a large change
+        // (more than `promptLargeChange` of it, or one reaching a picture in it, its icon) closes the whole hole the same
+        // way, so a new request in the same window is judged afresh; a small one (typing, the caret) keeps the hole, with a
+        // plain cover over each changed block until that block is judged (`promptCoverFirst`).
         let prompts = promptCandidates(snapshot)
         let promptTargets = Set(prompts.map { JudgeTarget.window(number: $0.number, ownerPID: $0.ownerPID) })
-        promptJudged = promptJudged.filter { t in
-            promptTargets.contains(t) && !promptMoved(t, snapshot) && !(newPixels && (visible[t] ?? []).contains(where: coverChanged))
+        promptJudged = promptJudged.filter { t in promptTargets.contains(t) && !promptMoved(t, snapshot) }
+        promptCoverFirst = promptCoverFirst.filter { promptJudged.contains($0.key) }
+        promptPictures = promptPictures.filter { promptJudged.contains($0.key) }
+        if newPixels {
+            for t in promptJudged {
+                let vis = visible[t] ?? []
+                guard let changed = promptChanges(vis, previous: previous, img, map, changedAreas: changedAreas) else {
+                    promptJudged.remove(t); promptCoverFirst[t] = nil; continue
+                }
+                guard !changed.isEmpty else { continue }
+                let visArea = vis.reduce(0) { $0 + $1.width * $1.height }
+                let area = changed.reduce(0) { $0 + $1.width * $1.height }
+                let reachesPicture = promptPictures[t].map { pics in changed.contains { c in pics.contains { $0.intersects(c) } } } ?? true
+                if area > Self.promptLargeChange * visArea || reachesPicture {
+                    promptJudged.remove(t); promptCoverFirst[t] = nil
+                } else {
+                    promptCoverFirst[t, default: []] += changed
+                }
+            }
         }
         let promptsDue = promptTargets.subtracting(promptJudged)
 
@@ -407,8 +443,9 @@ public final class DisplayPipeline {
             // Covers waiting to lift are judged on their own (step 3b), over exactly what each hides, so the entries over
             // each stay the same from one call to the next and its clean judgements can be gathered over several calls.
             for (_, old, new) in moved { areas += [old.intersection(d), new.intersection(d)].filter(\.hasArea) }
-            // A prompt not yet judged is judged whole, so its hole can open.
+            // A prompt not yet judged is judged whole, so its hole can open; its changed blocks waiting are judged too.
             for t in promptsDue { areas += visible[t] ?? [] }
+            for (_, blocks) in promptCoverFirst { areas += blocks }
         }
         // What was left unjudged before this look (work left over, failures to judge again, a window turned hot).
         let pendingBefore = pending
@@ -432,7 +469,8 @@ public final class DisplayPipeline {
         // back); then what is only judged again (covers waiting to lift, work left over), the one served longest ago first.
         parts.sort { a, b in
             // A password prompt waiting for its first judgement goes before everything.
-            let pa = promptsDue.contains(a.target), pb = promptsDue.contains(b.target)
+            let pa = promptsDue.contains(a.target) || promptCoverFirst[a.target] != nil
+            let pb = promptsDue.contains(b.target) || promptCoverFirst[b.target] != nil
             if pa != pb { return pa }
             let ha = hot.contains(a.target), hb = hot.contains(b.target)
             if ha != hb { return ha }
@@ -692,8 +730,16 @@ public final class DisplayPipeline {
             }
             if budget > 0 && (v.judgements > 0 || v.overloaded == 0) { served[p.target] = runSerial }
             // A prompt's hole opens once a call has judged all of it with nothing left unjudged.
-            if promptDue, budget > 0, v.overloaded == 0, v.modelFaults == 0, changedBox.intersection(visBox).insetBy(dx: -0.5, dy: -0.5).contains(visBox) {
+            let callBox = changedBox.intersection(visBox).insetBy(dx: -0.5, dy: -0.5)
+            if promptDue, budget > 0, v.overloaded == 0, v.modelFaults == 0, callBox.contains(visBox) {
                 promptJudged.insert(p.target)
+                // Its pictures (the icon), for telling a small change from one that reaches them.
+                promptPictures[p.target] = judger.pictureRegions(img, within: area).map { $0.map(map.toGlobal) }
+            }
+            // Changed blocks of an open prompt that this call judged, with nothing left unjudged, lose their cover.
+            if let blocks = promptCoverFirst[p.target], budget > 0, v.overloaded == 0, v.modelFaults == 0 {
+                let left = blocks.filter { !callBox.contains($0) }
+                promptCoverFirst[p.target] = left.isEmpty ? nil : left
             }
             if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
             if firstFrame { firstLeft = max(0, firstLeft - v.judgements) }
@@ -862,6 +908,7 @@ public final class DisplayPipeline {
         lastWindows = windowsHere
         dueSince = dueSince.filter { visible[$0.key] != nil }
         // Drawn only: what is held and judged carries on as before.
+        promptLookDue = !promptTargets.subtracting(promptJudged).isEmpty || !promptCoverFirst.isEmpty
         lastBase = guardedBase(CoverPlan(display: display, items: items), snapshot)
         lastPlan = withPromptHoles(lastBase!, snapshot)
         lastAbove = lastPlan.wholeDisplay == .windowAboveCovers ? windowAbove(items, snapshot) : nil
@@ -897,9 +944,36 @@ public final class DisplayPipeline {
     func refreshHoles(_ snapshot: WindowSnapshot) -> CoverPlan {
         guard let base = lastBase, snapshot.readable else { return lastPlan }
         // As in a look: a prompt that moved (or is not where the last look saw it) is judged again first.
+        let before = promptJudged
         promptJudged = promptJudged.filter { !promptMoved($0, snapshot) }
+        promptCoverFirst = promptCoverFirst.filter { promptJudged.contains($0.key) }
+        // A prompt dropped here is judged at the next look, which is asked for now (`needsAnotherLook`).
+        if promptJudged != before { promptLookDue = true }
         lastPlan = withPromptHoles(base, snapshot)
         return lastPlan
+    }
+
+    /// The blocks (global points, cut to `visible`) whose pixels differ from the last judged frame, or, with no last frame
+    /// to compare, the reported changed areas there. Nil when it cannot be said.
+    func promptChanges(_ visible: [CGRect], previous: RGBAImage?, _ img: RGBAImage, _ map: CaptureMap, changedAreas: [CGRect]) -> [CGRect]? {
+        guard let prev = previous else { return changedAreas.flatMap { visible.clipped(to: $0) } }
+        guard prev.width == img.width, prev.height == img.height else { return nil }
+        var out: [CGRect] = []
+        let b = DirtyRegions.block
+        for v in visible {
+            guard let r = map.toPixels(v) else { return nil }
+            var y = r.y
+            while y < r.maxY {
+                var x = r.x
+                while x < r.maxX {
+                    let blk = PixelRect(x: x, y: y, w: min(b, r.maxX - x), h: min(b, r.maxY - y))
+                    if DirtyRegions.differ(prev, img, blk) { out += visible.clipped(to: map.toGlobal(blk)) }
+                    x += b
+                }
+                y += b
+            }
+        }
+        return out
     }
 
     // MARK: The password prompt's hole
@@ -948,6 +1022,10 @@ public final class DisplayPipeline {
         var p = plan
         p.promptHoles = []
         let holes = promptHoles(snapshot)
+        // Changed blocks of an open prompt not judged yet: plain covers of its own, inside its hole.
+        let coverFirst = holes.flatMap { h in (promptCoverFirst[h.target] ?? []).map { CoverItem(rect: $0, kind: .plain, source: h.target) } }
+        var plan = plan
+        plan.items += coverFirst
         if p.wholeDisplay != nil {
             let own = Set(holes.map(\.target))
             p.items = holes.isEmpty ? [] : plan.items.filter { $0.source.map(own.contains) == true }

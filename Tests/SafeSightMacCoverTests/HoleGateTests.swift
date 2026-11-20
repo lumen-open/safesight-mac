@@ -59,3 +59,81 @@ import Testing
         #expect(!r.heldBack && r.plans == [plain])
     }
 }
+
+/// The order of drawing, with stand-in panels and canvas: at no moment is a hole cut in the covers without a backing
+/// standing at exactly its place, when a hole opens, closes, moves, or two holes trade places.
+@MainActor @Suite struct BackingOrderTests {
+    let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+
+    /// What is on screen: the holes cut in the covers, and where each backing stands.
+    @MainActor final class World {
+        var cut: Set<HoleGate.Hole> = []
+        var panels: [FakePanel] = []
+        var turns: [BehindPrompt.Turn] = []
+        var violations: [String] = []
+        func check(_ when: String) {
+            for h in cut where !panels.contains(where: { $0.shown && $0.frame == h.rect }) {
+                violations.append("\(when): hole \(h.rect) cut with no backing there")
+            }
+        }
+    }
+    final class FakePanel: BackingPanel {
+        let world: World
+        var frame: CGRect = .null
+        var shown = false
+        init(_ w: World) { world = w }
+        func place(_ f: CGRect, theme: CoverTheme) -> Bool {
+            if frame != f { frame = f; world.check("moved a backing") }
+            shown = true
+            return true
+        }
+        func hide() { shown = false; world.check("took a backing down") }
+    }
+
+    func setUp() -> (World, BehindPrompt) {
+        let w = World()
+        let b = BehindPrompt(make: { let p = FakePanel(w); w.panels.append(p); return p },
+                             nextTurn: { w.turns.append($0) }, toCocoa: { $0 })
+        return (w, b)
+    }
+
+    /// Draws `holes` through the backings, the canvas recording what it cuts, then runs the main loop's next turns.
+    func show(_ holes: [CGRect], _ w: World, _ b: BehindPrompt) {
+        let plan = CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: holes)
+        func draw(_ plans: [CoverPlan]) {
+            // A hole is cut when no plain cover was put back over exactly it.
+            w.cut = Set(plans.flatMap { p in p.promptHoles.filter { r in !p.items.contains { $0.rect == r } }.map { HoleGate.Hole(display: p.display.id, rect: $0) } })
+            w.check("drew the covers")
+        }
+        func apply(_ plans: [CoverPlan]) { b.apply(plans, theme: .light, draw: draw, again: apply) }
+        apply([plan])
+        while !w.turns.isEmpty { w.turns.removeFirst()() }
+    }
+
+    @Test func openingClosingMovingAndTradingPlacesNeverCutAHoleWithoutItsBacking() {
+        let (w, b) = setUp()
+        let a = CGRect(x: 100, y: 100, width: 150, height: 120), c = CGRect(x: 320, y: 100, width: 150, height: 120)
+        show([a], w, b)
+        #expect(w.cut == [HoleGate.Hole(display: 1, rect: a)], "opens after its backing")
+        show([a.offsetBy(dx: 20, dy: 0)], w, b)                         // moved
+        #expect(w.cut == [HoleGate.Hole(display: 1, rect: a.offsetBy(dx: 20, dy: 0))])
+        show([a, c], w, b)                                              // two holes
+        show([c.offsetBy(dx: -220, dy: 0), a.offsetBy(dx: 220, dy: 0)], w, b)  // the two trade places
+        show([CGRect(x: 10, y: 10, width: 100, height: 100)], w, b)     // both go, a new one comes
+        show([], w, b)                                                  // closed
+        #expect(w.cut.isEmpty)
+        #expect(w.violations.isEmpty, "\(w.violations)")
+        #expect(w.panels.allSatisfy { !$0.shown }, "every backing taken down once its hole is gone")
+    }
+
+    @Test func aBackingThatCannotBeDrawnKeepsItsHoleClosed() {
+        let w = World()
+        final class Broken: BackingPanel {
+            func place(_ f: CGRect, theme: CoverTheme) -> Bool { false }
+            func hide() {}
+        }
+        let b = BehindPrompt(make: { Broken() }, nextTurn: { w.turns.append($0) }, toCocoa: { $0 })
+        show([CGRect(x: 100, y: 100, width: 150, height: 120)], w, b)
+        #expect(w.cut.isEmpty)
+    }
+}
