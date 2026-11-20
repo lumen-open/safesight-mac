@@ -42,10 +42,12 @@ public enum WindowList {
 
     /// The prompt checks, with the real facts from the kernel and the file system.
     static let promptOwners = PromptOwners(facts: SystemProcessFacts.read, startTime: SystemProcessFacts.startTime,
-                                           allowedUIDs: { promptUIDs })
+                                           allowedUIDs: { promptUIDs }, systemIntact: { SystemIntegrity.intact() })
     static let promptUIDs = SystemProcessFacts.promptUIDs()
 
-    /// For the lab event log: whether each prompt-shaped window's owner passed each check (yes/no only: no name, no path).
+    /// For the lab event log: whether each prompt-shaped window's owner passed each check (yes/no only: no name, no path),
+    /// whether it is one of SecurityAgent's helpers (never exempt: if the real dialog is drawn by one, it shows here), and
+    /// whether System Integrity Protection and authenticated root read as on.
     public static func promptCheck() -> String {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return "prompt=unreadable" }
         let shaped = list.compactMap { d -> String? in
@@ -56,7 +58,8 @@ public enum WindowList {
             guard let f = try? SystemProcessFacts.read(pid) else { return "L1000 shape=\(PasswordPrompt.shapeQualifies(layer: 1000, bounds: b, alpha: alpha)) facts=none" }
             return "L1000 shape=\(PasswordPrompt.shapeQualifies(layer: 1000, bounds: b, alpha: alpha)) sealed=\(f.onSealedSystemVolume) "
                 + "bundle=\(f.bundleID.map { PasswordPrompt.bundleIDs.contains($0) } ?? false) uid=\(promptUIDs.contains(f.uid)) "
-                + "owner=\(PasswordPrompt.ownerQualifies(f, allowedUIDs: promptUIDs))"
+                + "helper=\(f.bundleID?.hasPrefix("com.apple.SecurityAgentHelper") ?? false) "
+                + "owner=\(PasswordPrompt.ownerQualifies(f, allowedUIDs: promptUIDs)) sip=\(SystemIntegrity.intact())"
         }
         return "prompt=[" + shaped.joined(separator: ",") + "]"
     }

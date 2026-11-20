@@ -348,11 +348,6 @@ public final class DisplayPipeline {
         // Windows that moved or changed size since the last snapshot.
         var moved: [(JudgeTarget, CGRect, CGRect)] = []
         for (t, old) in lastBounds { if let nb = snapshot.bounds(of: t), nb != old { moved.append((t, old, nb)) } }
-        // Password prompts on this display: one that left the list or moved is judged again before its hole opens again.
-        let prompts = promptCandidates(snapshot)
-        let promptTargets = Set(prompts.map { JudgeTarget.window(number: $0.number, ownerPID: $0.ownerPID) })
-        promptJudged = promptJudged.filter { t in promptTargets.contains(t) && !moved.contains { $0.0 == t } }
-        let promptsDue = promptTargets.subtracting(promptJudged)
         // What the frame itself shows changed (global points): nothing for a frame that says nothing changed, the whole
         // display when it cannot say. A full re-judge on the `FULL_REJUDGE` rhythm, or covers judged again, is no change:
         // nothing new is blurred first for them.
@@ -386,6 +381,15 @@ public final class DisplayPipeline {
                 held[i].round = held[i].round.filter { e in !entryChanged(map.toGlobal(e.rect)) }
             }
         }
+
+        // Password prompts on this display. One that left the list, moved, or whose pixels changed (typing, or a new request
+        // shown in the same window) is judged again before its hole opens again: until then it is covered as before.
+        let prompts = promptCandidates(snapshot)
+        let promptTargets = Set(prompts.map { JudgeTarget.window(number: $0.number, ownerPID: $0.ownerPID) })
+        promptJudged = promptJudged.filter { t in
+            promptTargets.contains(t) && !promptMoved(t, snapshot) && !(newPixels && (visible[t] ?? []).contains(where: coverChanged))
+        }
+        let promptsDue = promptTargets.subtracting(promptJudged)
 
         // 1. What to judge: the changed areas; regions waiting to lift; overflow from earlier calls;
         //    old and new places of moved windows; and a full pass on the `FULL_REJUDGE` rhythm.
@@ -892,11 +896,19 @@ public final class DisplayPipeline {
     /// has its place covered again at once.
     func refreshHoles(_ snapshot: WindowSnapshot) -> CoverPlan {
         guard let base = lastBase, snapshot.readable else { return lastPlan }
+        // As in a look: a prompt that moved (or is not where the last look saw it) is judged again first.
+        promptJudged = promptJudged.filter { !promptMoved($0, snapshot) }
         lastPlan = withPromptHoles(base, snapshot)
         return lastPlan
     }
 
     // MARK: The password prompt's hole
+
+    /// True when a prompt is not exactly where the last look saw it (moved, resized, or not seen then).
+    func promptMoved(_ t: JudgeTarget, _ snapshot: WindowSnapshot) -> Bool {
+        guard let old = lastBounds[t], let now = snapshot.bounds(of: t) else { return true }
+        return old != now
+    }
 
     /// Password prompts on this display: windows the window list marks as the prompt (`WindowInfo.passwordPrompt`, its
     /// owner checked), not this app's, that fit the display (`PasswordPrompt.fits`).

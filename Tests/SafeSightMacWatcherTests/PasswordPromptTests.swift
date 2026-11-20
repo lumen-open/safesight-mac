@@ -13,6 +13,8 @@ import Testing
 final class PerWindowScript: Judging {
     var unjudged: Set<UInt64> = []
     var flagged: Set<UInt64> = []
+    /// Windows judged in part: half their area clean, the rest left unjudged.
+    var partial: Set<UInt64> = []
     var calls: [UInt64] = []
     func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
                    progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
@@ -20,6 +22,13 @@ final class PerWindowScript: Judging {
         if unjudged.contains(context.windowID) {
             return FrameVerdict(regions: [RegionVerdict(rect: area, display: .contain, reason: .overload, pass: .whole)],
                                 coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: 1)
+        }
+        if partial.contains(context.windowID) {
+            let half = PixelRect(x: area.x, y: area.y, w: area.w / 2, h: area.h)
+            let rest = PixelRect(x: area.x + area.w / 2, y: area.y, w: area.w - area.w / 2, h: area.h)
+            return FrameVerdict(regions: [RegionVerdict(rect: half, display: .clear, reason: .judgedClean, pass: .region),
+                                          RegionVerdict(rect: rest, display: .contain, reason: .overload, pass: .region)],
+                                coverWindow: false, strike: false, hot: false, judgements: 1, overloaded: 1)
         }
         if flagged.contains(context.windowID) {
             return FrameVerdict(regions: [RegionVerdict(rect: area, display: .cover, reason: .bothFamilies, pass: .whole)],
@@ -56,6 +65,13 @@ final class PerWindowScript: Judging {
         _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: windows, time: 0), now: 0)
         p.held.append(DisplayPipeline.Held(target: appTarget, rel: .null, whole: true, kind: .plain, clean: 0))
         return p.process(touched(1, t: 0.1), snapshot: WindowSnapshot(windows: windows, time: 0.1), now: 0.1)
+    }
+
+    /// Every point of `r` is under a cover as drawn (whole-display covers by their pieces, holes left out).
+    func fullyCovered(_ plan: CoverPlan, _ r: CGRect) -> Bool {
+        guard plan.wholeDisplay != nil else { return plan.covers(r) }
+        let layer = CoordinateSpace.toCanvasLayer(r.insetBy(dx: 1, dy: 1), display: d.bounds)
+        return CoverLayout.layerPieces(plan).map(\.frame).reduce([layer]) { $0.subtracting($1) }.isEmpty
     }
 
     /// No cover item reaches into `r` (beyond a point of snapping).
@@ -187,6 +203,80 @@ final class PerWindowScript: Judging {
         #expect(p.cover(because: .streamStopped).promptHoles.isEmpty)
     }
 
+    /// Flagged content appearing inside an open hole closes it at once and is covered, normal and whole-display mode.
+    @Test func flaggedContentAppearingInsideAnOpenHoleIsCovered() {
+        let above = WindowInfo(number: 9, ownerPID: 700, layer: CoverLevel.canvas, bounds: CGRect(x: 0, y: 0, width: 100, height: 100))
+        for windows in [[prompt(), app], [above, prompt(), app]] {
+            let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [42], callWallMs: .infinity)
+            let open = coveredBehind(p, windows)
+            #expect(clear(open, promptRect), "open first")
+            var img = Fixtures.blank(600, 400)
+            Fixtures.paintFlagged(&img, PixelRect(x: 240, y: 150, w: 100, h: 100))
+            var early: [CoverPlan] = []
+            let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 232, y: 142, w: 116, h: 116)], t: 0.2),
+                                 snapshot: WindowSnapshot(windows: windows, time: 0.2), now: 0.2) { early.append($0) }
+            let pic = CGRect(x: 240, y: 150, width: 100, height: 100)
+            #expect(fullyCovered(plan, pic), "\(windows.count) windows: the flagged picture in the hole is covered")
+            #expect(early.allSatisfy { fullyCovered($0, pic) }, "never shown before it is judged")
+        }
+    }
+
+    @Test func aChangeInsideAnOpenHoleClosesItUntilJudgedAgain() {
+        let j = PerWindowScript()
+        let p = pipeline(j)
+        #expect(clear(coveredBehind(p, [prompt(), app]), promptRect))
+        // A new request in the same window (its pixels change) that cannot be judged now: closed.
+        j.unjudged = [JudgeTarget.window(number: 50, ownerPID: 900).contextID]
+        var img = Fixtures.blank(600, 400)
+        Fixtures.paint(&img, PixelRect(x: 220, y: 140, w: 60, h: 60), channel: nil, seed: 9)
+        let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 216, y: 136, w: 68, h: 68)], t: 0.2),
+                             snapshot: WindowSnapshot(windows: [prompt(), app], time: 0.2), now: 0.2)
+        #expect(plan.covers(promptRect) && plan.promptHoles.isEmpty)
+    }
+
+    @Test func aMovedPromptClosesItsHoleOnALookAndOnALookWithNothingToJudge() {
+        let j = PerWindowScript()
+        j.unjudged = []
+        let p = pipeline(j)
+        #expect(clear(coveredBehind(p, [prompt(), app]), promptRect))
+        let shifted = promptRect.offsetBy(dx: 40, dy: 0)
+        // A "started" frame (no look) with the prompt moved: its hole is not carried to the new place.
+        let started = CapturedFrame(display: d, status: .started, image: nil, map: nil, dirty: nil, time: 0.2)
+        let s1 = p.process(started, snapshot: WindowSnapshot(windows: [prompt(bounds: shifted), app], time: 0.2), now: 0.2)
+        #expect(s1.covers(shifted) && s1.promptHoles.isEmpty)
+        // A look with the prompt moved, its new place left unjudged: closed.
+        let q = pipeline(j)
+        #expect(clear(coveredBehind(q, [prompt(), app]), promptRect))
+        j.unjudged = [JudgeTarget.window(number: 50, ownerPID: 900).contextID]
+        let s2 = q.process(touched(5, t: 0.3), snapshot: WindowSnapshot(windows: [prompt(bounds: shifted), app], time: 0.3), now: 0.3)
+        #expect(s2.covers(shifted) && s2.promptHoles.isEmpty)
+    }
+
+    @Test func aPartialJudgementThenOverloadKeepsTheHoleClosed() {
+        // The prompt judged in part (half clean, the rest left unjudged), then left unjudged: the hole never opens.
+        let j = PerWindowScript()
+        let p = pipeline(j)
+        let promptID = JudgeTarget.window(number: 50, ownerPID: 900).contextID
+        j.partial = [promptID]
+        let first = coveredBehind(p, [prompt(), app])
+        #expect(fullyCovered(first, promptRect) && first.promptHoles.isEmpty)
+        #expect(!p.promptJudged.contains(.window(number: 50, ownerPID: 900)))
+        j.partial = []; j.unjudged = [promptID]
+        for k in 2...4 {
+            let t = Double(k) / 10
+            let plan = p.process(touched(k, t: t), snapshot: WindowSnapshot(windows: [prompt(), app], time: t), now: t)
+            #expect(plan.covers(promptRect) && plan.promptHoles.isEmpty, "look \(k)")
+        }
+    }
+
+    @Test func aWindowAtThePromptsLevelThatIsNotThePromptStaysUnderAWholeDisplayCover() {
+        let above = WindowInfo(number: 9, ownerPID: 700, layer: CoverLevel.canvas, bounds: CGRect(x: 0, y: 0, width: 100, height: 100))
+        let lookalike = WindowInfo(number: 51, ownerPID: 901, layer: PasswordPrompt.level, bounds: promptRect)
+        let plan = coveredBehind(pipeline(), [above, lookalike, app])
+        #expect(plan.wholeDisplay == .windowAboveCovers && plan.promptHoles.isEmpty)
+        #expect(fullyCovered(plan, promptRect))
+    }
+
     @Test func coversLeftOverByTheWatcherAreNeverCut() {
         // A cover added after the pipeline (no source) is drawn whole, over the hole too.
         var plan = coveredBehind(pipeline(), [prompt(), app])
@@ -205,8 +295,12 @@ final class PerWindowScript: Judging {
 
     @Test func onlyApplesAgentOnTheSealedVolumeQualifies() {
         #expect(PasswordPrompt.ownerQualifies(agent(), allowedUIDs: uids))
-        #expect(PasswordPrompt.ownerQualifies(agent(path: "/x/SecurityAgent.bundle/Contents/XPCServices/SecurityAgentHelper-arm64.xpc/Contents/MacOS/SecurityAgentHelper-arm64",
-                                                    id: "com.apple.SecurityAgentHelper.arm64", exe: "SecurityAgentHelper-arm64"), allowedUIDs: uids))
+        // SecurityAgent's helpers host third-party authorization plug-ins: never the prompt, on the sealed volume or not.
+        for arch in ["arm64", "x86_64"] {
+            #expect(!PasswordPrompt.ownerQualifies(agent(path: "/x/SecurityAgent.bundle/Contents/XPCServices/SecurityAgentHelper-\(arch).xpc/Contents/MacOS/SecurityAgentHelper-\(arch)",
+                                                         id: "com.apple.SecurityAgentHelper.\(arch)", exe: "SecurityAgentHelper-\(arch)"), allowedUIDs: uids))
+        }
+        #expect(PasswordPrompt.bundleIDs == ["com.apple.SecurityAgent"])
         // A program named SecurityAgent, or an app claiming its bundle identifier, anywhere but the sealed volume.
         #expect(!PasswordPrompt.ownerQualifies(agent(path: "/Users/someone/SecurityAgent.bundle/Contents/MacOS/SecurityAgent", sealed: false), allowedUIDs: uids))
         // Apple's own other programs on the sealed volume.
@@ -223,7 +317,7 @@ final class PerWindowScript: Judging {
         let owners = PromptOwners(facts: { _ in
             if fail { throw SystemProcessFacts.Failure.noPath }
             return facts
-        }, startTime: { _ in start }, allowedUIDs: { [501] })
+        }, startTime: { _ in start }, allowedUIDs: { [501] }, systemIntact: { true })
         #expect(owners.isPrompt(number: 1, pid: 900))
         #expect(owners.isPrompt(number: 1, pid: 900))
         #expect(owners.checks == 1, "checked once while it stays listed")
@@ -245,6 +339,22 @@ final class PerWindowScript: Judging {
         start = nil
         #expect(!owners.isPrompt(number: 1, pid: 900))
         #expect(!owners.isPrompt(number: 1, pid: 0))
+    }
+
+    @Test func withSystemIntegrityProtectionOrAuthenticatedRootOffNoWindowIsThePrompt() {
+        var intact = true
+        let owners = PromptOwners(facts: { _ in self.agent() }, startTime: { _ in 7 }, allowedUIDs: { [501] }, systemIntact: { intact })
+        #expect(owners.isPrompt(number: 1, pid: 900))
+        intact = false
+        #expect(!owners.isPrompt(number: 1, pid: 900), "asked every time, even for a window already checked")
+        // The configuration as the kernel reports it: unreadable, or any relaxation set, is not intact.
+        #expect(SystemIntegrity.intact(read: { $0.pointee = 0; return 0 }))
+        #expect(!SystemIntegrity.intact(read: { $0.pointee = 0; return -1 }), "unreadable")
+        for bit: UInt32 in [0x1, 0x2, 0x4, 0x8, 0x20, 0x200, 0x400, 0x800] {
+            #expect(!SystemIntegrity.intact(read: { $0.pointee = bit; return 0 }), "relaxation \(bit)")
+        }
+        // The real call can be made here (whatever this Mac's answer).
+        _ = SystemIntegrity.intact()
     }
 
     @Test func theRealFactsRefuseThisTestAndLaunchd() throws {

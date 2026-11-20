@@ -4,19 +4,26 @@
 // around the prompt is covered. It is a deliberate, permanent hole in the cover, so it is kept as narrow as it can be:
 //
 // - Which window. Only facts an ordinary app cannot set for itself count (`PromptOwners`, `ownerQualifies`): the
-//   owning process's executable, read from the kernel by process identifier, must lie on the sealed system volume and
-//   be the executable of Apple's SecurityAgent bundle (or of its helper); the process must run as the owner's own user
-//   or as `_securityagent`; and its start time must be the same before and after it was checked. A window's or an
-//   app's name is never read and never counts. On top of that the window itself must look like the prompt
-//   (`shapeQualifies`, `DisplayPipeline.promptHoles`): exactly at the level the prompt was read at, fully opaque, no
-//   larger than a dialog, at most a quarter of its display, and wholly on that display.
-// - What is left clear. Only that window's own rectangle, less every window in front of it, and only while it is in
-//   the window list. A plain cover stays drawn behind it, below its level (`CoverLevel.behindPrompt`), so a see-through
-//   or rounded part of the prompt never shows what lies behind.
+//   owning process's executable, read from the kernel by process identifier, must lie on the read-only system snapshot
+//   macOS booted from and be the executable of Apple's SecurityAgent bundle; System Integrity Protection and
+//   authenticated root must both be on (`SystemIntegrity`), so that snapshot is Apple's sealed one and no process can
+//   inject code into SecurityAgent; the process must run as the owner's own user or as `_securityagent`; and its start
+//   time must be the same before and after it was checked. A window's or an app's name is never read and never counts.
+//   What this does not cover: an administrator can install an authorization plug-in (`/Library/Security/
+//   SecurityAgentPlugins`, writable only by an administrator) and so run code inside SecurityAgent or its helper, and
+//   that code could draw any window. SecurityAgent's helpers, which exist to host such plug-ins, are never exempt; an
+//   owner who is not an administrator (as SafeSight's lock makes them) cannot install one. On top of that the window
+//   itself must look like the prompt (`shapeQualifies`, `DisplayPipeline.promptHoles`): exactly at the level the
+//   prompt was read at, fully opaque, no larger than a dialog, at most a quarter of its display, and wholly on it.
+// - What is left clear. Only that window's own rectangle, less every window in front of it, only while it is in the
+//   window list where the last look saw it. A plain cover is drawn behind it, below its level
+//   (`CoverLevel.behindPrompt`), and the hole opens only on a drawing after that cover is on screen (`HoleGate`), so a
+//   see-through or rounded part of the prompt never shows what lies behind.
 // - Its own content is still judged. The prompt shows the requesting app's name and icon, and an app can choose that
 //   icon (its own, or a picture it names when it asks), drawn at about 64 by 64 points. So the hole opens only once the
-//   prompt's own pixels have been judged since it appeared (it is judged first, with a small budget of its own), and
-//   its own covers and blurs (a flagged picture in it) are drawn inside the hole like any window's.
+//   prompt's own pixels have been judged since it appeared, moved or last changed (it is judged first, with a small
+//   budget of its own; any change inside it, a new request in the same window included, covers it again until
+//   judged), and its own covers and blurs (a flagged picture in it) are drawn inside the hole like any window's.
 // - Any doubt covers, as today: an owner that cannot be read or checked, a process that changed, a window too large
 //   or not opaque, another window at or above the backing level behind it, or a display that cannot be judged.
 //
@@ -36,12 +43,13 @@ public enum PasswordPrompt {
     public static let maxHeight: CGFloat = 720
     /// The largest share of its display a prompt may take.
     public static let maxShareOfDisplay: CGFloat = 0.25
-    /// The bundles whose windows may be the prompt: Apple's SecurityAgent, which draws the authorization dialog (Touch ID
-    /// for administrator rights included), and the helpers inside it, which may draw it for an older plug-in. Not
-    /// LocalAuthentication's own sheets (`coreautha`, which apps use for their own Touch ID checks), not
+    /// The one bundle whose windows may be the prompt: Apple's SecurityAgent, which draws the authorization dialog (Touch
+    /// ID for administrator rights included). Not its helpers (`com.apple.SecurityAgentHelper.*`, inside its bundle):
+    /// they host third-party authorization plug-ins, whose code can draw any window. If the dialog turns out to be drawn
+    /// by a helper on some macOS, it stays covered there (the lab log's `prompt` lines show which owner a level-1000
+    /// window has). Not LocalAuthentication's own sheets (`coreautha`, which apps use for their own Touch ID checks), not
     /// `authorizationhost` (which draws nothing), and not the login window (above the covers already).
-    public static let bundleIDs: Set<String> = ["com.apple.SecurityAgent", "com.apple.SecurityAgentHelper.arm64",
-                                                "com.apple.SecurityAgentHelper.x86_64"]
+    public static let bundleIDs: Set<String> = ["com.apple.SecurityAgent"]
 
     /// The window's own facts from the window list, checked before anything is asked about its owner: exactly at the
     /// prompt's level, fully opaque (a window at less than full opacity shows what is behind it), and no larger than
@@ -68,12 +76,13 @@ public enum PasswordPrompt {
         /// When the process started (microseconds), from the kernel's process table: a reused process identifier has
         /// another.
         public var startTime: UInt64
-        /// True when the executable lies on the sealed, read-only system volume that macOS booted from (`statfs`: the
-        /// root file system, mounted read-only from its sealed snapshot). Nothing can be added or changed there while
-        /// System Integrity Protection is on, so an app cannot put its own program there.
+        /// True when the executable lies on the read-only system snapshot macOS booted from (`statfs`: the root file
+        /// system, mounted read-only from a snapshot). That alone is not a seal: only with authenticated root and System
+        /// Integrity Protection on (`SystemIntegrity.intact`, checked by `PromptOwners`) is it Apple's sealed volume, where
+        /// nothing can be added or changed, so an app cannot put its own program there.
         public var onSealedSystemVolume: Bool
         /// The bundle identifier and executable name in the Info.plist of the bundle the executable sits in (its
-        /// `Contents/MacOS` folder). On the sealed volume, that file is Apple's too.
+        /// `Contents/MacOS` folder). On the sealed volume, that file is Apple's too (read only when it lies there).
         public var bundleID: String?
         public var bundleExecutable: String?
 
@@ -84,20 +93,21 @@ public enum PasswordPrompt {
         }
     }
 
-    /// Whether a process is the one that draws the prompt: its executable is on the sealed system volume and is the
-    /// executable of one of `bundleIDs`, and it runs as one of `allowedUIDs` (the owner's own user, under which
-    /// SecurityAgent runs in a login session, or `_securityagent`).
+    /// Whether a process is the one that draws the prompt: its executable is on the read-only system snapshot and is the
+    /// executable of SecurityAgent's own bundle (`bundleIDs`), and it runs as one of `allowedUIDs` (the owner's own
+    /// user, under which SecurityAgent runs in a login session, or `_securityagent`). `PromptOwners` also requires
+    /// `SystemIntegrity.intact`.
     ///
-    /// Why each part cannot be faked by an ordinary app: the path comes from the kernel for the running image; the
-    /// sealed volume is read-only and cryptographically sealed, so no app can place or change a file there (a path
-    /// that only starts with "/System/" is not enough: `/System/Volumes/Data` is the writable data volume, and it fails
-    /// here); the bundle's Info.plist sits on that same volume; the user comes from the kernel. A copy of SecurityAgent
-    /// run from anywhere else, a program named SecurityAgent, or an app with that bundle identifier on the data volume
-    /// all fail.
+    /// Why each part cannot be faked by an ordinary app: the path comes from the kernel for the running image; with
+    /// authenticated root and System Integrity Protection on, the snapshot is read-only and cryptographically sealed, so
+    /// no app can place or change a file there, and no process can inject code into one running from it (a path that
+    /// only starts with "/System/" is not enough: `/System/Volumes/Data` is the writable data volume, and it fails here);
+    /// the bundle's Info.plist sits on that same volume; the user comes from the kernel. A copy of SecurityAgent run from
+    /// anywhere else, a program named SecurityAgent, or an app with that bundle identifier on the data volume all fail.
     public static func ownerQualifies(_ f: OwnerFacts, allowedUIDs: Set<uid_t>) -> Bool {
         guard f.onSealedSystemVolume, allowedUIDs.contains(f.uid), let id = f.bundleID, bundleIDs.contains(id),
               let exe = f.bundleExecutable, !exe.isEmpty, !exe.contains("/") else { return false }
-        return f.executablePath.hasSuffix(".bundle/Contents/MacOS/" + exe) || f.executablePath.hasSuffix(".xpc/Contents/MacOS/" + exe)
+        return f.executablePath.hasSuffix(".bundle/Contents/MacOS/" + exe)
     }
 }
 
@@ -111,6 +121,7 @@ public final class PromptOwners: @unchecked Sendable {
     let facts: Facts
     let startTime: (Int32) -> UInt64?
     let allowedUIDs: () -> Set<uid_t>
+    let systemIntact: () -> Bool
     struct Key: Hashable { var number: UInt32; var pid: Int32 }
     /// Each window checked while it has been listed: its owner's start time when checked, and the answer.
     var known: [Key: (start: UInt64, prompt: Bool)] = [:]
@@ -118,13 +129,15 @@ public final class PromptOwners: @unchecked Sendable {
     public private(set) var checks = 0
     private let lock = NSLock()
 
-    public init(facts: @escaping Facts, startTime: @escaping (Int32) -> UInt64?, allowedUIDs: @escaping () -> Set<uid_t>) {
-        self.facts = facts; self.startTime = startTime; self.allowedUIDs = allowedUIDs
+    public init(facts: @escaping Facts, startTime: @escaping (Int32) -> UInt64?, allowedUIDs: @escaping () -> Set<uid_t>,
+                systemIntact: @escaping () -> Bool) {
+        self.facts = facts; self.startTime = startTime; self.allowedUIDs = allowedUIDs; self.systemIntact = systemIntact
     }
 
-    /// True only when this window's owner is the prompt's process (see `PasswordPrompt.ownerQualifies`).
+    /// True only when this window's owner is the prompt's process (see `PasswordPrompt.ownerQualifies`), on a Mac with
+    /// System Integrity Protection and authenticated root on (asked every time: a doubt is no).
     public func isPrompt(number: UInt32, pid: Int32) -> Bool {
-        guard pid > 0, let now = startTime(pid) else { return false }
+        guard pid > 0, systemIntact(), let now = startTime(pid) else { return false }
         let key = Key(number: number, pid: pid)
         lock.lock(); let seen = known[key]; lock.unlock()
         if let seen, seen.start == now { return seen.prompt }
@@ -147,6 +160,29 @@ public final class PromptOwners: @unchecked Sendable {
         public init(number: UInt32, pid: Int32) { self.number = number; self.pid = pid }
     }
 }
+
+/// Whether System Integrity Protection and authenticated root are on, as the kernel reports them
+/// (`csr_get_active_config`, exported by libSystem; it needs no framework and works inside the App Sandbox, checked on
+/// macOS 26). With either turned off, the system snapshot need not be Apple's sealed one, and code can be injected into
+/// SecurityAgent, so no window is the prompt. A configuration that cannot be read counts as off.
+public enum SystemIntegrity {
+    /// The relaxations that would let the rule be fooled: unsigned or unapproved kernel extensions (0x1, 0x200),
+    /// unrestricted file system (0x2), `task_for_pid` (0x4), the kernel debugger (0x8), unrestricted DTrace (0x20),
+    /// the executable policy override (0x400) and unauthenticated root (0x800). Any one of them set: not intact.
+    public static let relaxations: UInt32 = 0x1 | 0x2 | 0x4 | 0x8 | 0x20 | 0x200 | 0x400 | 0x800
+
+    /// True when the kernel's configuration was read and none of `relaxations` is set.
+    public static func intact(read: (UnsafeMutablePointer<UInt32>) -> Int32 = csrActiveConfig) -> Bool {
+        var config: UInt32 = .max
+        guard read(&config) == 0 else { return false }
+        return config & relaxations == 0
+    }
+
+    public static let csrActiveConfig: (UnsafeMutablePointer<UInt32>) -> Int32 = { csr_get_active_config($0) }
+}
+
+@_silgen_name("csr_get_active_config")
+private func csr_get_active_config(_ config: UnsafeMutablePointer<UInt32>) -> Int32
 
 /// The real facts about a process, from the kernel and the file system: `proc_pidpath`, the kernel's process table and
 /// `statfs`, and the Info.plist of the bundle around the executable. No name is read from the process, no framework
@@ -178,7 +214,8 @@ public enum SystemProcessFacts {
 
     public static func startTime(_ pid: Int32) -> UInt64? { process(pid)?.start }
 
-    /// True when `path` lies on the root file system, mounted read-only from its sealed snapshot: the system volume
+    /// True when `path` lies on the root file system, mounted read-only from a snapshot (not by itself proof of a seal:
+    /// `SystemIntegrity` adds that): the system volume
     /// macOS booted from. The data volume (`/System/Volumes/Data`, and everything firmlinked into it, such as
     /// `/Applications` or `/Library`) is another, writable file system, and fails.
     public static func onSealedSystemVolume(_ path: String) -> Bool {
@@ -194,7 +231,7 @@ public enum SystemProcessFacts {
         guard let p = process(pid) else { throw Failure.noProcess }
         guard let path = executablePath(pid), path.hasPrefix("/") else { throw Failure.noPath }
         let sealed = onSealedSystemVolume(path)
-        // The bundle around the executable: <bundle>/Contents/MacOS/<executable>. Read only on the sealed volume.
+        // The bundle around the executable: <bundle>/Contents/MacOS/<executable>. Read only on the read-only system volume.
         var id: String?, exe: String?
         let url = URL(fileURLWithPath: path)
         let contents = url.deletingLastPathComponent().deletingLastPathComponent()
