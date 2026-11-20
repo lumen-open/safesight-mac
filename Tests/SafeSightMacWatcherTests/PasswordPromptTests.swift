@@ -15,10 +15,23 @@ final class PerWindowScript: Judging {
     var flagged: Set<UInt64> = []
     /// Windows judged in part: half their area clean, the rest left unjudged.
     var partial: Set<UInt64> = []
+    /// Windows whose every call faults (a model failure), spending the budget it is given.
+    var faulty: Set<UInt64> = []
+    /// The pictures the finder "sees" (none by default; nil: this judge cannot say).
+    var pictures: [PixelRect]? = []
     var calls: [UInt64] = []
+    var areas: [(id: UInt64, area: PixelRect, budget: Int)] = []
+    func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? {
+        pictures.map { $0.filter { $0.intersects(area) } }
+    }
     func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
                    progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
         calls.append(context.windowID)
+        areas.append((context.windowID, area, budget))
+        if faulty.contains(context.windowID) {
+            return FrameVerdict(regions: [RegionVerdict(rect: area, display: .contain, reason: .overload, pass: .whole)],
+                                coverWindow: false, strike: false, hot: false, judgements: budget, overloaded: 1, modelFaults: 1)
+        }
         if unjudged.contains(context.windowID) {
             return FrameVerdict(regions: [RegionVerdict(rect: area, display: .contain, reason: .overload, pass: .whole)],
                                 coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: 1)
@@ -37,6 +50,20 @@ final class PerWindowScript: Judging {
         return VerdictScript.clean(area)
     }
     func setRule(_ rule: DetectorRule) {}
+}
+
+/// The real detector, counting the judgements made for each window.
+final class CountingJudge: Judging {
+    let inner = Fixtures.detector()
+    var judgements: [UInt64: Int] = [:]
+    func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
+                   progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+        let v = inner.judgeArea(frame, context: context, within: area, budget: budget, progress: progress)
+        judgements[context.windowID, default: 0] += v.judgements
+        return v
+    }
+    func setRule(_ rule: DetectorRule) {}
+    func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { inner.pictureRegions(frame, within: area) }
 }
 
 @Suite struct PasswordPromptTests {
@@ -221,17 +248,110 @@ final class PerWindowScript: Judging {
         }
     }
 
-    @Test func aChangeInsideAnOpenHoleClosesItUntilJudgedAgain() {
+    @Test func aSmallChangeLeftUnjudgedStaysCoveredWhileTheHoleStaysOpen() {
         let j = PerWindowScript()
         let p = pipeline(j)
         #expect(clear(coveredBehind(p, [prompt(), app]), promptRect))
-        // A new request in the same window (its pixels change) that cannot be judged now: closed.
+        // A change of about a tenth of the prompt, away from any picture, that cannot be judged now.
         j.unjudged = [JudgeTarget.window(number: 50, ownerPID: 900).contextID]
+        // 40 by 40 points across four of its 32-pixel blocks (4096 of 32000 square points: 12.8%).
         var img = Fixtures.blank(600, 400)
-        Fixtures.paint(&img, PixelRect(x: 220, y: 140, w: 60, h: 60), channel: nil, seed: 9)
-        let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 216, y: 136, w: 68, h: 68)], t: 0.2),
+        Fixtures.paint(&img, PixelRect(x: 240, y: 160, w: 40, h: 40), channel: nil, seed: 9)
+        let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 236, y: 156, w: 48, h: 48)], t: 0.2),
                              snapshot: WindowSnapshot(windows: [prompt(), app], time: 0.2), now: 0.2)
-        #expect(plan.covers(promptRect) && plan.promptHoles.isEmpty)
+        #expect(plan.promptHoles == [promptRect], "the hole stays")
+        #expect(fullyCovered(plan, CGRect(x: 240, y: 160, width: 40, height: 40)), "the change stays covered until judged")
+        // (A change that could hold a picture is judged over the whole prompt; left unjudged, that is blurred too.)
+    }
+
+    /// Blocks of the prompt's 32-pixel grid (from its corner), painted with texture: `n` of them, row by row.
+    func paintBlocks(_ n: Int, seed: UInt32 = 4) -> RGBAImage {
+        var img = Fixtures.blank(600, 400)
+        for k in 0..<n {
+            let x = 200 + 32 * (k % 6), y = 120 + 32 * (k / 6)
+            Fixtures.paint(&img, PixelRect(x: x, y: y, w: 32, h: 32), channel: nil, seed: seed + UInt32(k))
+        }
+        return img
+    }
+
+    /// 25% of the prompt (200 by 160 points) is 8000 square points: 7 blocks (7168) stay under, 8 (8192) go over.
+    @Test func theQuarterBoundaryDecidesBetweenCoveringBlocksAndClosingTheHole() {
+        for (n, closes) in [(7, false), (8, true)] {
+            let j = PerWindowScript()
+            let p = pipeline(j)
+            #expect(clear(coveredBehind(p, [prompt(), app]), promptRect))
+            j.unjudged = [JudgeTarget.window(number: 50, ownerPID: 900).contextID]
+            let plan = p.process(Fixtures.frame(paintBlocks(n), display: d, scale: 1, dirty: [PixelRect(x: 200, y: 120, w: 200, h: 64)], t: 0.2),
+                                 snapshot: WindowSnapshot(windows: [prompt(), app], time: 0.2), now: 0.2)
+            #expect(plan.promptHoles.isEmpty == closes, "\(n) blocks")
+            #expect(fullyCovered(plan, CGRect(x: 200, y: 120, width: 192, height: 32)), "\(n) blocks: the change is covered either way")
+        }
+    }
+
+    @Test func aPictureAppearingInAPromptWithNoneKeepsTheHoleAndIsCovered() {
+        // A blank prompt (the finder sees no picture), then a 64 by 64 flagged picture appears in it: 12.8% of it.
+        let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: 1e6, ignoredPIDs: [42], callWallMs: .infinity)
+        #expect(clear(coveredBehind(p, [prompt(), app]), promptRect))
+        #expect(p.promptPictures[.window(number: 50, ownerPID: 900)] == [], "no picture seen in the blank prompt")
+        var img = Fixtures.blank(600, 400)
+        Fixtures.paintFlagged(&img, PixelRect(x: 260, y: 160, w: 64, h: 64))
+        let pic = CGRect(x: 260, y: 160, width: 64, height: 64)
+        var early: [CoverPlan] = []
+        let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 256, y: 152, w: 72, h: 80)], t: 0.2),
+                             snapshot: WindowSnapshot(windows: [prompt(), app], time: 0.2), now: 0.2) { early.append($0) }
+        #expect(plan.promptHoles == [promptRect], "the hole stays open")
+        #expect(fullyCovered(plan, pic), "the flagged picture is covered")
+        #expect(early.allSatisfy { fullyCovered($0, pic) }, "and never shown before")
+    }
+
+    @Test func aPromptReplacedPieceByPieceIsJudgedWholeAgain() {
+        let j = PerWindowScript()
+        let p = pipeline(j)
+        #expect(clear(coveredBehind(p, [prompt(), app]), promptRect))
+        let whole = PixelRect(x: 200, y: 120, w: 200, h: 160)
+        let id = JudgeTarget.window(number: 50, ownerPID: 900).contextID
+        var img = Fixtures.blank(600, 400)
+        var closedAt: Int?
+        // Four thin strips, one block row each (each a fifth of the prompt): small one by one, not added up.
+        for k in 0..<4 {
+            j.areas = []
+            Fixtures.paint(&img, PixelRect(x: 200, y: 120 + 40 * k, w: 200, h: 6), channel: nil, seed: 20 + UInt32(k))
+            let t = 0.2 + 0.1 * Double(k)
+            _ = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 200, y: 120 + 40 * k, w: 200, h: 8)], t: t),
+                          snapshot: WindowSnapshot(windows: [prompt(), app], time: t), now: t)
+            if closedAt == nil, j.areas.contains(where: { $0.id == id && $0.area == whole }) { closedAt = k }
+        }
+        #expect(closedAt == 1, "the second strip takes the changes past a quarter: judged whole again (\(String(describing: closedAt)))")
+    }
+
+    /// A prompt whose every judgement faults is retried within the budget: no extra looks, the floor at most once a
+    /// second, the other windows still judged, the prompt still covered.
+    @Test func aPromptThatAlwaysFaultsTakesNoMoreThanItsShare() {
+        let j = PerWindowScript()
+        let promptID = JudgeTarget.window(number: 50, ownerPID: 900).contextID
+        j.faulty = [promptID]
+        let p = DisplayPipeline(display: d, judger: j, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [42], callWallMs: .infinity)
+        let windows = [prompt(), app]
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: windows, time: 0), now: 0)
+        // The first look after the display was covered whole is not held to the budget (by design): counted from here.
+        j.areas = []
+        var appCalls = 0, plan = CoverPlan.clear(d)
+        // Four seconds: something changes in the app every quarter of a second, and idle looks between when asked for.
+        for k in 1...32 {
+            let t = Double(k) / 8
+            let before = j.calls.count
+            if k % 2 == 0 {
+                plan = p.process(touched(k, t: t), snapshot: WindowSnapshot(windows: windows, time: t), now: t)
+            } else if p.needsAnotherLook {
+                plan = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t), snapshot: WindowSnapshot(windows: windows, time: t), now: t)
+            }
+            appCalls += j.calls[before...].filter { $0 == JudgeTarget.window(number: 1, ownerPID: 500).contextID }.count
+            #expect(fullyCovered(plan, promptRect) || plan.wholeDisplay != nil, "look \(k): covered")
+        }
+        let spent = j.areas.filter { $0.id == promptID }.reduce(0) { $0 + $1.budget }
+        #expect(Double(spent) <= Register.JUDGEMENT_BURST + 4 * Register.JUDGEMENT_BUDGET + 5 * Double(DisplayPipeline.promptFloor), "\(spent) judgements")
+        #expect(appCalls >= 10, "the app's window is still judged (\(appCalls) calls)")
+        #expect(!p.promptLookDue, "a faulting prompt asks for no extra looks")
     }
 
     @Test func aMovedPromptClosesItsHoleOnALookAndOnALookWithNothingToJudge() {
@@ -291,8 +411,11 @@ final class PerWindowScript: Judging {
     @Test func aBlinkingCaretKeepsTheHoleOpenAndIsJudgedWithinTheBudget() {
         let above = WindowInfo(number: 9, ownerPID: 700, layer: CoverLevel.canvas, bounds: CGRect(x: 0, y: 0, width: 100, height: 100))
         for windows in [[prompt(), app], [above, prompt(), app]] {
-            let p = DisplayPipeline(display: d, judger: Fixtures.detector(), budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [42], callWallMs: .infinity)
+            let j = CountingJudge()
+            let p = DisplayPipeline(display: d, judger: j, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [42], callWallMs: .infinity)
             #expect(clear(coveredBehind(p, windows), promptRect), "open first")
+            let promptID = JudgeTarget.window(number: 50, ownerPID: 900).contextID
+            let before = j.judgements[promptID] ?? 0
             var judgements = 0, closed = 0
             // Two seconds at 30 frames a second, the caret on and off every frame.
             for k in 0..<60 {
@@ -303,8 +426,14 @@ final class PerWindowScript: Judging {
                 // The rest of the prompt, the field typed into included, stays in sight.
                 #expect(clear(plan, CGRect(x: 200, y: 120, width: 50, height: 160)) && clear(plan, CGRect(x: 280, y: 120, width: 120, height: 160)),
                         "\(windows.count) windows, frame \(k)")
+                // Nothing of the prompt's asks for another look between blinks (the app's own cover may).
+                #expect(!p.promptLookDue && p.promptCoverFirst.isEmpty, "frame \(k): the caret was judged in its own look")
             }
             #expect(closed == 0, "the hole never closes for a caret")
+            let forCaret = (j.judgements[promptID] ?? 0) - before
+            // A caret holds no picture: the 60 frames cost a handful of judgements in all (the regular re-judges), not some
+            // every frame.
+            #expect(forCaret <= 10, "a caret, no picture: about nothing to judge (\(forCaret) in 60 frames)")
             #expect(Double(judgements) <= Register.JUDGEMENT_BURST + 2 * Register.JUDGEMENT_BUDGET + 1, "\(judgements) judgements in 2 s: within the budget")
         }
     }

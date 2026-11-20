@@ -3,6 +3,7 @@
 // the rectangle with the covers still over it, then the hole. A hole that moves is covered again until its backing has
 // moved too.
 import CoreGraphics
+import Foundation
 import Testing
 @testable import SafeSightMacCover
 @testable import SafeSightMacWatcher
@@ -126,14 +127,41 @@ import Testing
         #expect(w.panels.allSatisfy { !$0.shown }, "every backing taken down once its hole is gone")
     }
 
-    @Test func aBackingThatCannotBeDrawnKeepsItsHoleClosed() {
-        let w = World()
-        final class Broken: BackingPanel {
-            func place(_ f: CGRect, theme: CoverTheme) -> Bool { false }
-            func hide() {}
+    final class Flaky: BackingPanel {
+        var failuresLeft: Int
+        init(_ n: Int) { failuresLeft = n }
+        func place(_ f: CGRect, theme: CoverTheme) -> Bool {
+            if failuresLeft > 0 { failuresLeft -= 1; return false }
+            return true
         }
-        let b = BehindPrompt(make: { Broken() }, nextTurn: { w.turns.append($0) }, toCocoa: { $0 })
-        show([CGRect(x: 100, y: 100, width: 150, height: 120)], w, b)
-        #expect(w.cut.isEmpty)
+        func hide() {}
+    }
+
+    /// A backing that cannot be drawn keeps its hole covered; it is tried again a few times, further apart, so an idle
+    /// screen recovers on its own; one that never works stops being tried. No turn loops.
+    @Test func aBackingThatCannotBeDrawnKeepsItsHoleClosedAndRecovers() {
+        for (failures, recovers) in [(1, true), (2, true), (100, false)] {
+            let w = World()
+            var delays: [TimeInterval] = []
+            let panel = Flaky(failures)
+            let b = BehindPrompt(make: { panel }, nextTurn: { w.turns.append($0) }, toCocoa: { $0 },
+                                 later: { d, f in delays.append(d); w.turns.append(f) })
+            let hole = CGRect(x: 100, y: 100, width: 150, height: 120)
+            let plan = CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [hole])
+            var cuts: [Set<HoleGate.Hole>] = []
+            func draw(_ plans: [CoverPlan]) {
+                let cut = Set(plans.flatMap { p in p.promptHoles.filter { r in !p.items.contains { $0.rect == r } }.map { HoleGate.Hole(display: p.display.id, rect: $0) } })
+                cuts.append(cut)
+            }
+            func apply(_ plans: [CoverPlan]) { b.apply(plans, theme: .light, draw: draw, again: apply) }
+            apply([plan])
+            #expect(cuts.first == [], "covered while its backing cannot be drawn")
+            var turns = 0
+            while !w.turns.isEmpty && turns < 50 { w.turns.removeFirst()(); turns += 1 }
+            #expect(turns < 50, "no turn loops")
+            #expect(delays.count <= BehindPrompt.retries, "\(delays)")
+            #expect(delays == delays.sorted(), "further apart each time")
+            #expect((cuts.last == [HoleGate.Hole(display: 1, rect: hole)]) == recovers, "failures \(failures): \(cuts)")
+        }
     }
 }

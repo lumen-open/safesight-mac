@@ -112,11 +112,21 @@ final class BehindPrompt {
     private let make: @MainActor () -> BackingPanel
     private let nextTurn: @MainActor (@escaping Turn) -> Void
     private let toCocoa: @MainActor (CGRect) -> CGRect
+    private let later: @MainActor (TimeInterval, @escaping Turn) -> Void
+    /// Tries left, for a backing that could not be drawn, before the next change on screen: a few, further apart each
+    /// time (0.25, 0.5, 1 and 2 seconds), never a tight loop. Back to the full count once every backing is up.
+    static let retries = 4
+    private var retriesLeft = BehindPrompt.retries
+    private var retryPending = false
+    /// The latest plans: a retry draws these, not the ones it was scheduled with.
+    private var latest: [CoverPlan] = []
 
     init(make: @escaping @MainActor () -> BackingPanel = { CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1)) },
          nextTurn: @escaping @MainActor (@escaping Turn) -> Void = { f in DispatchQueue.main.async { MainActor.assumeIsolated { f() } } },
-         toCocoa: @escaping @MainActor (CGRect) -> CGRect = { CoordinateSpace.toCocoa($0, primaryHeight: CoverCanvas.primaryHeight) }) {
-        self.make = make; self.nextTurn = nextTurn; self.toCocoa = toCocoa
+         toCocoa: @escaping @MainActor (CGRect) -> CGRect = { CoordinateSpace.toCocoa($0, primaryHeight: CoverCanvas.primaryHeight) },
+         later: @escaping @MainActor (TimeInterval, @escaping Turn) -> Void = { d, f in
+             DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } }) {
+        self.make = make; self.nextTurn = nextTurn; self.toCocoa = toCocoa; self.later = later
     }
 
     /// Draws the backings `plans` want, then the covers by `draw`, with every hole still closed whose backing was not up
@@ -124,6 +134,7 @@ final class BehindPrompt {
     /// `plans` again by `again` if a hole was held back (unless newer plans came first).
     func apply(_ plans: [CoverPlan], theme: CoverTheme, draw: ([CoverPlan]) -> Void, again: @escaping ([CoverPlan]) -> Void) {
         serial += 1
+        latest = plans
         let wanted = HoleGate.holes(plans)
         for h in wanted where assigned[h] == nil { assigned[h] = spare.popLast() ?? make() }
         var up: Set<HoleGate.Hole> = []
@@ -141,6 +152,20 @@ final class BehindPrompt {
         // Drawn again only for a hole held back whose backing is up now (it opens then); one whose backing could not be
         // drawn stays covered, and is not retried in a loop.
         let held = up.contains { !open.contains($0) }
+        // A backing that could not be drawn: its hole stays covered, and the same plans are tried again a few times
+        // (so an idle screen recovers without waiting for a change), then no more until the next plans.
+        if wanted.allSatisfy(up.contains) {
+            retriesLeft = Self.retries
+        } else if retriesLeft > 0, !retryPending {
+            let delay = 0.25 * Double(1 << (Self.retries - retriesLeft))
+            retriesLeft -= 1
+            retryPending = true
+            later(delay) { [weak self] in
+                guard let self else { return }
+                self.retryPending = false
+                again(self.latest)
+            }
+        }
         let going = Set(assigned.keys).subtracting(wanted)
         guard held || !going.isEmpty else { return }
         let mine = serial
@@ -163,6 +188,7 @@ final class BehindPrompt {
     /// After every cover is gone.
     func removeAll() {
         serial += 1
+        latest = []
         takeDown(keeping: [])
         gate.drew([])
     }
