@@ -25,6 +25,7 @@ public final class CaptureLink {
         self.coordinator = coordinator
         coordinator.restartCapture = { [weak self] g in self?.send { s, only in await s.start(only: only, generation: g) } }
         coordinator.topUpCapture = { [weak self] g in self?.send { s, only in await s.topUp(only: only, generation: g) } }
+        coordinator.pauseCapture = { [weak self] g in self?.send { s, _ in await s.pause(generation: g) } }
     }
 
     /// What a scheduler tells this link's coordinator.

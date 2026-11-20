@@ -71,8 +71,11 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     func capturedCounts() -> [String: Int] { seenLock.withLock { captured } }
     /// Displays whose pipeline still has something to judge on a still screen (main thread only).
     private var wantsLook: Set<UInt32> = []
-    /// How long a still screen waits before the watcher asks for a look at the last frame itself.
-    static let idleLookAfter: TimeInterval = 0.25
+    /// How hard the looks at a still screen work (main thread; `energyOnJudging` is the judging queue's copy). On battery,
+    /// in Low Power Mode or when the Mac is hot, the looks that let covers lift come less often and use less of the
+    /// budget: covers stay up longer, and nothing is shown sooner.
+    @MainActor private(set) var energy = EnergyMode.full
+    private var energyOnJudging = EnergyMode.full
     /// What every display shows now: one plan per display the OS lists.
     @MainActor var plans: [CoverPlan] { coordinator.shown }
 
@@ -201,10 +204,20 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// The Mac or its displays woke, or the session came back: as a display change, for that reason.
     @MainActor func resume(_ reason: HoldReason) { coordinator.didChange(reason) }
 
+    @MainActor func setEnergy(_ mode: EnergyMode) {
+        energy = mode
+        judgeQueue.async { [weak self] in
+            self?.energyOnJudging = mode
+            self?.pipelines.values.forEach { $0.energy = mode }
+        }
+    }
+
     func setRule(_ rule: DetectorRule) { judgeQueue.async { [weak self] in self?.detector?.setRule(rule) } }
 
     /// Counts loads, so that only the latest one's outcome counts (main thread only).
     private var loadToken = 0
+    /// The load whose warm-up ran past `WARM_UP_LIMIT` and is still going: if it ends well, covering starts after all.
+    private var slowWarmUp: Int?
 
     /// Loads the detector and warms its models up before anything is judged. Every display stays covered whole until
     /// it is ready: a load that fails, a warm-up that fails or one that runs past `Register.WARM_UP_LIMIT` is a
@@ -228,13 +241,25 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
                 catch { DispatchQueue.main.async { self.loadFailed(token) }; return }
                 // A backstop on the main thread in case a model call itself does not come back.
                 DispatchQueue.main.async { self.armWarmUpDeadline(token) }
-                guard d.warmUp(limit: Register.WARM_UP_LIMIT) else { DispatchQueue.main.async { self.loadFailed(token) }; return }
+                // The first load at a new place can take longer than `WARM_UP_LIMIT` while Core ML builds its cache (12.3 s
+                // in the virtual Mac). Past the limit the main thread reports a failure (covered whole, the repair card);
+                // a warm-up that still ends well within `WARM_UP_SLOW_LIMIT` then starts covering as "try again" would,
+                // so a slow first load never leaves the displays covered for good. Nothing is judged or shown before.
+                guard d.warmUp(limit: Register.WARM_UP_SLOW_LIMIT) else { DispatchQueue.main.async { self.loadFailed(token) }; return }
                 self.detector = d
             } else {
                 self.detector?.setRule(rule)
             }
             DispatchQueue.main.async {
-                guard self.running, token == self.loadToken, !self.detectorFailed else { return }
+                guard self.running, token == self.loadToken else { return }
+                if self.detectorFailed {
+                    // Only a warm-up that ran past the limit and then ended well recovers by itself; any other failure stays.
+                    guard self.slowWarmUp == token else { return }
+                    self.detectorFailed = false
+                    self.coordinator.restart()
+                    self.onChange?()
+                }
+                self.slowWarmUp = nil
                 self.link.ready = true
                 self.coordinator.restartNow()
             }
@@ -243,6 +268,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     @MainActor private func loadFailed(_ token: Int) {
         guard token == loadToken else { return }
+        slowWarmUp = nil
         reportDetectorFailure()
     }
 
@@ -250,6 +276,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     @MainActor private func armWarmUpDeadline(_ token: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + Register.WARM_UP_LIMIT + 1) { [weak self] in
             guard let self, token == self.loadToken, !self.link.ready, !self.detectorFailed else { return }
+            self.slowWarmUp = token
             self.reportDetectorFailure()
         }
     }
@@ -312,6 +339,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             p = DisplayPipeline(display: f.display, judger: det, budgetShare: Register.JUDGEMENT_BUDGET / Double(max(1, judgedIDs.count)),
                                 ignoredPIDs: [ownPID])
             p.cover(because: .notYetJudged, until: need)
+            p.energy = energyOnJudging
             pipelines[id] = p
         }
         let start = ProcessInfo.processInfo.systemUptime
@@ -352,7 +380,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// so a display change nobody announced is covered too.
     @MainActor private func startTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: Register.TICK, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
     }
@@ -382,14 +410,14 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     }
 
     /// A still screen sends no frames, but covers waiting to lift must still be judged again: for each display that has
-    /// something left to judge, with no frame waiting or being judged and none for `idleLookAfter`, a "nothing changed"
+    /// something left to judge, with no frame waiting or being judged and none for `energy.lookEvery`, a "nothing changed"
     /// frame of its current stream is queued, and judged on the last frame's pixels like any idle frame. It never carries
     /// pixels, so it can never replace a frame waiting to be judged, and a frame from an older stream is never judged.
     @MainActor private func askForLooks(now: TimeInterval) {
         let waiting = frames.waiting(now: now)
         for id in wantsLook {
             let last: (display: DisplayDescriptor, generation: Int, at: TimeInterval)? = seenLock.withLock {
-                guard let l = lastFrame[id], now - l.at >= Self.idleLookAfter else { return nil }
+                guard let l = lastFrame[id], now - l.at >= energy.lookEvery - 0.01 else { return nil }
                 lastFrame[id]?.at = now
                 return l
             }

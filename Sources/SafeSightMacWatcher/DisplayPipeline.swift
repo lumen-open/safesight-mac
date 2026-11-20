@@ -76,6 +76,8 @@ public final class DisplayPipeline {
     var checkBase: (image: RGBAImage, map: CaptureMap, generation: Int)?
     var reportedSince: [PixelRect] = []
     public private(set) var dirtyMismatches = 0
+    /// Frames at a settled screen whose pixels were all the last judged frame's: not judged (a count only).
+    public private(set) var unchangedFrames = 0
     var lastFrameTime: TimeInterval?
     /// Cover first when judging a window's new pictures would end later than this after the frame arrived
     /// (`COVER_GOAL`; tests that run unoptimised builds raise it).
@@ -155,11 +157,21 @@ public final class DisplayPipeline {
                 callWallMs: Double = Register.JUDGE_CALL_WALL * 1000) {
         self.display = display; self.judger = judger; self.ignoredPIDs = ignoredPIDs; self.callWallMs = callWallMs
         self.bucket = TokenBucket(rate: budgetShare)
+        self.budgetShare = budgetShare
         // A display starts covered whole until its first judged frame.
         self.lastPlan = .covered(display, because: .notYetJudged)
     }
 
-    public func setBudgetShare(_ rate: Double) { bucket.rate = rate }
+    public func setBudgetShare(_ rate: Double) { budgetShare = rate; bucket.rate = rate }
+    /// This display's share of `JUDGEMENT_BUDGET`.
+    public private(set) var budgetShare: Double
+    /// How hard the looks at a still screen may work (`EnergyMode`). Only the looks that let covers lift slow down.
+    public var energy = EnergyMode.full
+    /// Judgements a second for the looks that only let covers lift: the mode's share of the budget, and no more than the
+    /// mode's duty cycle allows at the measured cost of a judgement here.
+    public var settleRate: Double {
+        min(budgetShare * energy.settleRateScale, energy.settleDuty * 1000 / max(msPerJudgement, 0.01))
+    }
 
     /// What the pipeline holds now, in counts only (for the lab event log and tests; nothing about screen content).
     public struct Diagnostics: Sendable, Equatable {
@@ -250,6 +262,11 @@ public final class DisplayPipeline {
             // Pictures seen clean once get their second clean check meanwhile (step 3c).
             guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap,
                   !(held.isEmpty && pending.isEmpty && dueAgain.isEmpty && !secondChecksWanted) else { return lastPlan }
+            // Saving energy slows only the settling: with nothing new left to judge, the budget comes in at the mode's
+            // share, so covers already up lift later (never sooner). Work left over from new pictures keeps the full rate.
+            // And on a slow Mac (no Neural Engine, a virtual Mac) the settling takes at most `energy.settleDuty` of the
+            // judging time, by the measured cost of a judgement: the same evidence, at a lower duty cycle.
+            bucket.rate = pending.isEmpty ? settleRate : budgetShare
             return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer,
                        idle: true, provisional: provisional)
         case .complete:
@@ -258,6 +275,18 @@ public final class DisplayPipeline {
             }
             // The first frame of another stream is judged whole, with no motion carried over from the old stream.
             let sameStream = judgedGeneration == f.generation
+            // A settled screen (nothing held, nothing left, nothing due) and a frame whose every pixel is the last judged
+            // frame's: nothing on screen has changed, so it is what a still screen that sends no frame is, and nothing is
+            // judged. Without this, such a frame (the capture sends them, for instance when the covers' own windows are
+            // redrawn) made a full re-judge of the whole display every `FULL_REJUDGE`. The pixels are compared, every
+            // one, so a frame that only claims nothing changed is judged as before.
+            if judged, sameStream, f.dirty?.isEmpty == true, held.isEmpty, pending.isEmpty, dueAgain.isEmpty, !secondChecksWanted,
+               let last = lastImage, lastMap == map, !DirtyRegions.changedOutside(old: last, new: img, reported: []) {
+                unchangedFrames += 1
+                return lastPlan
+            }
+            // New pixels are judged at the full budget in every energy mode.
+            bucket.rate = budgetShare
             let previous = sameStream && lastMap.map { $0 == map } == true ? lastImage : nil
             // The reported changed areas are checked against the pixels now and then: this frame is compared with the frame
             // of the last check, outside every area reported since. A change anywhere else, in any frame between, means they

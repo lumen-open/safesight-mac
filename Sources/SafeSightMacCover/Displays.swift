@@ -135,6 +135,10 @@ public final class CoverCoordinator {
     public var restartCapture: (@MainActor (_ generation: Int) -> Void)?
     /// Starts streams only for displays without one: a display ScreenCaptureKit did not list yet, a stream that stopped.
     public var topUpCapture: (@MainActor (_ generation: Int) -> Void)?
+    /// Stops every capture stream and starts none (asleep, locked, or another session on the console). Capture starts
+    /// again with the restart that follows the end of the hold; every display stays covered whole until a judged frame
+    /// of a stream started after that.
+    public var pauseCapture: (@MainActor (_ generation: Int) -> Void)?
     /// Hands the judging queue the judged displays (counted here from the OS's lists) and each display's required
     /// stream generation. Called whenever either changes.
     public var judging: (@MainActor (_ judged: [UInt32], _ required: [UInt32: Int]) -> Void)?
@@ -245,6 +249,7 @@ public final class CoverCoordinator {
             coverage.hold(.locked)
         }
         present(urgent: true)
+        if reason != .change { pauseForHold() }
     }
 
     /// A change has been applied (`.change`), or the Mac or its displays woke, or the session came back. The displays
@@ -316,6 +321,7 @@ public final class CoverCoordinator {
             holdSince[.locked] = now
             coverage.hold(.locked)
             draw(urgent: true)
+            pauseForHold()
         }
         var redraw = stalled != self.stalled || unjudged != self.unjudged
         self.stalled = stalled
@@ -392,6 +398,16 @@ public final class CoverCoordinator {
             judging?(judged, required)
         }
         onShown?(shown)
+    }
+
+    /// Sleep, display sleep, the lock screen or another session: nothing on screen is this session's to judge, so capture
+    /// stops (it costs energy and judges nothing that could be shown). It never lowers a cover: every display is covered
+    /// whole by the hold already, and the streams' stops retire their generations. Any restart already due waits for the
+    /// end of the hold, which restarts capture; the coming restart outranks this pause.
+    private func pauseForHold() {
+        guard coverage.holds.contains(where: { $0 != .change }) else { return }
+        topUpDue = nil
+        pauseCapture?(coverage.newRequest())
     }
 
     private func requestRestart(after delay: TimeInterval) {

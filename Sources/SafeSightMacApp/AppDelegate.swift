@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var howItWorks: HowItWorksWindow?
     /// CoreGraphics' display reconfiguration callback: every display is covered the moment macOS announces a change.
     private var reconfiguration: DisplayReconfiguration?
+    /// On battery, Low Power Mode and heat: the watcher's energy mode follows them (covers lift later, nothing shows sooner).
+    private var power: PowerState?
     #if SAFESIGHTMAC_TESTING
     let testing = TestingEditionApp()
     #endif
@@ -82,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ws.addObserver(forName: back, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.watcher.resume(reason) } }
         }
+        let power = PowerState { [weak self] mode in self?.watcher.setEnergy(mode) }
+        power.start()
+        self.power = power
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.watcher.displaysDidChange() } }
 
