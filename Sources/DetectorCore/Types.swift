@@ -18,6 +18,8 @@ public enum Reason: String, Sendable, Codable {
     /// bothFamilies: the two families agreed. referee: one family flagged and the referee confirmed.
     /// disputed: one family flagged and no referee could settle it, so the picture is covered (SD-125).
     case judgedClean, bothFamilies, referee, disputed, containedSmall, hotContext, overload, cached, videoHold
+    /// A single-family bundle (`ModelSet.singleFamily`): its one family flagged, and that alone covers.
+    case oneFamily
     /// Exactly these pixels were judged clear before, too near a cut-off for the verdict cache to keep (the margin rule),
     /// and this call's budget did not reach them again. Shown as judged, never counted as a fresh judgement: the caller
     /// lifts no cover on it.

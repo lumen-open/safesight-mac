@@ -125,6 +125,22 @@ public final class Detector {
         }
     }
 
+    /// Runs every model on a blank tensor before anything is judged, and says whether each gave a usable score, all
+    /// within `limit` seconds. A model's first prediction pays for loading it (on the Neural Engine Core ML can time
+    /// that one out under load), so a model that fails is asked once more while time is left; a second failure, or
+    /// running past `limit`, is a fault. Every failure is counted in `modelFaults`. Nothing is judged and nothing is
+    /// cached; the caller keeps every display covered until this returns true.
+    public func warmUp(limit: TimeInterval) -> Bool {
+        let start = Date()
+        for m in models.models + models.students + (models.referee.map { [$0] } ?? []) {
+            let blank = [[UInt8](repeating: 128, count: 3 * m.side * m.side)]
+            var ok = usableScores(m, blank) != nil
+            if !ok && Date().timeIntervalSince(start) < limit { ok = usableScores(m, blank) != nil }
+            guard ok, Date().timeIntervalSince(start) <= limit else { return false }
+        }
+        return true
+    }
+
     /// The picture regions the finder sees in `area`, through the finder cache, so the judge call that follows on the same
     /// pixels finds them there. No model runs.
     public func pictures(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect] {
@@ -370,7 +386,7 @@ public final class Detector {
                 if let s = standIn, tasks[i].pieces.contains(where: { s.detects(frame, $0) }) { flagged = true }
                 #endif
                 if flagged {
-                    progress?(.fastFlag(RegionVerdict(rect: tasks[i].rect, display: config.rule == .either ? .cover : .contain,
+                    progress?(.fastFlag(RegionVerdict(rect: tasks[i].rect, display: config.rule == .either || models.singleFamily ? .cover : .contain,
                                                       reason: .provisional, pass: .region)))
                 }
             }
@@ -443,7 +459,7 @@ public final class Detector {
             if display == .clear && covers {
                 // A flagged picture under 32 detail pixels is covered too (SD-125), but makes nothing hot.
                 display = .cover
-                reason = o.flagA && o.flagB ? .bothFamilies : .referee
+                reason = models.singleFamily && !o.forced ? .oneFamily : o.flagA && o.flagB ? .bothFamilies : .referee
                 if t.pass == .whole { coverWindow = true }
             } else if display == .clear && config.rule == .balanced && o.disputed && !o.refereeRan {
                 display = .cover
@@ -609,6 +625,13 @@ public final class Detector {
             case .b: o.flagB = o.flagB || flag; strikeB = strikeB || top >= cut.strike
             case .student: o.flagB = o.flagB || flag  // a student can add a cover; it never makes a strike
             }
+        }
+        if models.singleFamily {
+            // Single-family mode: the one family stands for both. Its flag alone covers under every rule (as Either
+            // does), makes a window hot as both families' agreement would, and there is never a dispute, so fewer
+            // models never means less covering.
+            let flag = o.flagA || o.flagB, hard = strikeA || strikeB
+            o.flagA = flag; o.flagB = flag; strikeA = hard; strikeB = hard
         }
         o.strikeBoth = strikeA && strikeB
         o.disputed = o.flagA != o.flagB

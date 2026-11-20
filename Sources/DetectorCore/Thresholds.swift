@@ -35,3 +35,14 @@ struct ThresholdTable: Codable, Sendable {
         try JSONDecoder().decode(ThresholdTable.self, from: Data(contentsOf: url))
     }
 }
+
+extension ModelManifest {
+    /// The models (by id) for which the cut-off table `json` lacks a size band, or the table cannot be read. A bundle
+    /// with any is refused: its models would otherwise run on the conservative fallback, not on cut-offs tuned for
+    /// them. Names only; no cut-off leaves.
+    public func modelsMissingCutoffs(in json: Data) -> [String] {
+        guard let t = try? JSONDecoder().decode(ThresholdTable.self, from: json) else { return models.map(\.id) }
+        let bands = Band.allCases.filter { $0 != .under16 }.map(\.rawValue)
+        return models.map(\.id).filter { id in bands.contains { t.models[id]?[$0] == nil } }
+    }
+}

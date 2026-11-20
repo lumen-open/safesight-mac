@@ -1,0 +1,85 @@
+{
+  "schema": "kestrel-models/1",
+  "families": 2,
+  "models": [
+    {
+      "id": "marqo-vit-tiny-384",
+      "slot": "A",
+      "runtime": "coreml",
+      "package": "marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage",
+      "inputSide": 384,
+      "classCount": 2,
+      "flagClasses": [
+        0
+      ],
+      "computeUnits": "cpuAndNeuralEngine",
+      "files": [
+        {
+          "path": "marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "sha256": "7f8ed2ca9c7df7c7f728b3bb7141c73f9b97a33189cd930afab4571a43a94998"
+        },
+        {
+          "path": "marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "sha256": "25f0a6ee9ddd1c5756a87f3fc61e5c0ae40e3803a36b890369a47b372079ce2d"
+        },
+        {
+          "path": "marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage/Manifest.json",
+          "sha256": "ce8389663040ae600b8c0662cb737ca64c17659a1b326605805e0e84a2efdeb7"
+        }
+      ]
+    },
+    {
+      "id": "nsfwjs-mobilenet-v2",
+      "slot": "B",
+      "runtime": "coreml",
+      "package": "nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage",
+      "inputSide": 224,
+      "classCount": 5,
+      "flagClasses": [
+        1,
+        3
+      ],
+      "computeUnits": "cpuAndNeuralEngine",
+      "files": [
+        {
+          "path": "nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "sha256": "103b3c919f0a5588c06e71a589a3722f60a07ef7dfb955ee928ca196d6036a44"
+        },
+        {
+          "path": "nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "sha256": "ee6435b2edecae6599eba431a86a295243e2273037397393936be6421bfb83ae"
+        },
+        {
+          "path": "nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage/Manifest.json",
+          "sha256": "45abee5af1cb8b94b6ef23fe98dd7eccdcac50f9bd0bb187b4ea168a0c479b69"
+        }
+      ]
+    },
+    {
+      "id": "bumble-private-detector",
+      "slot": "tie-breaker",
+      "runtime": "coreml",
+      "package": "bumble-private-detector/bumble-private-detector.fp32.mlpackage",
+      "inputSide": 480,
+      "classCount": 2,
+      "flagClasses": [
+        0
+      ],
+      "computeUnits": "cpuAndGPU",
+      "files": [
+        {
+          "path": "bumble-private-detector/bumble-private-detector.fp32.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "sha256": "d7fb06e70cb56f4c93647b13633b5110b49cc477ba0928da77571e34ecbefafa"
+        },
+        {
+          "path": "bumble-private-detector/bumble-private-detector.fp32.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "sha256": "1d8bf152c99ffbc8cd7445276c5f64ab52f91095c08d58167ada6478fd6fb744"
+        },
+        {
+          "path": "bumble-private-detector/bumble-private-detector.fp32.mlpackage/Manifest.json",
+          "sha256": "e6939705f98a1b72bb2de758fb63abe408cc9381bb38f065a68f83b3e752bb5f"
+        }
+      ]
+    }
+  ]
+}
