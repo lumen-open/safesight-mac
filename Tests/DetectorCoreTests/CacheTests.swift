@@ -116,7 +116,7 @@ final class CacheTests: XCTestCase {
 
     func testTheCacheIsBounded() {
         let c = VerdictCache(capacity: 64)
-        XCTAssertEqual(c.maxBytes, 64 * VerdictCache.bytesPerEntry)
+        XCTAssertEqual(c.maxBytes, (64 + c.markCapacity) * VerdictCache.bytesPerEntry, "the entries and the sticky marks")
         let img = noise(64, 64, seed: 3)
         let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false, cacheable: true)
         for i in 0..<5_000 {

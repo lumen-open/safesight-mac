@@ -434,7 +434,7 @@ SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-h
 - **What it means.** Two checks cut the chance a borderline picture is cached clean by about three at each showing. They do not close the gap: a picture shown many times can still get two low scores in a row. Closing it would need a stricter share where crossings were found, which is still open.
 - **Limits:** the same as the first measurement: harmless pictures only, 20 draws, half the screens and only the bands named.
 
-### Closing the clean-cache gap: a measurement of margin, checks and a sticky rule (20 November 2026)
+### Narrowing the clean-cache gap: a measurement of margin, checks and a sticky rule (20 November 2026)
 
 The measurement ran with the defaults of the time (share 0.5, two checks, restarting); the stricter margins it measures stay lab switches. The founder chose the strictest rule measured, sticky at a quarter of the cut-off with three checks, as the default: see the next section. Two clean checks narrowed the gap but did not close it: a borderline picture shown often enough can still get two low draws in a row and be remembered as clean for as long as it stays unchanged. This measures what it would take to close it, for margins 0.5, 0.4, 0.3, 0.25, 0.2 and 0.1 (the share of the cut-off a clean score must be under; verified: it is the share of the cut-off that acts there, the cover cut-off, or the containment cut-off where a blur can apply) by 2 and 3 clean checks, and for one alternative design.
 
@@ -496,7 +496,7 @@ The lab switches can now set only rules at least this strict.
 
 **At a still screen.** The background checks (`DisplayPipeline`, step 3c) give a waiting picture one check a look until it has all three. They are still bounded by 30 s of still screen; a picture that doesn't get them all by then is checked when it comes back. A picture marked borderline leaves the queue at once and is never queued again. Tests: `theLooksGiveEveryCheckAndNeverQueueAPictureOnceBorderline`, `CleanRuleTests`, `TwoCleanChecksTests`.
 
-**When the cache drops a mark.** The mark lives in the bounded verdict cache (65,536 entries, oldest first), like the counts, and goes when the cache drops the entry or is emptied (a rule change, a pause). Nothing is then left for those pixels. They are judged again as if never seen and need three fresh clearly clean judgements in a row; the first borderline one marks them again. Dropping a mark can only give a picture fresh first chances, never a clean verdict (`testADroppedMarkGivesOnlyFreshFirstChances`).
+**When a mark is lost.** The marks are kept in their own bounded set, apart from the counts and verdicts (65,536 keys, about 4 MB at most, oldest first). Switching Balanced and Either empties the counts and verdicts but keeps the marks: a mark comes from a score against a cut-off, which neither rule changes, so a switch never gives a borderline picture a fresh first chance (`testAMarkSurvivesARuleSwitch`). A pause keeps the detector and everything it holds; nothing in the app empties the cache. Only the lab benches (`Detector.removeCachedVerdicts`) and a lab rule change empty the marks, and quitting the app loses them, since nothing is kept on disk. A mark is lost only when the set drops it as the oldest. Nothing is then left for those pixels: they are judged again as if never seen and need three fresh clearly clean judgements in a row, and the first borderline one marks them again. Losing a mark can only give a picture fresh first chances, never a clean verdict (`testADroppedMarkGivesOnlyFreshFirstChances`, `testTheMarksAreBounded`).
 
 **What it costs**, with the default as shipped (no switch), against the old rule. Real models (only the sealed files, checked against the hash list), the six busy pages of harmless photos, and the virtual Mac's desktop for the still screen. Results: `results/speed-clean-default.json`.
 
@@ -513,8 +513,9 @@ The lab switches can now set only rules at least this strict.
 
 In plain words:
 - It takes about 2.1 times the judging work on a reload, and about 2.2 times on a window move.
-- A still screen takes about a minute longer to settle. Both runs settled and nothing came back.
-- No setting closes the gap for certain, this one included. In the measurement, 3 of 48 harmless crossings still had a draw under a quarter of their cut-off. The expected number cached clean falls from 14.8 to about 0.001. A borderline picture whose first three judgements all land under a quarter is still remembered as clean for as long as it stays unchanged.
+- A still screen takes about a minute longer to settle. Both runs settled and nothing came back. (The 280 and 270 s in the measurement table above are other runs of the same setting through the switch, before the merge with main; 252 and 287 s here are the default as shipped.)
+- Under load, pictures waiting to be judged again wait longer, because about half of ordinary harmless pictures (56% of entries on one draw, against 30% before) can no longer be cached and are judged again each time they come back.
+- No setting closes the gap for certain, this one included. In the measurement, 3 of 48 harmless crossings still had a draw under a quarter of their cut-off. The expected number cached clean falls from 14.8 (within 20 showings, under the old rule) to about 0.001 (for good). A borderline picture whose first three judgements all land under a quarter is still remembered as clean for as long as it stays unchanged.
 
 **Limits of the comparison.** The old-rule figures were measured earlier the same day, before this branch was merged with main at df457a6 (#28, #30, #31). A same-code re-run of main was started; its `capped` case had not finished after almost four hours of wall time, during which the Mac appears to have slept, and it was stopped, so it gave no figures. Judgement counts are exact. Times are noisy: other work kept the load average at about 23 to 27 during the runs.
 

@@ -75,7 +75,7 @@ public final class Detector {
     @discardableResult
     public func labSetCleanRule(margin: Float, checks: Int, sticky: Bool) -> Bool {
         guard cache.setRule(.init(margin: margin, checks: checks, sticky: sticky)) else { return false }
-        removeCachedVerdicts()
+        removeCachedVerdicts()   // the marks too: they were made under the other rule
         return true
     }
     /// LAB ONLY: the clean-cache rule in force (margin, checks, sticky).
@@ -115,8 +115,10 @@ public final class Detector {
         let (x, w) = grow(r.x, r.w, width); return PixelRect(x: x, y: r.y, w: w, h: r.h)
     }
 
-    /// Changes the detector rule. The verdict cache is emptied, because a cached outcome was made under
-    /// the other rule (the tie-breaker is asked only under Balanced).
+    /// Changes the detector rule. The verdict cache's counts and verdicts are emptied, because a cached outcome was made
+    /// under the other rule (the tie-breaker is asked only under Balanced). Its sticky marks stay: a mark comes from a
+    /// score against a cut-off, which neither rule changes, so switching rules never gives a borderline picture a fresh
+    /// first chance (`VerdictCache.CLEAN_STICKY`).
     public func setRule(_ rule: DetectorRule) {
         guard rule != config.rule else { return }
         config.rule = rule
@@ -124,9 +126,10 @@ public final class Detector {
         seenClear.removeAll()
     }
 
-    /// Empties the verdict cache (lab benches measure from scratch with it; pausing may use it). Emptying
-    /// only ever means judging again.
-    public func removeCachedVerdicts() { cache.removeAll(); finderCache.removeAll(); seenClear.removeAll() }
+    /// Empties the verdict cache, its sticky marks included, and the finder cache: the lab benches measure from scratch
+    /// with it. Nothing in the app calls it (a pause keeps the detector and its caches). Emptying only ever means
+    /// judging again, and a picture whose mark goes gets only fresh first chances.
+    public func removeCachedVerdicts() { cache.removeEverything(); finderCache.removeAll(); seenClear.removeAll() }
 
     /// Runs every model once on a blank tensor, so that the first real judgement does not pay for loading
     /// (the tie-breaker on the GPU costs about 0.2 s the first time). Used by the lab bench.
@@ -411,8 +414,8 @@ public final class Detector {
         for i in chosen where !fastFailed.contains(i) {
             guard let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) else { failed.insert(i); continue }
             tasks[i].outcome = o; tasks[i].judged = true
-            // A cover is kept; a clearly clean judgement adds to the entry's clean count (two in a row make it
-            // reusable); anything else starts the count again (the margin rule and `CLEAN_CHECKS`).
+            // A cover is kept; a clearly clean judgement adds to the entry's clean count (`CLEAN_CHECKS` in a row make
+            // it reusable); anything else forgets the count and, sticky, marks the entry (the margin rule, `CLEAN_STICKY`).
             cache.put(tasks[i].key, o)
             // Judged clear but not reusable from the cache yet (too near a cut-off, or clearly clean only once): these exact
             // pixels may be shown as judged earlier when a later call's budget does not reach them (`Reason.judgedEarlier`,
@@ -666,10 +669,10 @@ public final class Detector {
                 refereeCalls += t.pieces.count
             }
         }
-        // Cache a cover (reusing it only ever covers) or count a clearly clean outcome towards the two clean
-        // checks a clean verdict needs (`VerdictCache.CLEAN_CHECKS`). A borderline-clean one, a dispute the
-        // tie-breaker declined among them, is judged again with fresh jitter when it comes back; one not settled
-        // for a blur is judged again wherever a blur can apply.
+        // Cache a cover (reusing it only ever covers) or count a clearly clean outcome towards the `CLEAN_CHECKS` clean
+        // checks a clean verdict needs. A borderline-clean one, a dispute the tie-breaker declined among them, is judged
+        // again with fresh jitter when it comes back, and (sticky, the default) is never cached clean while its mark is
+        // held; one not settled for a blur is judged again wherever a blur can apply.
         let c = covers(o)
         o.covering = c
         o.cacheable = c || clearlyClean

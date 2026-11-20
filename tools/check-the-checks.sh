@@ -133,6 +133,8 @@ expect pass "standin: clean binary"                     sh "$here/check-no-stand
 expect fail "standin: binary holding the stand-in"      sh "$here/check-no-standin.sh" "$tmp/standin"
 printf '#!/bin/sh\necho LabEventLog lab-events.log\n' > "$tmp/lablog"; chmod +x "$tmp/lablog"
 expect fail "standin: binary holding the lab event log"  sh "$here/check-no-standin.sh" "$tmp/lablog"
+printf '#!/bin/sh\necho labSetCleanRule\n' > "$tmp/labrule"; chmod +x "$tmp/labrule"
+expect fail "standin: binary holding the lab clean-rule switch" sh "$here/check-no-standin.sh" "$tmp/labrule"
 expect pass "standin: a lab build on the lab path"        sh "$here/check-no-standin.sh" --lab "$tmp/standin"
 expect fail "standin: a normal build on the lab path"     sh "$here/check-no-standin.sh" --lab "$tmp/clean"
 expect fail "standin: the lab path with two files"        sh "$here/check-no-standin.sh" --lab "$tmp/standin" "$tmp/clean"
