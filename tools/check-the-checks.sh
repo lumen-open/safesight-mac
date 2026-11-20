@@ -150,6 +150,67 @@ rm "$mf/a.mlpackage/Data/extra.bin"
 ln -s /etc/hosts "$mf/a.mlpackage/link"
 expect fail "models: a link"                            sh "$here/check-model-files.sh" "$tmp/list.sha256" "$mf"
 
+# --- tools/conformance: the file checks of the conformance kit ------------------------------------------------
+# A made-up bundle of two synthetic "models" (a few bytes each, never a real model), with every file the contract asks
+# for. Each bad copy changes one thing, and the kit's file stage must refuse it.
+cf="$here/conformance/run.sh"
+python3 -I - "$tmp/bundle" <<'PY'
+import hashlib, json, os, sys
+b = sys.argv[1]
+def put(rel, data):
+    p = os.path.join(b, rel); os.makedirs(os.path.dirname(p), exist_ok=True)
+    open(p, "wb").write(data if isinstance(data, bytes) else data.encode())
+models = []
+for mid, slot in (("ma", "A"), ("mb", "B")):
+    pkg = f"{mid}/{mid}.mlpackage"
+    put(f"{pkg}/Manifest.json", "{}"); put(f"{pkg}/Data/model.mlmodel", f"synthetic {mid}")
+    models.append({"id": mid, "slot": slot, "runtime": "coreml", "package": pkg, "inputSide": 224, "classCount": 2,
+                   "flagClasses": [0], "computeUnits": "cpuAndNeuralEngine", "files": []})
+    put(f"cards/{mid}.json", json.dumps({"id": mid, "family": slot, "inputSide": 224, "classes": ["Flag", "Other"],
+        "flagClasses": ["Flag"], "notMeantToFlag": ["Other"], "licence": "Apache-2.0", "licenceFile": "LICENSES/x.txt",
+        "source": {"revision": "0" * 40}, "trainingDataAsStated": "synthetic", "files": [{"path": "x", "sha256": "a" * 64}]}))
+    inputs = []
+    for i in range(100):
+        rel = f"inputs/{i}.png"; data = f"synthetic input {i}".encode(); put(f"conformance/{mid}/{rel}", data)
+        inputs.append({"file": rel, "sha256": hashlib.sha256(data).hexdigest(), "flagScore": 0.01})
+    put(f"conformance/{mid}/reference.json", json.dumps({"schema": "kestrel-parity/1", "preprocess": "kestrel-preprocess/1",
+        "reference": "synthetic", "tolerance": {"cpuAndNeuralEngine": 0.02}, "inputs": inputs}))
+put("LICENSES/x.txt", "licence text")
+cut = {k: 0.5 for k in ("cover", "strike", "gridMember", "gridLow")}; cut["clean"] = 0.1
+put("thresholds.json", json.dumps({"schema": "kestrel-thresholds/1", "models": {m["id"]: {b_: cut for b_ in ("16-31", "32-63", "64-127", "128+")} for m in models}}))
+put("bundle-manifest.json", json.dumps({"schema": "kestrel-models/1", "families": 2, "models": models}))
+PY
+python3 -I "$here/conformance/bundle.py" fill "$tmp/bundle" >/dev/null
+expect pass "conformance: a bundle with every file"            sh "$cf" --stage files "$tmp/bundle"
+cbad() { rm -rf "$tmp/cbad"; cp -R "$tmp/bundle" "$tmp/cbad"; }
+cbad; printf 'x' > "$tmp/cbad/ma/ma.mlpackage/Data/extra.bin"
+expect fail "conformance: an unlisted file in a package"       sh "$cf" --stage files "$tmp/cbad"
+cbad; printf 'changed' > "$tmp/cbad/mb/mb.mlpackage/Data/model.mlmodel"
+expect fail "conformance: a file that doesn't match its hash"  sh "$cf" --stage files "$tmp/cbad"
+cbad; ln -s /etc/hosts "$tmp/cbad/ma/ma.mlpackage/Data/link"
+expect fail "conformance: a link in a package"                 sh "$cf" --stage files "$tmp/cbad"
+cbad; rm "$tmp/cbad/cards/mb.json"
+expect fail "conformance: a missing card"                      sh "$cf" --stage files "$tmp/cbad"
+cbad; sed 's/"notMeantToFlag": \["Other"\], //' "$tmp/bundle/cards/ma.json" > "$tmp/cbad/cards/ma.json"
+expect fail "conformance: a card without notMeantToFlag"       sh "$cf" --stage files "$tmp/cbad"
+cbad; rm "$tmp/cbad/LICENSES/x.txt"
+expect fail "conformance: a missing licence file"              sh "$cf" --stage files "$tmp/cbad"
+cbad; sed 's/"128+"/"256+"/g' "$tmp/bundle/thresholds.json" > "$tmp/cbad/thresholds.json"
+expect fail "conformance: a cut-off band missing"              sh "$cf" --stage files "$tmp/cbad"
+cbad; python3 -I -c 'import json,sys; p=sys.argv[1]; r=json.load(open(p)); r["inputs"]=r["inputs"][:99]; json.dump(r,open(p,"w"))' "$tmp/cbad/conformance/ma/reference.json"
+expect fail "conformance: too few reference inputs"            sh "$cf" --stage files "$tmp/cbad"
+cbad; sed 's/"families": 2/"families": 2, "familes": 1/' "$tmp/bundle/bundle-manifest.json" > "$tmp/cbad/bundle-manifest.json"
+expect fail "conformance: an unknown manifest key"             sh "$cf" --stage files "$tmp/cbad"
+cbad; sed -e 's/"families": 2/"families": 1/' -e 's/"slot": "B"/"slot": "tie-breaker"/' "$tmp/bundle/bundle-manifest.json" > "$tmp/cbad/bundle-manifest.json"
+expect fail "conformance: one family with a tie-breaker"       sh "$cf" --stage files "$tmp/cbad"
+expect fail "conformance: no bundle folder"                    sh "$cf" --stage files "$tmp/none"
+expect fail "conformance: no arguments"                        sh "$cf"
+# Sealing names the manifest in the hash list and in the generated Swift, so the build refuses an edited one.
+mkdir -p "$tmp/crepo/models" "$tmp/crepo/Sources/SafeSightMacWatcher"; : > "$tmp/crepo/Package.swift"
+python3 -I "$here/conformance/bundle.py" seal "$tmp/bundle" "$tmp/crepo" >/dev/null
+expect pass "conformance: the seal names the manifest"         grep -q '  bundle-manifest\.json$' "$tmp/crepo/Sources/SafeSightMacWatcher/CommittedModelData.swift"
+expect pass "conformance: the sealed list matches the bundle"  sh -c 'cd "$1" && shasum -a 256 -c "$2" >/dev/null' _ "$tmp/bundle" "$tmp/crepo/models/watcher-models.sha256"
+
 # --- site/check.mjs ---------------------------------------------------------------------------------------------
 expect pass "site: its own self-test (refresh and others)" node "$root/site/check.mjs" --self-test
 

@@ -90,6 +90,8 @@ Nothing has shipped and no Mac holds the lock, so today every identity below can
 - **The design record.** The decision register, its chapters, three red-team reviews and the research behind the Hardcore lock are in a separate planning repository. Code comments cite its decision numbers (`SD-018` and so on). It comes with the project.
 - **Step documents written for the current maintainers.** `docs/STEP-0-OWNER.md` and "What needs the maintainers" in `docs/STEP-1-STATUS.md` list accounts and steps under today's names. Rewrite them for your team.
 
+**Bringing your own model.** The models the detector runs are named in a sealed manifest, not in the code, and a written contract says what a model has to provide. [BRING-YOUR-OWN-DETECTOR.md](BRING-YOUR-OWN-DETECTOR.md) walks through plugging one in and checking it with the conformance kit (`tools/conformance/run.sh`).
+
 ## 6. How SafeSight Mac fits your privacy policy
 
 [docs/PRIVACY.md](PRIVACY.md) is SafeSight Mac's own policy. It's written so it can stand alone or become one section of a larger organization's policy.
@@ -141,7 +143,7 @@ The design record lists each with its default. The ones that matter most:
 
 | Part | How separate it is | What still ties it |
 |---|---|---|
-| **Detector** | Its own library (`DetectorCore`, with `Preprocess` and `RegionFinder`), no knowledge of the screen, a written preprocessing spec with vectors | Nothing product-specific beyond comments |
+| **Detector** | Its own library (`DetectorCore`, with `Preprocess` and `RegionFinder`), no knowledge of the screen, a written preprocessing spec with vectors, and a written contract for bringing your own model ([BRING-YOUR-OWN-DETECTOR.md](BRING-YOUR-OWN-DETECTOR.md)) | Nothing product-specific beyond comments |
 | **Cover layer and covers** | `SafeSightMacWatcher` is pure logic, driven in tests with synthetic frames; `SafeSightMacCapture` and `SafeSightMacCover` are separate targets | Not yet exported as package products; they read their words from `SafeSightMacCore`; the practice-state check knows the keeper's launch file name |
 | **The lock** | The keeper (on the `keeper-core` branch) is a Rust crate with no Swift dependency; every edge to macOS is a trait with a fake | The watcher's heartbeat and the app's messages are designed, not built |
 | **Keyholder page** | One file, no dependencies, documented code formats | Approvals are checked by the keeper |

@@ -10,6 +10,9 @@
   "flagClasses": [
     "NSFW"
   ],
+  "notMeantToFlag": [
+    "SFW"
+  ],
   "licence": "Apache-2.0",
   "licenceFile": "LICENSE",
   "licenceEvidence": {

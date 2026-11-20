@@ -10,6 +10,9 @@
   "flagClasses": [
     "Yes"
   ],
+  "notMeantToFlag": [
+    "No"
+  ],
   "licence": "Apache-2.0",
   "licenceFile": "LICENSES/upstream-bumble-private-detector-Apache-2.0.txt",
   "licenceEvidence": {
