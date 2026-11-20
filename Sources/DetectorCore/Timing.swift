@@ -28,7 +28,7 @@ public struct JudgeTimings: Sendable, Equatable {
     /// Calls whose picture-finder result was reused (every pixel the finder reads was the same).
     public var finderCacheHits = 0
     public var judgements = 0
-    /// Of `judgements`: those spent on pictures seen clean once, for their second clean check
+    /// Of `judgements`: those spent on pictures waiting for clean checks, for their next clean check
     /// (`VerdictCache.CLEAN_CHECKS`), in a judge call and in the background (`secondChecks`).
     public var secondCheckJudgements = 0
     public var overloaded = 0

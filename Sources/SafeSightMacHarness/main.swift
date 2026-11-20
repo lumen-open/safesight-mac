@@ -274,9 +274,9 @@ let detector = makeDetector()
 if o.cleanMargin != nil || o.cleanChecks != nil || o.cleanSticky {
     #if SAFESIGHTMAC_LAB
     let std = detector.labCleanRule
-    let r = (margin: o.cleanMargin ?? std.margin, checks: o.cleanChecks ?? std.checks, sticky: o.cleanSticky)
+    let r = (margin: o.cleanMargin ?? std.margin, checks: o.cleanChecks ?? std.checks, sticky: o.cleanSticky || std.sticky)
     guard detector.labSetCleanRule(margin: r.margin, checks: r.checks, sticky: r.sticky) else {
-        fail("--clean-margin must be 0 to 0.5 and --clean-checks 2 to 8: the switch measures stricter rules only")
+        fail("--clean-margin must be 0 to \(std.margin) and --clean-checks \(std.checks) to 8: the switch measures stricter rules only")
     }
     print("clean rule: margin \(r.margin), checks \(r.checks), \(r.sticky ? "sticky" : "restart")")
     #else

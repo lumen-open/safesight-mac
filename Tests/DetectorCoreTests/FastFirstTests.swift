@@ -62,12 +62,12 @@ final class FastFirstTests: XCTestCase {
         }
         for r in [red, both, clean] { XCTAssertTrue(pending.contains { $0.intersects(r) }) }
         XCTAssertGreaterThan(estimate, 0)
-        _ = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false))   // the second clean check
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)) }   // the other clean checks
         var again: [PixelRect]? = nil, cachedCovers: [PixelRect] = []
         _ = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)) { e in
             if case let .found(p, c, _) = e { again = p; cachedCovers = c }
         }
-        // After two clean checks everything comes from the cache except the red picture: a dispute the
+        // After every clean check everything comes from the cache except the red picture: a dispute the
         // tie-breaker declined is not clearly clean, so it is judged again (the margin rule).
         XCTAssertEqual(again?.isEmpty, false)
         XCTAssertTrue(again?.allSatisfy { $0.intersects(red) } ?? false, "only the declined dispute is left: \(again ?? [])")

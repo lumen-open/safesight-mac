@@ -251,7 +251,7 @@ public final class Detector {
     }
 
     /// Second clean checks in the background (`VerdictCache.CLEAN_CHECKS`): within `budget`, judges once more,
-    /// with fresh jitter, only the entries of `area` that are seen clean once, so that when they come back they
+    /// with fresh jitter, only the entries of `area` waiting for clean checks, so that when they have them all and come back they
     /// are served from the cache. Every other entry is left as it is and not reported. The verdict holds only the
     /// entries judged here: a flag (or a blur) is reported to cover at once; a clean result only adds to the
     /// entry's count, and lifts or clears nothing. `secondChecksLeft` says how many are still waiting.
@@ -340,7 +340,7 @@ public final class Detector {
         var pendingCost = 0
         for i in tasks.indices {
             if secondChecksOnly {
-                // Only pictures seen clean once; nothing else is looked up, judged or reported.
+                // Only pictures waiting for clean checks (never a marked one); nothing else is looked up, judged or reported.
                 guard cache.seenCleanOnce(tasks[i].key) else { continue }
             } else if let o = cache.get(tasks[i].key), o.settledForBlur || !blurCanApply(tasks[i]) {
                 tasks[i].outcome = o; tasks[i].judged = true; tasks[i].fromCache = true; timings.cacheHits += 1; continue
@@ -503,7 +503,7 @@ public final class Detector {
         }
         timings.judgements += judgements
         timings.overloaded += overloaded
-        // Pictures of this call still seen clean once, waiting for their second check (counted once per key).
+        // Pictures of this call still waiting for clean checks (counted once per key; a marked one never is).
         var waiting = Set<ExactKey>()
         for t in tasks where cache.seenCleanOnce(t.key) { waiting.insert(t.key) }
         return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded,

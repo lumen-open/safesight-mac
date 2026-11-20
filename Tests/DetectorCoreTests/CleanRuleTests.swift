@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// The clean-cache rule switch (`VerdictCache.CleanRule`), used only by lab measurements: the default is unchanged,
-// only stricter rules can be set, and each knob (margin, checks, sticky) acts as described. Set outcomes and set
+// The clean-cache rule (`VerdictCache.CleanRule`): the default (sticky, margin 0.5, three checks), the lab switch that
+// sets only stricter rules, and how each knob (margin, checks, sticky) acts, eviction included. Set outcomes and set
 // scores only, on synthetic pixels.
 import Foundation
 import XCTest
@@ -23,9 +23,12 @@ final class CleanRuleTests: XCTestCase {
         return o
     }
 
-    func testTheDefaultIsUnchanged() {
-        XCTAssertEqual(VerdictCache.CleanRule.standard, .init(margin: 0.5, checks: 2, sticky: false))
-        XCTAssertEqual(VerdictCache().rule, .standard)
+    func testTheDefaultIsStickyWithThreeChecks() {
+        XCTAssertEqual(VerdictCache.CLEAN_CACHE_MARGIN, 0.5)
+        XCTAssertEqual(VerdictCache.CLEAN_CHECKS, 3)
+        XCTAssertTrue(VerdictCache.CLEAN_STICKY)
+        XCTAssertEqual(VerdictCache.CleanRule.standard, .init(margin: 0.5, checks: 3, sticky: true))
+        XCTAssertEqual(VerdictCache().rule, .standard, "every build starts with the standard rule")
         let c = Cutoffs(cover: 0.8, clean: 0.3, strike: 0.95, gridMember: 0.3, gridLow: 0.2)
         XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false), 0.4)
         XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false, margin: 0.25), 0.2)
@@ -33,73 +36,95 @@ final class CleanRuleTests: XCTestCase {
 
     func testOnlyAStricterRuleCanBeSet() {
         let c = VerdictCache()
-        XCTAssertFalse(c.setRule(.init(margin: 0.6, checks: 2, sticky: false)), "a higher margin is refused")
-        XCTAssertFalse(c.setRule(.init(margin: 0.5, checks: 1, sticky: false)), "fewer checks are refused")
-        XCTAssertFalse(c.setRule(.init(margin: .nan, checks: 2, sticky: false)))
-        XCTAssertFalse(c.setRule(.init(margin: -0.1, checks: 2, sticky: false)))
+        XCTAssertFalse(c.setRule(.init(margin: 0.6, checks: 3, sticky: true)), "a higher margin is refused")
+        XCTAssertFalse(c.setRule(.init(margin: 0.5, checks: 2, sticky: true)), "fewer checks are refused")
+        XCTAssertFalse(c.setRule(.init(margin: 0.5, checks: 3, sticky: false)), "restarting instead of sticky is refused")
+        XCTAssertFalse(c.setRule(.init(margin: .nan, checks: 3, sticky: true)))
+        XCTAssertFalse(c.setRule(.init(margin: -0.1, checks: 3, sticky: true)))
         XCTAssertEqual(c.rule, .standard, "a refused rule changes nothing")
-        XCTAssertTrue(c.setRule(.init(margin: 0.2, checks: 3, sticky: true)))
-        XCTAssertEqual(c.rule, .init(margin: 0.2, checks: 3, sticky: true))
+        XCTAssertTrue(c.setRule(.init(margin: 0.2, checks: 4, sticky: true)))
+        XCTAssertEqual(c.rule, .init(margin: 0.2, checks: 4, sticky: true))
     }
 
     func testSettingARuleEmptiesTheCache() {
         let c = VerdictCache()
-        c.put(key(), clean()); c.put(key(), clean())
+        for _ in 0..<3 { c.put(key(), clean()) }
         XCTAssertNotNil(c.get(key()))
-        c.setRule(.init(margin: 0.4, checks: 2, sticky: false))
+        c.setRule(.init(margin: 0.4, checks: 3, sticky: true))
         XCTAssertNil(c.checks(key()))
     }
 
     func testThreeChecksNeedThreeInARow() {
         let c = VerdictCache()
-        c.setRule(.init(margin: 0.5, checks: 3, sticky: false))
         c.put(key(), clean()); c.put(key(), clean())
         XCTAssertNil(c.get(key()), "two are not enough")
         XCTAssertTrue(c.seenCleanOnce(key()), "still waiting for a check")
         c.put(key(), clean())
+        XCTAssertFalse(c.seenCleanOnce(key()), "no longer waiting")
         XCTAssertNotNil(c.get(key()))
         XCTAssertEqual(c.get(key())?.settledForBlur, true)
     }
 
-    func testRestartStartsAgainAfterABorderlineJudgement() {
+    func testAPictureOnceBorderlineIsNeverCachedClean() {
         let c = VerdictCache()
-        c.put(key(), clean()); c.put(key(), borderline); c.put(key(), clean())
-        XCTAssertNil(c.get(key()))
-        c.put(key(), clean())
-        XCTAssertNotNil(c.get(key()), "today's rule: two in a row after the borderline one cache it")
-    }
-
-    func testStickyNeverCachesAPictureOnceBorderline() {
-        let c = VerdictCache()
-        c.setRule(.init(margin: 0.5, checks: 2, sticky: true))
         c.put(key(), clean()); c.put(key(), borderline)
         for _ in 0..<10 { c.put(key(), clean()) }
         XCTAssertNil(c.get(key()), "once borderline, never cached clean while held")
         XCTAssertTrue(c.isStuck(key()))
-        XCTAssertFalse(c.seenCleanOnce(key()), "no background second checks for it")
+        XCTAssertFalse(c.seenCleanOnce(key()), "never queued for more background checks")
         c.forget(key())
-        c.put(key(), clean()); c.put(key(), clean())
+        for _ in 0..<3 { c.put(key(), clean()) }
         XCTAssertNil(c.get(key()), "a model failure keeps the mark")
+        XCTAssertTrue(c.isStuck(key()))
         // A picture clearly clean from the start is cached as usual.
-        c.put(key(1), clean()); c.put(key(1), clean())
+        for _ in 0..<3 { c.put(key(1), clean()) }
         XCTAssertNotNil(c.get(key(1)))
     }
 
-    func testStickyKeepsAPictureNotSettledForABlurUnsettled() {
+    func testABorderlineFirstJudgementMarksAtOnce() {
         let c = VerdictCache()
-        c.setRule(.init(margin: 0.5, checks: 2, sticky: true))
+        c.put(key(), borderline)
+        XCTAssertTrue(c.isStuck(key()))
+        XCTAssertFalse(c.seenCleanOnce(key()))
+        for _ in 0..<3 { c.put(key(), clean()) }
+        XCTAssertNil(c.get(key()))
+    }
+
+    func testAPictureNotSettledForABlurStaysUnsettled() {
+        let c = VerdictCache()
         c.put(key(), clean(settled: false))
-        c.put(key(), clean()); c.put(key(), clean())
+        for _ in 0..<3 { c.put(key(), clean()) }
         XCTAssertEqual(c.get(key())?.settledForBlur, false, "reused where no blur applies, never settled for one")
     }
 
-    func testStickyAfterACoverStaysUncached() {
+    func testAfterACoverItStaysUncached() {
         let c = VerdictCache()
-        c.setRule(.init(margin: 0.5, checks: 2, sticky: true))
         c.put(key(), cover)
         XCTAssertEqual(c.get(key())?.covering, true, "a cover is reused at once")
-        c.put(key(), clean()); c.put(key(), clean())
+        for _ in 0..<3 { c.put(key(), clean()) }
         XCTAssertNil(c.get(key()), "once flagged, never cached clean while held")
+    }
+
+    /// The mark lives in the bounded cache. Dropping it gives only fresh first chances: the pixels are judged again as
+    /// if never seen, need `CLEAN_CHECKS` clearly clean judgements in a row, and a borderline one marks them again.
+    func testADroppedMarkGivesOnlyFreshFirstChances() {
+        let c = VerdictCache(capacity: 8)
+        c.put(key(), borderline)
+        XCTAssertTrue(c.isStuck(key()))
+        for i in 1...40 { c.put(key(i), clean()) }   // pushes the mark out, oldest first
+        XCTAssertNil(c.checks(key()), "dropped: nothing is held for these pixels")
+        XCTAssertNil(c.get(key()), "dropped is never reused: it is judged again")
+        c.put(key(), clean()); c.put(key(), clean())
+        XCTAssertNil(c.get(key()), "fresh first chances: two are not enough")
+        c.put(key(), borderline)
+        XCTAssertTrue(c.isStuck(key()), "a borderline one marks it again")
+        for _ in 0..<3 { c.put(key(), clean()) }
+        XCTAssertNil(c.get(key()))
+        // Emptied whole: the same.
+        c.removeAll()
+        XCTAssertNil(c.get(key()))
+        for _ in 0..<2 { c.put(key(), clean()) }
+        XCTAssertNil(c.get(key()))
     }
 
     /// Through the detector: a lower margin makes a score that was clearly clean borderline.
@@ -112,14 +137,14 @@ final class CleanRuleTests: XCTestCase {
             let fa = FaultyModel(id: "fa", family: .a, score: 0.2), fb = FaultyModel(id: "fb", family: .b, score: 0.2)
             let d = Detector(models: ModelSet(models: [fa, fb], bundleVersion: "rule"), table: ThresholdTable(schema: "test", models: m),
                              config: DetectorConfig(), finder: RegionFinder())
-            if let margin { XCTAssertTrue(d.cache.setRule(.init(margin: margin, checks: 2, sticky: false))) }
+            if let margin { XCTAssertTrue(d.cache.setRule(.init(margin: margin, checks: 3, sticky: true))) }
             var i = canvas(400, 300)
             paint(&i, PixelRect(x: 60, y: 60, w: 96, h: 96), channel: nil, seed: 5)
             let ctx = JudgeContext(windowID: 1, startsCovered: false)
-            for _ in 0..<3 { _ = d.judge(i, context: ctx) }
+            for _ in 0..<4 { _ = d.judge(i, context: ctx) }
             return d.timings.cacheHits > 0
         }
-        XCTAssertTrue(run(nil), "0.2 is under half of 0.5: cached after two checks")
+        XCTAssertTrue(run(nil), "0.2 is under half of 0.5: cached after three checks")
         XCTAssertFalse(run(0.3), "0.2 is not under 0.3 of 0.5 (0.15): never cached")
     }
 }

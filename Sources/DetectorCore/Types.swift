@@ -72,8 +72,8 @@ public struct FrameVerdict: Sendable {
     /// whether it was left unjudged or shown as judged earlier; 0 when the budget reached every entry it had to judge. A
     /// caller whose calls keep leaving such an entry can save its budget up for it.
     public var nextCost = 0
-    /// Entries of this call seen clean once (`VerdictCache.CLEAN_CHECKS`), still waiting for their second clean
-    /// check. A count only; the cover layer may give them that check in the background (`Detector.secondChecks`).
+    /// Entries of this call still waiting for clean checks (`VerdictCache.CLEAN_CHECKS`), for their remaining clean
+    /// checks. A count only; the cover layer may give them those checks in the background (`Detector.secondChecks`).
     public var secondChecksLeft = 0
 }
 

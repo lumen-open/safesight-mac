@@ -25,10 +25,13 @@ import RegionFinder
         let whole = [PixelRect(x: 0, y: 0, w: 600, h: 400)]
         _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
         #expect(p.lastTimings.judgements > 0)
-        // Shown again: the harmless pictures get their second clean check (`VerdictCache.CLEAN_CHECKS`).
-        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: 0.5), snapshot: window, now: 0.5)
-        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: 0.6), snapshot: window, now: 0.6)
-        #expect(p.lastTimings.judgements > 0)
+        // Shown again, as often as it takes: the harmless pictures get their other clean checks (`VerdictCache.CLEAN_CHECKS`).
+        for n in 1..<VerdictCache.CLEAN_CHECKS {
+            let t = 0.3 * Double(n)
+            _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: t), snapshot: window, now: t)
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: t + 0.1), snapshot: window, now: t + 0.1)
+            #expect(p.lastTimings.judgements > 0)
+        }
         _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: 1), snapshot: window, now: 1)
         d.resetTimings()
         let again = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: 2), snapshot: window, now: 2)
@@ -60,7 +63,45 @@ import RegionFinder
         #expect(!p.secondChecksDue)
         _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: t + 1), snapshot: window, now: t + 1)
         _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: t + 2), snapshot: window, now: t + 2)
-        #expect(p.lastTimings.judgements == 0, "two clean checks: served from the cache")
+        #expect(p.lastTimings.judgements == 0, "every clean check given: served from the cache")
+    }
+
+    /// The looks give a picture every clean check it lacks, one a look, until it has all `CLEAN_CHECKS`; a picture whose
+    /// background check comes out borderline (at or over the margin) is marked and never queued again.
+    @Test func theLooksGiveEveryCheckAndNeverQueueAPictureOnceBorderline() {
+        let a = SwitchModel(id: "fa", family: .a), b = SwitchModel(id: "fb", family: .b)
+        let c = Cutoffs(cover: 0.5, clean: 0.5, strike: 0.95, gridMember: 0.9, gridLow: 0.9)
+        let table = ThresholdTable(schema: "test", models: ["fa": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) }),
+                                                            "fb": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) })])
+        func run(borderlineAt: Int?) -> (looksWithChecks: Int, due: Bool, reused: Bool) {
+            let d = Detector(models: ModelSet(models: [a, b], bundleVersion: "looks"), table: table, config: DetectorConfig(), finder: RegionFinder())
+            let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
+            var page = Fixtures.blank(600, 400)
+            Fixtures.paint(&page, PixelRect(x: 300, y: 200, w: 100, h: 100), channel: nil, seed: 4)
+            a.score = 0.1; b.score = 0.1
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
+            var looks = 0, t = 0.0
+            for k in 0..<10 where p.secondChecksDue {
+                if k == borderlineAt { a.score = 0.3 } else { a.score = 0.1 }   // 0.3: clean, but not under half of 0.5
+                t += 0.1
+                _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+                if p.lastTimings.secondCheckJudgements > 0 { looks += 1 }
+            }
+            let due = p.secondChecksDue
+            a.score = 0.1
+            let whole = [PixelRect(x: 0, y: 0, w: 600, h: 400)]
+            _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: t + 1), snapshot: window, now: t + 1)
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: t + 2), snapshot: window, now: t + 2)
+            return (looks, due, p.lastTimings.judgements == 0)
+        }
+        let clean = run(borderlineAt: nil)
+        #expect(clean.looksWithChecks == VerdictCache.CLEAN_CHECKS - 1, "one look for each check the first judgement left")
+        #expect(!clean.due)
+        #expect(clean.reused, "every check given: served from the cache")
+        let border = run(borderlineAt: 0)
+        #expect(border.looksWithChecks == 1, "the borderline check ends the queue for it")
+        #expect(!border.due)
+        #expect(!border.reused, "once borderline, never cached clean: judged again when it comes back")
     }
 
     /// With background checks off, the second check waits until the picture comes back.

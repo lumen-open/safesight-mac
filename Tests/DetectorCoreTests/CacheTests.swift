@@ -53,9 +53,11 @@ final class CacheTests: XCTestCase {
         let (d, a, _) = detector()
         let first = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false))
         XCTAssertGreaterThan(first.judgements, 0)
-        XCTAssertGreaterThan(d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)).judgements, 0, "one clean check is not enough")
+        for _ in 1..<VerdictCache.CLEAN_CHECKS {
+            XCTAssertGreaterThan(d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)).judgements, 0, "fewer clean checks are not enough")
+        }
         let calls = a.calls
-        XCTAssertEqual(d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)).judgements, 0, "after two, the same pixels are not judged again")
+        XCTAssertEqual(d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)).judgements, 0, "after all of them, the same pixels are not judged again")
         XCTAssertEqual(a.calls, calls)
         // One pixel of the picture changes by one level: judged again, never inherited.
         var near = img
@@ -77,7 +79,9 @@ final class CacheTests: XCTestCase {
         let first = d.judge(img, context: ctx)
         XCTAssertGreaterThan(first.judgements, 0)
         XCTAssertFalse(first.regions.contains { $0.display != .clear }, "the harmless picture is judged clean")
-        XCTAssertFalse(d.judge(img, context: ctx).regions.contains { $0.display != .clear }, "and clean again")
+        for _ in 1..<VerdictCache.CLEAN_CHECKS {
+            XCTAssertFalse(d.judge(img, context: ctx).regions.contains { $0.display != .clear }, "and clean again")
+        }
         XCTAssertEqual(d.judge(img, context: ctx).judgements, 0, "so its clean verdict is cached")
         var flagged = img
         paint(&flagged, PixelRect(x: r.x, y: r.y, w: 60, h: 120), channel: 0, seed: 7)
@@ -127,14 +131,14 @@ final class CacheTests: XCTestCase {
         let img = noise(64, 64, seed: 3)
         let o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false, cacheable: true)
         let kept = VerdictCache.key(img, PixelRect(x: 0, y: 0, w: 64, h: 64), pass: "region", version: "v")
-        c.put(kept, o); c.put(kept, o)   // two clean checks
+        for _ in 0..<VerdictCache.CLEAN_CHECKS { c.put(kept, o) }   // every clean check
         for i in 0..<2_000 {
             c.put(VerdictCache.key(img, PixelRect(x: 0, y: 0, w: 1 + i % 63, h: 1 + i / 63), pass: "slice", version: "v"), o)
             if i % 16 == 0 { XCTAssertNotNil(c.get(kept), "used often, so kept (step \(i))") }
         }
         // An entry nobody asks for again is dropped.
         let once = VerdictCache.key(img, PixelRect(x: 0, y: 0, w: 5, h: 5), pass: "whole", version: "v")
-        c.put(once, o); c.put(once, o)
+        for _ in 0..<VerdictCache.CLEAN_CHECKS { c.put(once, o) }
         for i in 0..<200 { c.put(VerdictCache.key(img, PixelRect(x: 1, y: 1, w: 1 + i % 60, h: 1 + i / 60), pass: "region", version: "v"), o) }
         XCTAssertNil(c.get(once))
     }
@@ -193,14 +197,14 @@ final class CacheTests: XCTestCase {
     }
 
     func testJudgingWithTheFinderCacheGivesTheSameEntries() {
-        // The same frame judged three times: the later calls reuse the finder, the third every verdict (after
-        // two clean checks), and their entries are the first call's.
+        // The same frame judged once more than `CLEAN_CHECKS` times: the later calls reuse the finder, the last every
+        // verdict (after every clean check), and their entries are the first call's.
         let img = page(800, 500, seed: 13)
         let (d, _, _) = detector()
         let one = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false))
-        _ = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false))
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)) }
         let two = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false))
-        XCTAssertEqual(d.timings.finderCacheHits, 2)
+        XCTAssertEqual(d.timings.finderCacheHits, VerdictCache.CLEAN_CHECKS)
         XCTAssertEqual(one.regions.map(\.rect), two.regions.map(\.rect))
         XCTAssertEqual(one.regions.map(\.display), two.regions.map(\.display))
         XCTAssertEqual(two.judgements, 0)
@@ -294,7 +298,7 @@ final class CleanCacheMarginTests: XCTestCase {
         let first = d.judge(img, context: ctx)
         XCTAssertEqual(over(first)?.display, .clear)
         XCTAssertEqual(first.judgements, 4, "the region and the whole pass, two models each")
-        XCTAssertEqual(d.judge(img, context: ctx).judgements, 4, "the second clean check")
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { XCTAssertEqual(d.judge(img, context: ctx).judgements, 4, "another clean check") }
         d.resetTimings()
         let again = d.judge(img, context: ctx)
         XCTAssertEqual(again.judgements, 0, "no blur can apply in this window: reused, as before the containment rule")
@@ -321,7 +325,7 @@ final class CleanCacheMarginTests: XCTestCase {
         let (d, fa, _, _) = scored(0.2, 0, table: cutoffs(0.5, clean: 0.3))
         let show = d.judge(small, context: ctx)
         XCTAssertEqual(show.regions.filter { $0.pass == .region }.map(\.rect), [rs], "one region, as the setup expects")
-        _ = d.judge(small, context: ctx)
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = d.judge(small, context: ctx) }
         XCTAssertEqual(d.judge(small, context: ctx).judgements, 0, "reused where no blur can apply")
         fa.score = 0.35
         let covered = d.judge(small, context: JudgeContext(windowID: 9, startsCovered: true))
@@ -334,7 +338,7 @@ final class CleanCacheMarginTests: XCTestCase {
         // 0.1 is under half of both cut-offs (0.3 and 0.5): the small picture is settled, and reused even in a hot
         // window.
         let (d, _, _, _) = scored(0.1, 0.1, table: cutoffs(0.5, clean: 0.3))
-        _ = d.judge(img, context: ctx); _ = d.judge(img, context: ctx)
+        for _ in 0..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: ctx) }
         d.hot.mark(ctx.windowID, ctx.now)
         XCTAssertEqual(d.judge(img, context: ctx).judgements, 0, "clearly clean for both actions: reused in a hot window")
         // A 160-pixel picture is never blurred (128 and up), so only its cover cut-off counts: 0.2 is under half
@@ -346,13 +350,13 @@ final class CleanCacheMarginTests: XCTestCase {
         let first = e.judge(big, context: ctx)
         XCTAssertEqual(first.regions.filter { $0.pass == .region }.map(\.rect), [rb], "one region, as the setup expects")
         XCTAssertFalse(first.regions.contains { $0.display != .clear })
-        _ = e.judge(big, context: ctx)
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = e.judge(big, context: ctx) }
         e.hot.mark(ctx.windowID, ctx.now)
         XCTAssertEqual(e.judge(big, context: ctx).judgements, 0, "reused, hot window or not")
         // The same scores on the 96-pixel picture, which can be blurred: reused in a show-first window, judged
         // again in a hot one (the whole pass is not).
         let (f, _, _, _) = scored(0.2, 0.2, table: cutoffs(0.5, clean: 0.1))
-        _ = f.judge(img, context: ctx); _ = f.judge(img, context: ctx)
+        for _ in 0..<VerdictCache.CLEAN_CHECKS { _ = f.judge(img, context: ctx) }
         XCTAssertEqual(f.judge(img, context: ctx).judgements, 0)
         f.hot.mark(ctx.windowID, ctx.now)
         XCTAssertEqual(f.judge(img, context: ctx).judgements, 2)
@@ -370,7 +374,7 @@ final class CleanCacheMarginTests: XCTestCase {
         let first = d.judge(page, context: ctx)
         XCTAssertEqual(first.regions.first { $0.rect == green }?.display, .clear)
         XCTAssertFalse(first.hot)
-        _ = d.judge(page, context: ctx)   // the second clean check
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = d.judge(page, context: ctx) }   // the other clean checks
         paint(&page, red, channel: 0, seed: 4)
         d.resetTimings()
         let second = d.judge(page, context: ctx)
@@ -410,7 +414,7 @@ final class CleanCacheMarginTests: XCTestCase {
         let first = d.judge(img, context: ctx)
         XCTAssertEqual(over(first)?.display, .clear)
         XCTAssertGreaterThan(first.judgements, 0)
-        XCTAssertEqual(d.judge(img, context: ctx).judgements, first.judgements, "the second clean check")
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { XCTAssertEqual(d.judge(img, context: ctx).judgements, first.judgements, "another clean check") }
         let calls = (fa.calls, fb.calls)
         d.resetTimings()
         let again = d.judge(img, context: ctx)
@@ -428,7 +432,7 @@ final class CleanCacheMarginTests: XCTestCase {
             let (d, _, _, _) = scored(a, b)
             let first = d.judge(img, context: ctx)
             XCTAssertEqual(over(first)?.display, .clear, "\(a), \(b): clean either way")
-            _ = d.judge(img, context: ctx)
+            for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: ctx) }
             let again = d.judge(img, context: ctx)
             XCTAssertEqual(again.judgements == 0, cached, "\(a), \(b)")
         }
@@ -442,7 +446,7 @@ final class CleanCacheMarginTests: XCTestCase {
         XCTAssertFalse(first.regions.contains { $0.display != .clear })
         XCTAssertEqual(first.regions.filter { $0.pass == .region }.map(\.rect), [r], "one region, as the setup expects")
         XCTAssertEqual(first.judgements, 4, "the region and the whole pass, two models each")
-        _ = d.judge(img, context: ctx)
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: ctx) }
         d.resetTimings()
         let again = d.judge(img, context: ctx)
         XCTAssertEqual(d.timings.cacheHits, 1, "the region comes from the cache")
@@ -488,12 +492,16 @@ final class CleanCacheMarginTests: XCTestCase {
         let k = VerdictCache.key(img, r, pass: "region", version: "v")
         var o = TileOutcome(flagA: false, flagB: false, strikeBoth: false, clean: true, gridMember: false, gridLow: false, forced: false)
         c.put(k, o)
-        XCTAssertNil(c.get(k), "not marked: not kept")
+        XCTAssertNil(c.get(k), "not marked cacheable: never reused")
+        XCTAssertTrue(c.isStuck(k), "and, sticky, never cached clean while held")
         o.cacheable = true
-        c.put(k, o)
-        XCTAssertNil(c.get(k), "marked, once: seen clean once, not reused")
-        c.put(k, o)
-        XCTAssertEqual(c.get(k), o, "twice in a row: reused")
+        let k2 = VerdictCache.key(img, PixelRect(x: r.x, y: r.y, w: r.w - 1, h: r.h), pass: "region", version: "v")
+        for n in 1..<VerdictCache.CLEAN_CHECKS {
+            c.put(k2, o)
+            XCTAssertNil(c.get(k2), "marked cacheable \(n) times: still waiting for clean checks, not reused")
+        }
+        c.put(k2, o)
+        XCTAssertEqual(c.get(k2), o, "every check in a row: reused")
     }
 }
 

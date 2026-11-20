@@ -436,11 +436,11 @@ SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-h
 
 ### Closing the clean-cache gap: a measurement of margin, checks and a sticky rule (20 November 2026)
 
-A measurement, not a decision: no default changed (the share stays 0.5, the checks 2). Two clean checks narrowed the gap but did not close it: a borderline picture shown often enough can still get two low draws in a row and be remembered as clean for as long as it stays unchanged. This measures what it would take to close it, for margins 0.5, 0.4, 0.3, 0.25, 0.2 and 0.1 (the share of the cut-off a clean score must be under; verified: it is the share of the cut-off that acts there, the cover cut-off, or the containment cut-off where a blur can apply) by 2 and 3 clean checks, and for one alternative design.
+The measurement ran with the defaults of the time (share 0.5, two checks, restarting); the stricter margins it measures stay lab switches. Its cheapest strict step, sticky at 0.5 with three checks, is now the default: see the next section. Two clean checks narrowed the gap but did not close it: a borderline picture shown often enough can still get two low draws in a row and be remembered as clean for as long as it stays unchanged. This measures what it would take to close it, for margins 0.5, 0.4, 0.3, 0.25, 0.2 and 0.1 (the share of the cut-off a clean score must be under; verified: it is the share of the cut-off that acts there, the cover cut-off, or the containment cut-off where a blur can apply) by 2 and 3 clean checks, and for one alternative design.
 
 **The alternative: sticky.** Today a borderline judgement (at or over the margin) only starts the count again, so a picture shown many times gets many chances. Under the sticky rule a borderline judgement, or a cover, marks the picture as never to be remembered clean while the cache holds it: only its first `checks` judgements can cache it. Ordinary pictures that are clearly clean from the start are cached as before. Other variants suggested (the highest draw so far under the margin, a small spread between draws) are what today's consecutive checks already do, or a lower margin.
 
-**Switches** (lab builds only; refused in release builds, and a looser rule than today's is refused everywhere): `safesightmac-harness bench|static ... --clean-margin M --clean-checks N [--clean-sticky]` (`Detector.labSetCleanRule`, `VerdictCache.CleanRule`). Tests: `CleanRuleTests`. The jitter tool now also scores every setting against its draws (`CleanGrid.swift`).
+**Switches** (lab builds only; refused in release builds, and a rule looser than the default is refused everywhere; since the default is now sticky with three checks, restarting settings can no longer be set): `safesightmac-harness bench|static ... --clean-margin M --clean-checks N [--clean-sticky]` (`Detector.labSetCleanRule`, `VerdictCache.CleanRule`). Tests: `CleanRuleTests`. The jitter tool now also scores every setting against its draws (`CleanGrid.swift`).
 
 ```
 SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter --models ../v3-detector/models/converted \
@@ -452,7 +452,7 @@ Results: `results/jitter-clean-margin.json` (protection and harmless-picture cos
 
 | Setting | Crossings with a draw under the margin / cached in their 40 draws | Expected cached (largest chance for one) | Harmless entries not cacheable on one draw | Harmless entries never cached | Reload (judgements) | Window move | Still screen settled (s) |
 |---|---|---|---|---|---|---|---|
-| **today: restart 0.5 x 2** | 48 / 22 | 14.8 (99.9%) | 30% | 25% | 238 | 172 | 195, 212 |
+| **until now: restart 0.5 x 2** | 48 / 22 | 14.8 (99.9%) | 30% | 25% | 238 | 172 | 195, 212 |
 | restart 0.4 x 2 | 19 / 6 | 4.7 (96%) | 39% | 32% | 322 (1.4x) | 228 (1.3x) | |
 | restart 0.3 x 2 | 5 / 3 | 1.2 (49%) | 49% | 39% | 428 (1.8x) | 322 (1.9x) | |
 | restart 0.25 x 2 | 3 / 0 | 0.25 (16%) | 56% | 44% | 500 (2.1x) | 376 (2.2x) | |
@@ -464,7 +464,7 @@ Results: `results/jitter-clean-margin.json` (protection and harmless-picture cos
 | restart 0.25 x 3 | 3 / 0 | 0.02 (1.6%) | 56% | 46% | 500 (2.1x) | 374 (2.2x) | |
 | restart 0.2 x 3 | 0 / 0 | 0 | 64% | 52% | 590 (2.5x) | 462 (2.7x) | |
 | restart 0.1 x 3 | 0 / 0 | 0 | 90% | 77% | 876 (3.7x) | 684 (4.0x) | |
-| sticky 0.5 x 3 | 48 / 0 | 0.87 (24%) | 30% | 32% | 238 (1.0x) | 172 (1.0x) | |
+| **sticky 0.5 x 3 (now the default)** | 48 / 0 | 0.87 (24%) | 30% | 32% | 238 (1.0x) | 172 (1.0x) | |
 | sticky 0.3 x 3 | 5 / 0 | 0.014 (0.8%) | 49% | 46% | 432 (1.8x) | 334 (1.9x) | 264, 266 |
 | sticky 0.25 x 2 | 3 / 0 | 0.015 (1.0%) | 56% | 50% | 494 (2.1x) | 368 (2.1x) | |
 | **sticky 0.25 x 3** | 3 / 0 | 0.0013 (0.1%) | 56% | 51% | 500 (2.1x) | 372 (2.2x) | 280, 270 |
