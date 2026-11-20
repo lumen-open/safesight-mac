@@ -35,7 +35,12 @@ public struct CoverItem: Equatable, Sendable {
     public var kind: CoverKind
     /// True on the largest visible piece of a whole-window cover: the way-out line is drawn on it.
     public var wayOut: Bool
-    public init(rect: CGRect, kind: CoverKind, wayOut: Bool = false) { self.rect = rect; self.kind = kind; self.wayOut = wayOut }
+    /// The window or surface whose content the cover hides, when known: a password prompt's own covers stay inside its
+    /// hole, every other cover is cut out of it (`DisplayPipeline.promptHoles`). Nil counts as anyone's: never cut.
+    public var source: JudgeTarget?
+    public init(rect: CGRect, kind: CoverKind, wayOut: Bool = false, source: JudgeTarget? = nil) {
+        self.rect = rect; self.kind = kind; self.wayOut = wayOut; self.source = source
+    }
 }
 
 /// Where the way-out line sits on a cover.
@@ -83,8 +88,9 @@ public enum OwnCoverColours {
 public enum CoverLevel {
     /// The cover canvas: above the screen saver's level (1000) and the assistive-technology levels (up to 1500), and
     /// safely below the lock screen. loginwindow's windows were read at levels 2001 and 2004 on a locked Mac, so the lock
-    /// screen's password field, the login window, authorization prompts and other system dialogs stay above every cover:
-    /// a cover must never be what stops the owner unlocking their Mac. An app that raises its own window to this level
+    /// screen's password field and the login window stay above every cover: a cover must never be what stops the owner
+    /// unlocking their Mac. macOS's authorization prompt does not: it was read at level 1000, under the covers, so its
+    /// rectangle is left out of the covers instead (`PasswordPrompt`). An app that raises its own window to this level
     /// or above is not covered itself; over a cover, it covers the display whole (`DisplayPipeline.canvasLevel`). Raising
     /// the canvas above the lock screen is not allowed until a test Mac shows all of those stay usable over a whole-display
     /// cover (`docs/STEP-1-STATUS.md`).
@@ -93,6 +99,9 @@ public enum CoverLevel {
     public static let appAbove = 1991
     /// The lowest level loginwindow's windows were seen at on a locked Mac.
     public static let lockScreenSeen = 2001
+    /// The plain cover drawn behind a password prompt's hole: one level below the prompt (`PasswordPrompt.level`), so
+    /// the prompt shows over it and nothing behind the prompt shows through a see-through or rounded part of it.
+    public static let behindPrompt = PasswordPrompt.level - 1
 }
 
 /// Everything drawn on one display, applied in one step.
@@ -101,9 +110,14 @@ public struct CoverPlan: Equatable, Sendable {
     public var items: [CoverItem]
     /// When set, the whole display is covered and `items` is ignored: the display cannot be judged.
     public var wholeDisplay: FaultCause?
+    /// Where a password prompt is left clear (global points): its own rectangle, less the windows in front of it
+    /// (`DisplayPipeline.promptHoles`). Covers of anything else are already cut out of it; a whole-display cover is drawn
+    /// around it, with the prompt's own covers (`items`) inside it. A plain cover is drawn behind it, below the prompt
+    /// (`CoverLevel.behindPrompt`).
+    public var promptHoles: [CGRect]
 
-    public init(display: DisplayDescriptor, items: [CoverItem], wholeDisplay: FaultCause? = nil) {
-        self.display = display; self.items = items; self.wholeDisplay = wholeDisplay
+    public init(display: DisplayDescriptor, items: [CoverItem], wholeDisplay: FaultCause? = nil, promptHoles: [CGRect] = []) {
+        self.display = display; self.items = items; self.wholeDisplay = wholeDisplay; self.promptHoles = promptHoles
     }
 
     public static func covered(_ display: DisplayDescriptor, because cause: FaultCause) -> CoverPlan {
@@ -130,7 +144,19 @@ public enum CoverLayout {
         let d = plan.display.bounds
         if plan.wholeDisplay != nil {
             let mb = min(max(0, menuBar.isFinite ? menuBar : 0), WayOut.menuBarMax)
-            return [CoverPiece(frame: CGRect(x: d.minX, y: d.minY + mb, width: d.width, height: d.height - mb), kind: .plain, wayOut: .belowCard)]
+            let whole = CGRect(x: d.minX, y: d.minY + mb, width: d.width, height: d.height - mb)
+            let holes = plan.promptHoles.clipped(to: d)
+            guard !holes.isEmpty else { return [CoverPiece(frame: whole, kind: .plain, wayOut: .belowCard)] }
+            // Around a password prompt: the whole display less its hole, the way out on the largest piece, and the
+            // prompt's own covers inside the hole.
+            var pieces = holes.reduce([whole]) { $0.subtracting($1) }.filter(\.hasArea).map { CoverPiece(frame: $0, kind: .plain) }
+            if let i = pieces.indices.max(by: { pieces[$0].frame.width * pieces[$0].frame.height < pieces[$1].frame.width * pieces[$1].frame.height }) {
+                pieces[i].wayOut = .belowCard
+            }
+            return pieces + plan.items.compactMap { item in
+                let r = item.rect.intersection(d)
+                return r.hasArea ? CoverPiece(frame: r, kind: item.kind) : nil
+            }
         }
         return plan.items.compactMap { item in
             let r = item.rect.intersection(d)
@@ -147,6 +173,9 @@ public enum CoverLayout {
     public static func layerFrames(_ plan: CoverPlan, menuBar: CGFloat = 0) -> [(CGRect, CoverKind)] {
         layerPieces(plan, menuBar: menuBar).map { ($0.frame, $0.kind) }
     }
+
+    /// The plain covers behind password prompts (`CoverPlan.promptHoles`), in global points, cut to the display.
+    public static func behindPromptRects(_ plan: CoverPlan) -> [CGRect] { plan.promptHoles.clipped(to: plan.display.bounds) }
 
     /// The per-window overlay form (the written pivot of ST-032): one overlay window per cover, its
     /// frame in Cocoa points, cut to the display.
