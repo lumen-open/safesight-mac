@@ -6,7 +6,7 @@
 //   safesightmac-harness demo [--out DIR]                         scripted synthetic scenes (lab build: with the stand-in)
 //   safesightmac-harness frames FILE... [--models DIR] [--out DIR] image files as successive frames of one display
 //   safesightmac-harness bench [--models DIR] [--pages DIR] [--json FILE] [--trials N] [--cases single,grid,busy,scroll]
-//            [--no-background-checks]
+//            [--no-background-checks] [--clean-margin M] [--clean-checks N] [--clean-sticky]
 //            (lab build only) times the chain from frame to cover plan to cover layer update, by stage; see Bench.swift
 //   safesightmac-harness falsecovers --models DIR --list FILE [--root DIR] [--rule R] [--jsonl FILE] [--json FILE]
 //            false covers on harmless screens through the whole pipeline; see FalseCovers.swift
@@ -22,7 +22,7 @@
 //            [--every K] [--seed S] [--bands B,...] [--json FILE]
 //            (lab build only) how far jitter moves each model's score on harmless screens; see JitterSpread.swift
 //   safesightmac-harness static FILE --models DIR [--slow-ms MS] [--seconds S] [--fps F] [--frames idle|empty|none]
-//            [--windows FILE]
+//            [--windows FILE] [--clean-margin M] [--clean-checks N] [--clean-sticky]
 //            (lab build only) one harmless screenshot as a still screen on a slowed-down judge: does the cover settle to
 //            nothing and stay so? See StaticScreen.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
@@ -62,6 +62,11 @@ struct Options {
     var jsonl: String?
     var theme = CoverTheme.light
     var still = StillOptions()
+    /// Lab measurement only: a stricter clean-cache rule (`--clean-margin`, `--clean-checks`, `--clean-sticky`); nil keeps
+    /// the standard rule.
+    var cleanMargin: Float?
+    var cleanChecks: Int?
+    var cleanSticky = false
 }
 
 /// `static` options, parsed in every build so that a release build can refuse `static` plainly.
@@ -128,6 +133,9 @@ func parse() -> Options {
         case "--label": o.bench.label = v()
         case "--busy-pages": o.bench.busyPages = Int(v()) ?? 6
         case "--no-background-checks": o.bench.backgroundChecks = false
+        case "--clean-margin": guard let m = Float(v()) else { fail("--clean-margin needs a number") }; o.cleanMargin = m
+        case "--clean-checks": guard let n = Int(v()) else { fail("--clean-checks needs a whole number") }; o.cleanChecks = n
+        case "--clean-sticky": o.cleanSticky = true
         case "--scroll-speeds": o.bench.scrollSpeeds = v().split(separator: ",").compactMap { Int($0) }
         case "--draws": o.jitter.draws = max(2, Int(v()) ?? 24)
         case "--per-band": o.jitter.perBand = max(0, Int(v()) ?? 3000)
@@ -239,6 +247,21 @@ func makeDetector() -> Detector {
 }
 
 let detector = makeDetector()
+
+// Lab measurement switch: a stricter clean-cache rule for this run (bench, static). Release builds refuse it; a looser
+// rule than the standard one is refused in every build.
+if o.cleanMargin != nil || o.cleanChecks != nil || o.cleanSticky {
+    #if SAFESIGHTMAC_LAB
+    let std = detector.labCleanRule
+    let r = (margin: o.cleanMargin ?? std.margin, checks: o.cleanChecks ?? std.checks, sticky: o.cleanSticky)
+    guard detector.labSetCleanRule(margin: r.margin, checks: r.checks, sticky: r.sticky) else {
+        fail("--clean-margin must be 0 to 0.5 and --clean-checks 2 to 8: the switch measures stricter rules only")
+    }
+    print("clean rule: margin \(r.margin), checks \(r.checks), \(r.sticky ? "sticky" : "restart")")
+    #else
+    fail("--clean-margin, --clean-checks and --clean-sticky need a lab build")
+    #endif
+}
 
 if o.command == "falsecovers" {
     guard let list = o.list, o.models != nil else { fail("falsecovers needs --models DIR and --list FILE") }

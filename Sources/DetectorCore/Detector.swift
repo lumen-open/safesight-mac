@@ -69,6 +69,17 @@ public final class Detector {
     /// LAB ONLY (absent from release builds): changes the per-call cap, so the lab bench can judge a whole page in one
     /// call and count exactly what reuse costs.
     public func labSetCallCap(_ n: Int) { config.maxJudgementsPerCall = n }
+    /// LAB ONLY (absent from release builds): a stricter clean-cache rule, for measuring what it costs and buys
+    /// (`VerdictCache.CleanRule`): `margin` no higher than `CLEAN_CACHE_MARGIN`, `checks` no fewer than `CLEAN_CHECKS`
+    /// (up to 8), and the sticky variant. Empties the caches. Returns false, and changes nothing, for a looser rule.
+    @discardableResult
+    public func labSetCleanRule(margin: Float, checks: Int, sticky: Bool) -> Bool {
+        guard cache.setRule(.init(margin: margin, checks: checks, sticky: sticky)) else { return false }
+        removeCachedVerdicts()
+        return true
+    }
+    /// LAB ONLY: the clean-cache rule in force (margin, checks, sticky).
+    public var labCleanRule: (margin: Float, checks: Int, sticky: Bool) { (cache.rule.margin, cache.rule.checks, cache.rule.sticky) }
     #endif
 
     public convenience init(models: ModelSet, thresholdsURL: URL?, config: DetectorConfig = DetectorConfig(), finder: RegionFinder = RegionFinder()) throws {
@@ -598,8 +609,8 @@ public final class Detector {
         for m in judges {
             let cut = table.cutoffs(model: m.id, band: band)
             guard let top = precomputed[m.id] ?? topScore(frame, t, m) else { return nil }
-            if !(top < VerdictCache.cleanLevel(cut, containable: false)) { clearlyClean = false }
-            if !(top < VerdictCache.cleanLevel(cut, containable: containable)) { settledForBlur = false }
+            if !(top < VerdictCache.cleanLevel(cut, containable: false, margin: cache.rule.margin)) { clearlyClean = false }
+            if !(top < VerdictCache.cleanLevel(cut, containable: containable, margin: cache.rule.margin)) { settledForBlur = false }
             let flag = top >= cut.cover
             if top > cut.clean { o.clean = false }
             if top >= cut.gridMember { o.gridMember = true }
