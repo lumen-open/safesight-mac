@@ -67,8 +67,8 @@ public struct TokenBucket: Sendable {
         let t = min(max(0, n), tokens); tokens -= t; return t
     }
 
-    /// Puts back judgements taken out.
-    public mutating func give(_ n: Double) { tokens += max(0, n) }
+    /// Puts back judgements taken out (never above the depth).
+    public mutating func give(_ n: Double) { tokens = min(depth, tokens + max(0, n)) }
 }
 
 /// Stage timings of one `DisplayPipeline.process` call, for the lab harness's bench. Durations and counts

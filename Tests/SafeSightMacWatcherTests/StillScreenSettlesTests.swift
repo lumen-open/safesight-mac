@@ -38,8 +38,9 @@ final class CostJudge: Judging {
     /// real time each call takes whatever it judges (finding pictures, hashing).
     var msPerJudgement = 0.0
     var msPerCall = 0.0
-    /// Every call: its area and the budget it was given.
-    var log: [(area: PixelRect, budget: Int)] = []
+    /// Every call: its area, the budget it was given, and the look it was made in (`look`, set by the test).
+    var log: [(area: PixelRect, budget: Int, look: Int)] = []
+    var look = 0
 
     init(entries: [Entry], blindCalls: Int = 2, wholeCost: @escaping (PixelRect) -> Int = { _ in 2 }) {
         self.entries = entries; self.blindCalls = blindCalls; self.wholeCost = wholeCost
@@ -48,7 +49,7 @@ final class CostJudge: Judging {
     func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
                    progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
         serial += 1
-        log.append((area, budget))
+        log.append((area, budget, look))
         if msPerCall > 0 { usleep(useconds_t(msPerCall * 1000)) }
         let inside = entries.filter { $0.rect.intersection(area) == $0.rect }
         var tasks: [(Key, Int)] = [(Key(pass: .whole, rect: area), wholeCost(area))] + inside.map { (Key(pass: .region, rect: $0.rect), $0.cost) }
@@ -125,6 +126,7 @@ final class CostJudge: Judging {
         var plans = [p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)]
         for k in 1...Int(seconds * 4) {
             let t = Double(k) * 0.25
+            (p.judger as? CostJudge)?.look = k
             if let changed = each?(k, &img) {
                 plans.append(p.process(Fixtures.frame(img, display: d, scale: 1, dirty: changed, t: t), snapshot: snap, now: t))
             } else {
@@ -278,12 +280,15 @@ final class CostJudge: Judging {
     // MARK: The line for saved-up judgements never holds other work back
 
     /// A window whose content keeps changing (a video, typing) spends more than comes in at every look, while a cover
-    /// elsewhere saves up for a dear line of text. New-change calls are never held back, and neither is anything else:
-    /// pictures left unjudged by a model failure (first judgements, judged again over the same area) are judged, a flagged
-    /// picture is judged again on its rhythm, and the cover saving up is still served, from the share set aside for it.
-    @Test func busyWindowElsewhereNeverStarvesPendingWorkFlaggedRechecksOrTheSaver() {
+    /// elsewhere saves up for a dear line of text. The busy window's new changes are never held back for the cover saving
+    /// up: they are judged with budget at most looks, and never wait more than two seconds (eight looks) in a row (work left over from
+    /// earlier looks takes a turn before them every few looks). Nothing else is starved either: pictures left unjudged by a model failure (first judgements, judged
+    /// again over the same area) are judged, a flagged picture is judged again with budget, and the cover saving up is
+    /// served, from the share set aside for it. `callWallMs`/`msPerCall` > 0 make looks run out of time as well.
+    func busyElsewhere(callWallMs: Double, msPerCall: Double, seconds: Double) {
         // The busy window, and two quiet ones well clear of it (so its changes never reach them).
         let busy = PixelRect(x: 0, y: 0, w: 240, h: 400)
+        let changed = PixelRect(x: 0, y: 0, w: 200, h: 400)
         let busyEntries = Self.grid(busy, side: 14, step: 18)
         let line = PixelRect(x: 370, y: 180, w: 220, h: 12)
         let failing = Self.grid(PixelRect(x: 360, y: 210, w: 120, h: 190))
@@ -297,16 +302,26 @@ final class CostJudge: Judging {
                                             WindowInfo(number: 2, ownerPID: 502, layer: 0, bounds: CGRect(x: 360, y: 0, width: 240, height: 200)),
                                             WindowInfo(number: 3, ownerPID: 503, layer: 0, bounds: CGRect(x: 360, y: 200, width: 240, height: 200))], time: 0)
         let t2 = JudgeTarget.window(number: 2, ownerPID: 502)
-        _ = still(p, Fixtures.blank(600, 400), snap, seconds: 90) { k, img in
+        var outOfTime = 0
+        _ = still(p, Fixtures.blank(600, 400), snap, seconds: seconds) { k, img in
             if k == 1 {
                 p.held.append(DisplayPipeline.Held(target: t2, rel: CGRect(x: 0, y: 0, width: 240, height: 200), whole: false, kind: .plain, clean: 0))
+                p.callWallMs = callWallMs
+                judge.msPerCall = msPerCall
             }
+            outOfTime += p.lastTimings.leftForLater
             // The busy window's content changes at every look: all of it is new, and wants more than comes in.
             for e in busyEntries { judge.lastJudged[CostJudge.Key(pass: .region, rect: e.rect)] = nil }
             judge.lastJudged[CostJudge.Key(pass: .whole, rect: busy)] = nil
             img.pixels[(5 * 600 + 5) * 4] = UInt8(k % 200)
-            return [PixelRect(x: 0, y: 0, w: 200, h: 400)]
+            return [changed]
         }
+        let looks = Int(seconds * 4)
+        let busyLooks = Set(judge.log.filter { $0.area.intersects(changed) && $0.area.maxX <= busy.maxX && $0.budget > 0 }.map(\.look)).sorted()
+        #expect(Double(busyLooks.count) >= 0.5 * Double(looks), "the busy window's new changes were judged with budget at \(busyLooks.count) of \(looks) looks")
+        let longestWait = zip(busyLooks, busyLooks.dropFirst()).map { $1 - $0 - 1 }.max() ?? looks
+        #expect(longestWait <= 8, "the busy window's new changes waited at most \(longestWait) looks in a row")
+        if callWallMs.isFinite { #expect(outOfTime > 0, "looks ran out of time") }
         #expect(judge.faults > 0, "the first judgements in the third window failed")
         #expect(failing.allSatisfy { (judge.judgedCount[$0.rect] ?? 0) >= 1 }, "pictures left unjudged by a failure were judged again: \(failing.filter { judge.judgedCount[$0.rect] == nil }.count) never")
         let badChecks = judge.log.filter { $0.area.intersection(bad) != nil && $0.budget > 0 }.count
@@ -314,6 +329,16 @@ final class CostJudge: Judging {
         #expect((judge.judgedCount[line] ?? 0) >= 1, "the cover saving up was served")
         let g = CGRect(x: bad.x, y: bad.y, width: bad.w, height: bad.h)
         #expect(p.lastPlan.covers(g, kind: .plain), "the flagged picture is still covered")
+    }
+
+    @Test func busyWindowElsewhereNeverStarvesPendingWorkFlaggedRechecksOrTheSaver() {
+        busyElsewhere(callWallMs: .infinity, msPerCall: 0, seconds: 90)
+    }
+
+    /// The same with looks that run out of time: each call takes 4 ms against a 10 ms limit, so the third window is often
+    /// left for a later look.
+    @Test func busyWindowElsewhereNeverStarvesAnythingWhenLooksRunOutOfTime() {
+        busyElsewhere(callWallMs: 10, msPerCall: 4, seconds: 120)
     }
 
     /// A flagged picture's cover due to be judged again (`RECHECK_FLAGGED_EVERY`) is judged with budget while another cover
@@ -372,12 +397,14 @@ final class CostJudge: Judging {
     }
 
     /// The `FULL_REJUDGE` pass at a still screen judges every window again. When a look has no time for some of them, they
-    /// show what was judged before, unchanged, until their turn: nothing is blurred or covered for want of time or budget,
-    /// so a still screen cannot flicker at every pass. The looks go on here (a flagged picture stays covered).
-    @Test func fullPassesAtAStillScreenDoNotFlicker() {
-        var windows: [WindowInfo] = [], entries: [CostJudge.Entry] = []
+    /// show what was judged before, unchanged, until their turn, and are then judged again with budget: nothing is blurred
+    /// or covered for want of time, so a still screen cannot flicker at every pass. The looks go on here (a flagged picture
+    /// stays covered), so the passes do.
+    @Test func fullPassesAtAStillScreenDoNotFlickerAndEveryWindowIsJudgedAgain() {
+        var windows: [WindowInfo] = [], entries: [CostJudge.Entry] = [], areas: [PixelRect] = []
         for k in 0..<6 {
             let r = PixelRect(x: k * 100, y: 0, w: 100, h: 400)
+            areas.append(r)
             windows.append(WindowInfo(number: UInt32(1 + k), ownerPID: Int32(600 + k), layer: 0, bounds: CGRect(x: r.x, y: r.y, width: r.w, height: r.h)))
             entries += Self.grid(r, step: 30)
         }
@@ -386,19 +413,106 @@ final class CostJudge: Judging {
         judge.flagged = [bad]
         judge.msPerCall = 2
         let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: 5)
-        let plans = still(p, Fixtures.blank(600, 400), WindowSnapshot(windows: windows, time: 0), seconds: 300)
+        var passes: [Int] = [], lastPass = p.lastFullPass
+        let plans = still(p, Fixtures.blank(600, 400), WindowSnapshot(windows: windows, time: 0), seconds: 300) { k, _ in
+            if p.lastFullPass != lastPass { passes.append(k - 1); lastPass = p.lastFullPass }
+            return nil
+        }
         let g = CGRect(x: bad.x, y: bad.y, width: bad.w, height: bad.h)
         #expect(plans.last!.covers(g, kind: .plain), "the flagged picture stays covered")
         // The flagged picture's window stays covered (its first looks left it unjudged too long, and the flag keeps every
-        // cover over it). Everything else settles once judged, and then nothing else is drawn, through every full pass
-        // after it (one every 30 s).
+        // cover over it). From 100 s on, nothing else is drawn, through every full pass after it (one every 30 s).
         let flaggedWindow = CGRect(x: 0, y: 0, width: 100, height: 400).insetBy(dx: 1, dy: 1)
         func calm(_ plan: CoverPlan) -> Bool { plan.wholeDisplay == nil && plan.items.allSatisfy { flaggedWindow.contains($0.rect.insetBy(dx: 1, dy: 1)) } }
-        let lastStray = plans.lastIndex { !calm($0) } ?? -1
-        let settled = Double(lastStray + 1) / 4
-        #expect(settled <= 150, "the rest settled at \(settled) s, leaving at least five full passes after it")
-        let strays = plans.indices.filter { !calm(plans[$0]) }.map { Double($0) / 4 }
-        #expect(strays.allSatisfy { $0 < settled }, "nothing else drawn after \(settled) s")
+        let strays = plans.indices.filter { $0 >= 400 && !calm(plans[$0]) }.map { Double($0) / 4 }
+        #expect(strays.isEmpty, "something else was drawn at \(strays.prefix(8)) s")
+        // Each full pass from 100 s on judges every window again, with budget, within 5 s (some at later looks).
+        let late = passes.filter { $0 >= 400 }
+        #expect(late.count >= 5, "full passes from 100 s: \(late)")
+        for pass in late {
+            let missed = areas.filter { a in !judge.log.contains { $0.area == a && $0.budget > 0 && $0.look >= pass && $0.look <= pass + 20 } }
+            #expect(missed.isEmpty, "the pass at look \(pass) left \(missed.count) windows unjudged for 5 s")
+        }
+        #expect(judge.log.contains { $0.look > 400 && passes.contains($0.look - 1) && $0.budget > 0 }, "some window waited for a later look")
         #expect(p.needsAnotherLook, "the looks go on, so the full passes do")
+    }
+
+    // MARK: What a still look never shows as judged before
+
+    /// A screen of four windows (the first holding a flagged picture, so the looks go on) settled; then a look at the last
+    /// frame with no time for any window, on the `FULL_REJUDGE` rhythm, after `change` (a window moved, opened or turned
+    /// hot, or work left over). Returns that look's plan.
+    func outOfTimeFullPass(_ change: (DisplayPipeline, inout [WindowInfo]) -> Void) -> CoverPlan {
+        var windows: [WindowInfo] = [], entries: [CostJudge.Entry] = []
+        for k in 0..<4 {
+            let r = PixelRect(x: k * 150, y: 0, w: 150, h: 400)
+            windows.append(WindowInfo(number: UInt32(1 + k), ownerPID: Int32(700 + k), layer: 0, bounds: CGRect(x: r.x, y: r.y, width: r.w, height: r.h)))
+            entries += Self.grid(r, step: 40)
+        }
+        let judge = CostJudge(entries: entries, blindCalls: 0)
+        judge.flagged = [entries[2].rect]
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        let plans = still(p, Fixtures.blank(600, 400), WindowSnapshot(windows: windows, time: 0), seconds: 20)
+        #expect(!plans.last!.covers(CGRect(x: 160, y: 10, width: 400, height: 380)), "settled before the look (only the flagged window covered)")
+        change(p, &windows)
+        p.callWallMs = 0
+        p.lastFullPass = -1000
+        return p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 20.25), snapshot: WindowSnapshot(windows: windows, time: 0), now: 20.25)
+    }
+
+    /// Control: with nothing changed, a still look with no time for a full pass shows what was judged before.
+    @Test func anOutOfTimeFullPassShowsWhatWasJudgedBefore() {
+        let plan = outOfTimeFullPass { _, _ in }
+        #expect(!plan.covers(CGRect(x: 160, y: 10, width: 400, height: 380)), "nothing blurred for want of time")
+    }
+
+    @Test func anOutOfTimeFullPassBlursAMovedWindow() {
+        let plan = outOfTimeFullPass { _, w in
+            w[3] = WindowInfo(number: w[3].number, ownerPID: w[3].ownerPID, layer: 0, bounds: CGRect(x: 450, y: 60, width: 150, height: 340))
+        }
+        #expect(plan.covers(CGRect(x: 450, y: 60, width: 150, height: 340)), "its new place is blurred until judged")
+        #expect(plan.covers(CGRect(x: 450, y: 0, width: 150, height: 60)), "and what its old place now shows")
+    }
+
+    @Test func anOutOfTimeFullPassBlursANewWindow() {
+        let plan = outOfTimeFullPass { _, w in
+            w.insert(WindowInfo(number: 99, ownerPID: 799, layer: 0, bounds: CGRect(x: 200, y: 100, width: 200, height: 150)), at: 0)
+        }
+        #expect(plan.covers(CGRect(x: 200, y: 100, width: 200, height: 150)), "a window seen before its frame is blurred until judged")
+    }
+
+    @Test func anOutOfTimeFullPassBlursAHotWindow() {
+        let plan = outOfTimeFullPass { p, _ in p.hot.insert(.window(number: 2, ownerPID: 701)) }
+        #expect(plan.covers(CGRect(x: 150, y: 0, width: 150, height: 400)), "a hot window is blurred until judged")
+    }
+
+    @Test func anOutOfTimeFullPassBlursWorkLeftOver() {
+        let plan = outOfTimeFullPass { p, _ in p.pending = [CGRect(x: 300, y: 0, width: 150, height: 400)] }
+        #expect(plan.covers(CGRect(x: 300, y: 0, width: 150, height: 400)), "work left unjudged stays blurred")
+    }
+
+    /// A window a still look's full pass could not judge with budget waits as judged before for `JUDGING_STALL` at most:
+    /// with the bucket kept empty, it is then blurred until it is judged.
+    @Test func aWindowLeftWithoutBudgetIsBlurredAfterTheStallLimit() {
+        var windows: [WindowInfo] = [], entries: [CostJudge.Entry] = []
+        for k in 0..<4 {
+            let r = PixelRect(x: k * 150, y: 0, w: 150, h: 400)
+            windows.append(WindowInfo(number: UInt32(1 + k), ownerPID: Int32(700 + k), layer: 0, bounds: CGRect(x: r.x, y: r.y, width: r.w, height: r.h)))
+            entries += Self.grid(r, step: 40)
+        }
+        let judge = CostJudge(entries: entries, blindCalls: 0)
+        judge.flagged = [entries[2].rect]
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = WindowSnapshot(windows: windows, time: 0)
+        let plans = still(p, Fixtures.blank(600, 400), snap, seconds: 30) { k, _ in
+            if k == 81 { p.lastFullPass = -1000 }          // a full pass at 20.25 s
+            if k == 81 { p.bucket.spend(1000); p.setBudgetShare(0) }   // and from then on, no budget at all
+            return nil
+        }
+        let g = CGRect(x: 160, y: 10, width: 130, height: 380)
+        #expect(plans[81...96].allSatisfy { !$0.covers(g) }, "shown as judged before at first")
+        let blurredAt = plans.indices.first { $0 > 81 && plans[$0].covers(g) }
+        #expect(blurredAt != nil, "blurred once it had waited too long without budget")
+        if let b = blurredAt { #expect(Double(b - 81) / 4 <= Register.JUDGING_STALL + 0.5, "blurred after \(Double(b - 81) / 4) s") }
     }
 }
