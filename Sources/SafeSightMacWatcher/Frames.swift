@@ -114,6 +114,21 @@ public enum DirtyRegions {
         }
     }
 
+    /// True when any pixel of `r` differs between two frames of the same size (frames of different sizes always do).
+    public static func differ(_ old: RGBAImage, _ new: RGBAImage, _ r: PixelRect) -> Bool {
+        guard old.width == new.width, old.height == new.height, old.pixels.count == new.pixels.count else { return true }
+        guard let c = r.clamped(width: new.width, height: new.height), c.w > 0, c.h > 0 else { return false }
+        return old.pixels.withUnsafeBufferPointer { a in
+            new.pixels.withUnsafeBufferPointer { b in
+                for y in c.y..<c.maxY {
+                    let o = (y * new.width + c.x) * 4
+                    if memcmp(a.baseAddress! + o, b.baseAddress! + o, c.w * 4) != 0 { return true }
+                }
+                return false
+            }
+        }
+    }
+
     static func touches(_ a: PixelRect, _ b: PixelRect) -> Bool {
         a.x <= b.maxX && b.x <= a.maxX && a.y <= b.maxY && b.y <= a.maxY
     }

@@ -18,6 +18,13 @@ public enum Reason: String, Sendable, Codable {
     /// bothFamilies: the two families agreed. referee: one family flagged and the referee confirmed.
     /// disputed: one family flagged and no referee could settle it, so the picture is covered (SD-125).
     case judgedClean, bothFamilies, referee, disputed, containedSmall, hotContext, overload, cached, videoHold
+    /// Exactly these pixels were judged clear before, too near a cut-off for the verdict cache to keep (the margin rule),
+    /// and this call's budget did not reach them again. Shown as judged, never counted as a fresh judgement: the caller
+    /// lifts no cover on it.
+    case judgedEarlier
+    /// As `judgedEarlier`, but that judgement is older than `DetectorConfig.rejudgeAfter`: shown as judged, and judged
+    /// again first among entries judged before, whenever a call reaches it (a full re-judge, or a cover judged again).
+    case rejudgeDue
     /// Only in `JudgeProgress.fastFlag`, never in a verdict: the fastest model flagged, the full rule has not
     /// decided yet.
     case provisional
@@ -59,6 +66,10 @@ public struct FrameVerdict: Sendable {
     /// family model failed on is in `overloaded`, and a dispute the tie-breaker failed on is unanswered, so it
     /// is covered. A count only.
     public var modelFaults = 0
+    /// What the first entry the budget did not reach would have cost (model judgements), in the order this call judges,
+    /// whether it was left unjudged or shown as judged earlier; 0 when the budget reached every entry it had to judge. A
+    /// caller whose calls keep leaving such an entry can save its budget up for it.
+    public var nextCost = 0
 }
 
 /// Size bands in detail pixels (short side), as in the small-picture policy.

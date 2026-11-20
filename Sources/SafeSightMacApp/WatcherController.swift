@@ -12,6 +12,9 @@ import SafeSightMacCapture
 import SafeSightMacCover
 import SafeSightMacWatcher
 import Foundation
+#if SAFESIGHTMAC_LAB
+import LabStandIn
+#endif
 
 final class WatcherController: CaptureSink, @unchecked Sendable {
     // Capture queues, the judging queue and the main thread.
@@ -49,8 +52,27 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     }
     var repairActions: RepairCard.Actions?
     /// Told about every judged frame, on the main thread: the display, judging time and time from capture to the plan
-    /// (ms), and the plan (the Testing report's numbers).
-    @MainActor var onJudged: ((UInt32, Double, Double, CoverPlan) -> Void)?
+    /// (ms), the plan, whether it was a "nothing changed" frame, and the pipeline's own counts for it (the Testing
+    /// report's numbers).
+    @MainActor var onJudged: ((UInt32, Double, Double, CoverPlan, Bool, PipelineTimings) -> Void)?
+    /// Told about every update drawn, on the main thread (every display in it).
+    @MainActor var onDrawn: (([CoverPlan]) -> Void)? {
+        get { presenter.onDrawn }
+        set { presenter.onDrawn = newValue }
+    }
+    /// Told on every timer tick that covers changes left waiting too long to be judged.
+    @MainActor var onWaitingCover: (() -> Void)?
+    /// Per display: the last frame's display and stream generation, and when it came; and frames captured by status.
+    /// Written on the capture queues and read on the main thread, under `seenLock` (no hop to the main thread per frame).
+    private let seenLock = NSLock()
+    private var lastFrame: [UInt32: (display: DisplayDescriptor, generation: Int, at: TimeInterval)] = [:]
+    private var captured: [String: Int] = [:]
+    /// Frames captured so far, by the status the capture gave them (the Testing report's numbers).
+    func capturedCounts() -> [String: Int] { seenLock.withLock { captured } }
+    /// Displays whose pipeline still has something to judge on a still screen (main thread only).
+    private var wantsLook: Set<UInt32> = []
+    /// How long a still screen waits before the watcher asks for a look at the last frame itself.
+    static let idleLookAfter: TimeInterval = 0.25
     /// What every display shows now: one plan per display the OS lists.
     @MainActor var plans: [CoverPlan] { coordinator.shown }
 
@@ -108,9 +130,22 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     // MARK: Start, stop
 
+    #if SAFESIGHTMAC_LAB
+    /// Lab only: whether the window server's own overlays can be told apart inside the sandbox, and the windows above
+    /// the covers (levels and rectangles only).
+    func logOverlays(_ when: String) {
+        LabEventLog.shared.log(when + " " + WindowList.overlayCheck() + " above=" + WindowList.snapshot().windows
+            .filter { $0.layer >= CoverLevel.canvas && $0.ownerPID != ownPID }
+            .map { "L\($0.layer)@\(LabEventLog.rect($0.bounds)) overlay=\($0.systemOverlay)" }.joined(separator: ","))
+    }
+    #endif
+
     /// Covers every display whole at once, before any stream exists; loads the detector; then starts capture.
     @MainActor func start(rule: DetectorRule) {
         guard !running else { return }
+        #if SAFESIGHTMAC_LAB
+        logOverlays("start")
+        #endif
         running = true
         detectorFailed = false
         frames.open()
@@ -125,6 +160,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     @MainActor func stop() {
         running = false
         frames.close()
+        seenLock.withLock { lastFrame = [:] }
+        wantsLook = []
         // Not waited for: anything the old streams still send carries a generation outranked when covering starts again.
         link.detach()
         judgeQueue.async { [weak self] in
@@ -170,7 +207,14 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         judgeQueue.async { [weak self] in
             guard let self else { return }
             if self.detector == nil {
-                do { self.detector = try WatcherModels.loadDetector(folder: Self.modelsFolder(), rule: rule) }
+                do {
+                    self.detector = try WatcherModels.loadDetector(folder: Self.modelsFolder(), rule: rule)
+                    #if SAFESIGHTMAC_LAB
+                    // Lab builds only: the synthetic stand-in (a magenta and green checker) is flagged like an explicit
+                    // picture, so the cover can be seen working through the real app without any explicit material.
+                    self.detector?.standIn = CheckerStandIn()
+                    #endif
+                }
                 catch { DispatchQueue.main.async { self.reportDetectorFailure() }; return }
             } else {
                 self.detector?.setRule(rule)
@@ -193,6 +237,16 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     // MARK: CaptureSink (capture queues)
 
     func capture(_ frame: CapturedFrame) {
+        let at = ProcessInfo.processInfo.systemUptime
+        seenLock.withLock {
+            lastFrame[frame.display.id] = (frame.display, frame.generation, at)
+            captured[frame.status.rawValue, default: 0] += 1
+        }
+        #if SAFESIGHTMAC_LAB
+        let area = frame.dirty?.reduce(0) { $0 + $1.w * $1.h }
+        let box = frame.dirty?.reduce(CGRect.null) { $0.union(CGRect(x: $1.x, y: $1.y, width: $1.w, height: $1.h)) }
+        LabEventLog.shared.log("cap d=\(frame.display.id) g=\(frame.generation) st=\(frame.status.rawValue) img=\(frame.image != nil) dirty=\(frame.dirty.map { String($0.count) } ?? "nil") px=\(area.map(String.init) ?? "-") box=\(box.map { $0.isNull ? "-" : LabEventLog.rect($0) } ?? "-")")
+        #endif
         if frames.offer(frame, now: ProcessInfo.processInfo.systemUptime) {
             judgeQueue.async { [weak self] in self?.judgeNext() }
         }
@@ -241,14 +295,26 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         let pointer = CGEvent(source: nil)?.location
         let generation = f.generation
         let plan = p.process(f, snapshot: f.windows ?? WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
+            #if SAFESIGHTMAC_LAB
+            LabEventLog.shared.log("prov d=\(id) items=\(early.items.count) plain=\(early.plainCount) whole=\(early.wholeDisplay?.rawValue ?? "-")")
+            #endif
             DispatchQueue.main.async { self?.coordinator.deliver(early, generation: generation) }
         }
         let ended = ProcessInfo.processInfo.systemUptime
+        let wants = p.needsAnotherLook, timings = p.lastTimings, idle = f.status == .idle
+        #if SAFESIGHTMAC_LAB
+        do {
+            let t = p.lastTimings, g = p.diagnostics
+            let above = p.lastAbove.map { "L\($0.layer)@\(LabEventLog.rect($0.bounds))" } ?? "-"
+            LabEventLog.shared.log("judge d=\(id) st=\(f.status.rawValue) dirty=\(f.dirty.map { String($0.count) } ?? "nil") ms=\(Int((ended - start) * 1000)) lat=\(Int((ended - f.time) * 1000)) items=\(plan.items.count) plain=\(plan.plainCount) whole=\(plan.wholeDisplay?.rawValue ?? "-") above=\(above) calls=\(t.calls) jd=\(t.judgements) ovl=\(t.overloaded) prov=\(t.provisionalMs.count) atOnce=\(t.blurredAtOnce) first=\(t.coveredFirst) fast=\(t.fastFlags) left=\(t.leftForLater) rechk=\(t.rechecks) held=\(g.heldPlain)/\(g.heldBlur)/\(g.heldWhole) pend=\(g.pending) tok=\(Int(g.tokens)) mpj=\(String(format: "%.1f", g.msPerJudgement)) est=\(Int(g.runEstimateMs)) over=\(g.overrunFrames)")
+        }
+        #endif
         let judgeMs = (ended - start) * 1000, latencyMs = (ended - f.time) * 1000
         DispatchQueue.main.async {
             self.busySince[id] = nil; self.busyAreas[id] = nil
+            if wants { self.wantsLook.insert(id) } else { self.wantsLook.remove(id) }
             self.coordinator.deliver(plan, generation: generation)
-            self.onJudged?(id, judgeMs, latencyMs, plan)
+            self.onJudged?(id, judgeMs, latencyMs, plan, idle, timings)
         }
     }
 
@@ -277,8 +343,33 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         for (id, since) in busySince where now - since >= Register.WAITING_FRAME_COVER {
             if let a = busyAreas[id] ?? nil { unjudged[id, default: []] += a } else { stalled.insert(id) }
         }
+        #if SAFESIGHTMAC_LAB
+        if !stalled.isEmpty || !unjudged.isEmpty {
+            LabEventLog.shared.log("tick stalled=\(stalled.sorted()) unjudged=\(unjudged.mapValues(\.count)) busy=\(busySince.mapValues { Int((now - $0) * 1000) })")
+        }
+        #endif
         coordinator.tick(stalled: stalled, unjudged: unjudged)
+        if !stalled.isEmpty || !unjudged.isEmpty { onWaitingCover?() }
         updateRepairCard(now: now)
+        askForLooks(now: now)
+    }
+
+    /// A still screen sends no frames, but covers waiting to lift must still be judged again: for each display that has
+    /// something left to judge, with no frame waiting or being judged and none for `idleLookAfter`, a "nothing changed"
+    /// frame of its current stream is queued, and judged on the last frame's pixels like any idle frame. It never carries
+    /// pixels, so it can never replace a frame waiting to be judged, and a frame from an older stream is never judged.
+    @MainActor private func askForLooks(now: TimeInterval) {
+        let waiting = frames.waiting(now: now)
+        for id in wantsLook {
+            let last: (display: DisplayDescriptor, generation: Int, at: TimeInterval)? = seenLock.withLock {
+                guard let l = lastFrame[id], now - l.at >= Self.idleLookAfter else { return nil }
+                lastFrame[id]?.at = now
+                return l
+            }
+            guard let last, busySince[id] == nil, waiting[id] == nil else { continue }
+            let f = CapturedFrame(display: last.display, status: .idle, image: nil, map: nil, dirty: [], time: now, generation: last.generation)
+            if frames.offer(f, now: now) { judgeQueue.async { [weak self] in self?.judgeNext() } }
+        }
     }
 
     @MainActor private func shownChanged() {
@@ -309,6 +400,7 @@ final class WatchedPresenter: CoverPresenter {
     private let inner: CoverPresenter
     private var showing = false
     var onCoversShown: ((Bool) -> Void)?
+    var onDrawn: (([CoverPlan]) -> Void)?
 
     init(_ inner: CoverPresenter) { self.inner = inner }
 
@@ -318,11 +410,15 @@ final class WatchedPresenter: CoverPresenter {
     }
 
     func apply(_ plans: [CoverPlan]) {
+        #if SAFESIGHTMAC_LAB
+        LabEventLog.shared.log("draw " + plans.map { "d=\($0.display.id) items=\($0.items.count) whole=\($0.wholeDisplay?.rawValue ?? "-")" }.joined(separator: " | "))
+        #endif
         let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty }
         if now || showing { onCoversShown?(true) }
         inner.apply(plans)
         showing = now
         onCoversShown?(now)
+        onDrawn?(plans)
     }
 
     func removeAll() {

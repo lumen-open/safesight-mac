@@ -83,6 +83,8 @@ public struct PipelineTimings: Sendable, Equatable {
     public var fastFlags = 0
     /// Changed parts blurred at once, before judging, because recent frames took longer than `COVER_GOAL` to judge.
     public var blurredAtOnce = 0
+    /// Whether this call blurred large changed parts at once (0 or 1; for counting frames).
+    public var blurAtOnceFirings = 0
     /// Parts of the frame left for the next call because this one reached `JUDGE_CALL_WALL` (blurred meanwhile).
     public var leftForLater = 0
     /// Covers judged on their own, over their whole rectangle (not all on show as their window's).

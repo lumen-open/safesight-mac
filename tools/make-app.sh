@@ -18,15 +18,21 @@
 #        tools/make-app.sh --testing BUNDLE_ID MODELS_DIR
 #        tools/make-app.sh --testing --no-models BUNDLE_ID OUT_DIR
 #            (for tools/check-testing-edition.sh only: an app with no models covers every display whole)
+#        tools/make-app.sh --testing --lab BUNDLE_ID MODELS_DIR
+#            (developers' test Macs only: "SafeSight Mac Testing LAB.app", a lab Testing build that covers the synthetic
+#            stand-in and keeps a lab event log in its container; the identifier must end in .lab.testing. It is never
+#            handed to helpers; tools/check-no-standin.sh proves the release and normal Testing builds hold no stand-in)
 set -eu
 cd "$(dirname "$0")/.."
 # Never a lab build, whatever the shell has set: the stand-in and lab switches stay out of every app.
 unset SAFESIGHTMAC_LAB KESTREL_LAB
 
 testing=0
+lab=0
 models_wanted=1
 [ "${1:-}" = "--testing" ] && { testing=1; shift; }
 [ "$testing" = 1 ] && [ "${1:-}" = "--no-models" ] && { models_wanted=0; shift; }
+[ "$testing" = 1 ] && [ "$models_wanted" = 1 ] && [ "${1:-}" = "--lab" ] && { lab=1; shift; }
 bundle_id="${1:?bundle identifier, for example <rd>.safesightmac.app (or <rd>.safesightmac.testing with --testing)}"
 if [ "$models_wanted" = 1 ]; then
   models="${2:?models folder holding the three converted model packages}"
@@ -41,10 +47,22 @@ if [ "$testing" = 1 ]; then
     *) echo "The Testing edition's identifier must end in .testing (for example <rd>.safesightmac.testing),"
        echo "so it never shares a permission, settings or a sandbox with the full app."; exit 2 ;;
   esac
-  scratch=.build-testing
-  SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --product safesight-mac >/dev/null
-  bin=$(SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --show-bin-path)
-  app="${out_dir:-$scratch}/SafeSight Mac Testing.app"
+  if [ "$lab" = 1 ]; then
+    case "$bundle_id" in
+      *.lab.testing) ;;
+      *) echo "A lab Testing build's identifier must end in .lab.testing, so it never shares anything with a normal one."; exit 2 ;;
+    esac
+    # Its own scratch folder: a lab build never shares build products with the normal Testing build.
+    scratch=.build-testing-lab
+    SAFESIGHTMAC_LAB=1 SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --product safesight-mac >/dev/null
+    bin=$(SAFESIGHTMAC_LAB=1 SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --show-bin-path)
+    app="$scratch/SafeSight Mac Testing LAB.app"
+  else
+    scratch=.build-testing
+    SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --product safesight-mac >/dev/null
+    bin=$(SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path "$scratch" --show-bin-path)
+    app="${out_dir:-$scratch}/SafeSight Mac Testing.app"
+  fi
   plist=packaging/Testing-Info.plist
 else
   unset SAFESIGHTMAC_TESTING
@@ -57,10 +75,20 @@ fi
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/safesight-mac" "$app/Contents/MacOS/"
-# What goes into the app is checked, not only what the build folder holds: no lab stand-in.
-tools/check-no-standin.sh "$app/Contents/MacOS/safesight-mac" \
-  || { rm -rf "$app"; echo "the built app contains the lab stand-in; nothing was assembled"; exit 1; }
+# What goes into the app is checked, not only what the build folder holds: no lab stand-in and no lab event log. A lab
+# Testing build takes the explicit lab path instead, which requires it to be a lab build.
+if [ "$lab" = 1 ]; then
+  tools/check-no-standin.sh --lab "$app/Contents/MacOS/safesight-mac" \
+    || { rm -rf "$app"; echo "the lab app is not a lab build; nothing was assembled"; exit 1; }
+else
+  tools/check-no-standin.sh "$app/Contents/MacOS/safesight-mac" \
+    || { rm -rf "$app"; echo "the built app contains the lab stand-in; nothing was assembled"; exit 1; }
+fi
 sed -e "s/BUNDLE_ID/$bundle_id/" -e "s/VERSION/$version/g" "$plist" > "$app/Contents/Info.plist"
+# A lab build says so in its name wherever macOS shows it (System Settings' Screen Recording list, Finder).
+if [ "$lab" = 1 ]; then
+  sed -i '' -e 's#<string>SafeSight Mac Testing</string>#<string>SafeSight Mac Testing LAB</string>#' "$app/Contents/Info.plist"
+fi
 if [ "$models_wanted" = 1 ]; then
   here=$(pwd)
   packages=$(mktemp -d "${TMPDIR:-/tmp}/safesightmac-packages.XXXXXX")
@@ -96,6 +124,7 @@ if [ "$testing" = 1 ]; then
   codesign --force --sign - --options runtime --entitlements packaging/Testing.entitlements "$app"
   codesign --verify --strict "$app"
   echo "Built $app (ad hoc signed, sandboxed, not notarized). For this Mac or a test Mac only."
+  if [ "$lab" = 1 ]; then echo "A LAB build: it covers the synthetic stand-in and keeps a lab event log. Never hand it to anyone."; fi
 else
   echo "Built $app (unsigned). Sign and notarize it before giving it to anyone."
 fi

@@ -196,3 +196,28 @@ final class VerdictCache {
         store.put(k, v)
     }
 }
+
+/// Exact pixels last judged clear but kept out of the verdict cache by the margin rule (`Detector.seenClear`): the key
+/// and when it was judged, nothing else (no outcome, no score). Bounded; the oldest go first when it is full.
+final class SeenClear {
+    struct Entry: Sendable { var serial: UInt64; var at: Date }
+    static let capacity = 20_000
+    private var store: [ExactKey: Entry] = [:]
+    private var next: UInt64 = 0
+
+    func get(_ k: ExactKey) -> Entry? { store[k] }
+
+    func put(_ k: ExactKey, at: Date) {
+        next += 1
+        store[k] = Entry(serial: next, at: at)
+        if store.count > Self.capacity {
+            // Drop the older half: rare, and an entry dropped is only judged again sooner.
+            let cut = store.values.map(\.serial).sorted()[store.count / 2]
+            store = store.filter { $0.value.serial >= cut }
+        }
+    }
+
+    func remove(_ k: ExactKey) { store[k] = nil }
+    func removeAll() { store.removeAll() }
+    var count: Int { store.count }
+}

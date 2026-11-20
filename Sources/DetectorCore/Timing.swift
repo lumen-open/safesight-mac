@@ -29,13 +29,15 @@ public struct JudgeTimings: Sendable, Equatable {
     public var finderCacheHits = 0
     public var judgements = 0
     public var overloaded = 0
+    /// Entries the budget did not reach that were shown as judged earlier on the same pixels (`Reason.judgedEarlier`).
+    public var judgedEarlier = 0
     /// Per model id: judgements the model failed (it threw or gave an unusable score; `Detector.usable`).
     public var modelFaults: [String: Int] = [:]
     public init() {}
 
     public mutating func add(_ o: JudgeTimings) {
         calls += o.calls; finderMs += o.finderMs; cacheMs += o.cacheMs; decisionMs += o.decisionMs; totalMs += o.totalMs
-        cacheHits += o.cacheHits; cacheMisses += o.cacheMisses; finderCacheHits += o.finderCacheHits; judgements += o.judgements; overloaded += o.overloaded
+        cacheHits += o.cacheHits; cacheMisses += o.cacheMisses; finderCacheHits += o.finderCacheHits; judgements += o.judgements; overloaded += o.overloaded; judgedEarlier += o.judgedEarlier
         for (k, v) in o.preprocessMs { preprocessMs[k, default: 0] += v }
         for (k, v) in o.inferenceMs { inferenceMs[k, default: 0] += v }
         for (k, v) in o.tiles { tiles[k, default: 0] += v }

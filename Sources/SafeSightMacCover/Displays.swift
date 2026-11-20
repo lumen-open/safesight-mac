@@ -49,8 +49,12 @@ public struct SystemState: Equatable, Sendable {
     public var sessionOnConsole: Bool
     /// The screen is locked (the session dictionary's `CGSSessionScreenIsLocked`).
     public var screenLocked: Bool
-    public init(displaysAsleep: Bool, sessionOnConsole: Bool, screenLocked: Bool = false) {
+    /// The lock screen (or login window) is drawn over every listed display: a window at or above the level the lock
+    /// screen was seen at (`CoverLevel.lockScreenSeen`) covering each display whole. Read only while `away`.
+    public var lockScreenUp: Bool
+    public init(displaysAsleep: Bool, sessionOnConsole: Bool, screenLocked: Bool = false, lockScreenUp: Bool = false) {
         self.displaysAsleep = displaysAsleep; self.sessionOnConsole = sessionOnConsole; self.screenLocked = screenLocked
+        self.lockScreenUp = lockScreenUp
     }
 
     /// The owner is at the lock screen or the login window, or another session has the console: covers must not be drawn.
@@ -62,7 +66,27 @@ public struct SystemState: Equatable, Sendable {
         let d = CGSessionCopyCurrentDictionary() as? [String: Any]
         let session = d?[kCGSessionOnConsoleKey as String] as? Bool
         let locked = d?["CGSSessionScreenIsLocked"] as? Bool
-        return SystemState(displaysAsleep: asleep, sessionOnConsole: session ?? false, screenLocked: locked ?? false)
+        var s = SystemState(displaysAsleep: asleep, sessionOnConsole: session ?? false, screenLocked: locked ?? false)
+        if s.away { s.lockScreenUp = lockScreenCovers(displays.map { CGDisplayBounds($0) }) }
+        return s
+    }
+
+    /// Whether every display is covered whole by a window at or above the lock screen's level (the window list gives levels
+    /// and frames only; no name is read). False with no display, or when the list cannot be read.
+    public static func lockScreenCovers(_ displays: [CGRect]) -> Bool {
+        guard !displays.isEmpty, let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return false }
+        let shields: [CGRect] = list.compactMap { d in
+            guard let layer = d[kCGWindowLayer as String] as? Int, layer >= CoverLevel.lockScreenSeen,
+                  (d[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1 > 0.001,
+                  let b = d[kCGWindowBounds as String] as? NSDictionary, let r = CGRect(dictionaryRepresentation: b as CFDictionary) else { return nil }
+            return r
+        }
+        return lockScreenCovers(displays, shields: shields)
+    }
+
+    /// The pure rule: every display lies inside one of `shields` (to within a point).
+    public static func lockScreenCovers(_ displays: [CGRect], shields: [CGRect]) -> Bool {
+        !displays.isEmpty && displays.allSatisfy { d in shields.contains { $0.insetBy(dx: -1, dy: -1).contains(d) } }
     }
 }
 
@@ -129,6 +153,10 @@ public final class CoverCoordinator {
     /// A sleep, display-sleep or session hold whose wake or return notification never came ends once the OS says it
     /// is over and the hold has lasted this long (awake time): displays awake, the session on the console.
     public nonisolated static let holdCheckAfter: [HoldReason: TimeInterval] = [.displaysAsleep: 2, .session: 2, .sleep: 10, .locked: 0]
+    /// While the screen locks, every display stays covered whole (below the lock screen's level) until the lock screen is
+    /// seen drawn over it; then the canvases are taken off. If it is not seen within this long, they are taken off anyway:
+    /// a cover must never be what stands in front of the password field.
+    public nonisolated static let lockScreenWait: TimeInterval = 10
 
     private let presenter: CoverPresenter
     private let read: @MainActor ([UInt32]) -> DisplayList?
@@ -303,6 +331,7 @@ public final class CoverCoordinator {
             topUpCapture?(coverage.newRequest())
         }
         if refresh() { redraw = true }
+        if waitingForLockScreen { redraw = true }
         if redraw { draw(urgent: true) }
     }
 
@@ -330,12 +359,32 @@ public final class CoverCoordinator {
         return true
     }
 
+    /// True while the canvases are drawn covered whole during a lock, waiting for the lock screen to be drawn.
+    public private(set) var waitingForLockScreen = false
+
     private func draw(urgent: Bool) {
         guard running else { return }
         shown = coverage.shown(stalled: stalled, unjudged: unjudged)
         // At the lock screen nothing is drawn: every canvas is taken off the screen, so none can stand in front of the
-        // password field. Everything counts as covered whole meanwhile, and is drawn covered whole on the way back.
-        if coverage.holds.contains(.locked) { presenter.removeAll() } else { presenter.apply(shown) }
+        // password field. But the lock screen takes a moment (seconds, on a slow Mac) to be drawn after the session says
+        // it is locked, and taking the canvases off at once showed the desktop meanwhile. So until the lock screen is
+        // seen over every display, the canvases stay, covered whole, below its level (`CoverLevel.canvas` is under
+        // `CoverLevel.lockScreenSeen`), and they go once it is, or after `lockScreenWait` in any case. Everything counts as
+        // covered whole meanwhile, and is drawn covered whole on the way back.
+        if coverage.holds.contains(.locked) {
+            let since = holdSince[.locked] ?? clock()
+            if state(coverage.list.ids).lockScreenUp || clock() - since >= Self.lockScreenWait {
+                waitingForLockScreen = false
+                presenter.removeAll()
+            } else {
+                waitingForLockScreen = true
+                presenter.apply(shown)
+                wake?(0.1)
+            }
+        } else {
+            waitingForLockScreen = false
+            presenter.apply(shown)
+        }
         if urgent { flush() }
         let judged = coverage.list.judged, required = coverage.required
         if handedToJudging.map({ $0.judged != judged || $0.required != required }) ?? true {

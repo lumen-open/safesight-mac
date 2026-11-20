@@ -15,7 +15,8 @@ let detectorSettings: [SwiftSetting] = labSettings + [.swiftLanguageMode(.v5)]
 // The Testing edition, for volunteer helpers (docs/TESTING-EDITION.md):
 // `SAFESIGHTMAC_TESTING=1 swift build -c release --scratch-path .build-testing`. It has no lock and nothing that
 // could add one: no keeper check, no installer, no login item, nothing that asks for an administrator. The flag is
-// independent of the lab flag: a lab Testing build (both set) adds the stand-in, for the harness only.
+// independent of the lab flag: a lab Testing build (both set, `tools/make-app.sh --testing --lab`) adds the stand-in
+// and the lab event log, to the harness and to the app (developers' test Macs only).
 let testing = env["SAFESIGHTMAC_TESTING"] == "1"
 let editionSettings: [SwiftSetting] = testing ? [.define("SAFESIGHTMAC_TESTING")] : []
 let coreSettings: [SwiftSetting] = labSettings + editionSettings
@@ -49,7 +50,7 @@ var targets: [Target] = [
     // The cover-only menu-bar app.
     .executableTarget(name: "SafeSightMacApp",
                       dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCapture", "SafeSightMacCover", "DetectorCore"]
-                          + (testing ? ["SafeSightMacTestingEdition"] : []),
+                          + (testing ? ["SafeSightMacTestingEdition"] : []) + (lab ? ["LabStandIn"] : []),
                       swiftSettings: appSettings),
     // The lab harness: frames from files or synthetic scenes through the pipeline, never the screen.
     .executableTarget(name: "SafeSightMacHarness", dependencies: ["SafeSightMacCore", "SafeSightMacWatcher", "SafeSightMacCover", "DetectorCore", "Preprocess"] + (lab ? ["LabStandIn"] : []),

@@ -116,6 +116,24 @@ import Testing
         #expect(buttons.map(\.title) == [AppText.repairTryAgain, AppText.repairPause, AppText.repairQuit])
     }
 
+    /// The first live run: the card's buttons were cut off. Setting a window's content view first sizes the view to the
+    /// window (300 points high when new), so the card's own size was lost.
+    @Test(arguments: [true, false])
+    func theCardIsShownWholeWithItsButtons(_ testing: Bool) throws {
+        let v = RepairCardView.make(cause: .notYetJudged, pause: true, theme: .light, target: nil, tryAgain: nil, pause: nil, quit: nil,
+                                    notice: testing ? .testing(shortcut: true) : nil)
+        let designed = v.frame.size
+        let p = RepairPanel.make()
+        p.fit(v)
+        let content = try #require(p.contentView)
+        #expect(content === v)
+        #expect(content.frame.size == designed, "the window takes the card's size")
+        let buttons = views(v).compactMap { $0 as? NSButton }
+        #expect(buttons.count == 3)
+        for b in buttons { #expect(content.bounds.contains(b.frame), "\(b.title) is inside the card") }
+        if testing { #expect(designed.height > 300, "taller than a new panel, which is what cut it off") }
+    }
+
     @Test func theReleaseCardHasNoTestingLine() {
         let v = RepairCardView.make(cause: .detectorUnavailable, pause: true, theme: .light, target: nil, tryAgain: nil, pause: nil, quit: nil)
         #expect(!views(v).contains { ($0.accessibilityLabel() ?? "").hasPrefix("Testing edition") })
@@ -183,6 +201,26 @@ import Testing
         let largest = CoordinateSpace.toCanvasLayer(rects[0], display: display.bounds)
         #expect(largest.contains(line.frame), "on the largest cover with room")
         #expect(lines(plan(rects), nil).isEmpty, "the release edition stays wordless")
+    }
+
+    /// The first live run: several overlapping blurs, each hiding more than half the display, drew two to four lines
+    /// stacked on one another. One line per display.
+    @Test func overlappingBigCoversCarryOneLineNotAStack() {
+        let rects = [CGRect(x: 0, y: 0, width: 1280, height: 800), CGRect(x: 0, y: 40, width: 1280, height: 700),
+                     CGRect(x: 100, y: 0, width: 1000, height: 800), CGRect(x: 0, y: 0, width: 1280, height: 760)]
+        let blurs = CoverPlan(display: display, items: rects.map { CoverItem(rect: $0, kind: .blur(BlurTile(columns: 1, rows: 1, rgba: [9, 9, 9, 255]))) })
+        #expect(lines(blurs, testing).count == 1)
+        #expect(lines(plan(rects), testing).count == 1)
+    }
+
+    @Test func severalWholeWindowCoversCarryOneLine() throws {
+        let big = CGRect(x: 0, y: 0, width: 800, height: 600), small = CGRect(x: 820, y: 100, width: 440, height: 400)
+        let p = CoverPlan(display: display, items: [CoverItem(rect: small, kind: .plain, wayOut: true), CoverItem(rect: big, kind: .plain, wayOut: true)])
+        let found = lines(p, testing)
+        #expect(found.count == 1)
+        #expect(CoordinateSpace.toCanvasLayer(big, display: display.bounds).contains(try #require(found.first).frame), "on the larger")
+        let ways = CoverDrawing.layers(for: p, theme: .light, scale: 2, notice: testing).compactMap { $0 as? WayOutLayer }
+        #expect(ways.count == 2, "every whole-window cover keeps its way-out line")
     }
 
     @Test func coversHidingLessThanHalfStayWordless() {
