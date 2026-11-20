@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Vendored from the kestrel lab detector (v3-detector, commit 49ecdd9) under Apache-2.0.
 // kestrel-preprocess/1 (spec/preprocess.md), Swift implementation. Integer-exact.
+import Accelerate
 import Foundation
 
 public enum PreprocessSpec {
@@ -32,7 +33,28 @@ public struct RGBAImage: Sendable {
     /// From a BGRA capture buffer (opaque premultiplied equals straight).
     /// A display capture's BGRA pixels as RGBA. A display has no see-through parts: alpha is always 255, so a capture
     /// whose alpha bytes are not opaque is never darkened by the alpha step before judging.
+    ///
+    /// It runs on the capture queue for every frame with new pixels, so it is done with Accelerate's vector routines
+    /// (one channel swap, then alpha set to 255): byte for byte what `fromBGRAScalar` gives, several times faster. If
+    /// Accelerate refuses the buffer, the plain loop does it.
     public static func fromBGRA(width: Int, height: Int, bytesPerRow: Int, base: UnsafePointer<UInt8>) -> RGBAImage {
+        var px = [UInt8](repeating: 0, count: width * height * 4)
+        let ok = px.withUnsafeMutableBytes { out -> Bool in
+            var src = vImage_Buffer(data: UnsafeMutableRawPointer(mutating: base), height: vImagePixelCount(height),
+                                    width: vImagePixelCount(width), rowBytes: bytesPerRow)
+            var dst = vImage_Buffer(data: out.baseAddress!, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: width * 4)
+            // BGRA (bytes 0, 1, 2, 3) to RGBA: take bytes 2, 1, 0, 3.
+            let map: [UInt8] = [2, 1, 0, 3]
+            guard vImagePermuteChannels_ARGB8888(&src, &dst, map, vImage_Flags(kvImageDoNotTile)) == kvImageNoError else { return false }
+            // The fourth byte of each pixel (mask bit 0x1, the last channel) set to 255.
+            return vImageOverwriteChannelsWithScalar_ARGB8888(255, &dst, &dst, 0x1, vImage_Flags(kvImageDoNotTile)) == kvImageNoError
+        }
+        if !ok { return fromBGRAScalar(width: width, height: height, bytesPerRow: bytesPerRow, base: base) }
+        return RGBAImage(width: width, height: height, pixels: px)
+    }
+
+    /// The same conversion as `fromBGRA`, one pixel at a time: the reference the tests compare it with.
+    public static func fromBGRAScalar(width: Int, height: Int, bytesPerRow: Int, base: UnsafePointer<UInt8>) -> RGBAImage {
         var px = [UInt8](repeating: 0, count: width * height * 4)
         px.withUnsafeMutableBufferPointer { out in
             for y in 0..<height {

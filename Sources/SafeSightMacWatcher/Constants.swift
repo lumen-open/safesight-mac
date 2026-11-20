@@ -54,4 +54,13 @@ public enum Register {
     /// meanwhile. Past it, the detector counts as failed: the displays stay covered whole and the repair card offers to
     /// try again. Not in the register; a working value, well above the measured warm-up (spec/detector-contract.md).
     public static let WARM_UP_LIMIT: TimeInterval = 10
+    /// How long a warm-up past `WARM_UP_LIMIT` may still end well. The first load at a new place builds Core ML's cache
+    /// (12.3 s in a virtual Mac): past `WARM_UP_LIMIT` the displays are covered whole as for a failure, and if the warm-up
+    /// then ends well within this, covering starts as after "try again". Not in the register; a working value.
+    public static let WARM_UP_SLOW_LIMIT: TimeInterval = 120
+    /// The watcher's quarter-second check on the main thread: judging that stalls, frames left waiting, the OS's display
+    /// lists and session state (a change nobody announced, the lock screen), and the looks at a still screen. It is the
+    /// one timer that runs at a settled screen; it backs up the OS's own notices and is kept at this rate in every energy
+    /// mode. Not in the register; a working value.
+    public static let TICK: TimeInterval = 0.25
 }

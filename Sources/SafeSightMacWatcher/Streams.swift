@@ -67,6 +67,7 @@ public struct CaptureReports: Sendable {
 ///   newest start is ignored.
 /// - A request stops early, stopping what it had just started, as soon as a newer start (or `stop`) has begun.
 /// - Two streams never run for one display: the newer is kept and the older stopped.
+/// - `pause(generation:)` stops every stream older than the request and starts none; a newer start starts them again.
 /// - `stop()` stops every stream; nothing after it starts another.
 public actor StreamScheduler {
     private struct Running { let stream: any CaptureStream; let generation: Int; let serial: Int }
@@ -98,6 +99,21 @@ public actor StreamScheduler {
             await r.stream.close()
         }
         await addMissing(only, g)
+    }
+
+    /// Stops every stream older than the request and starts none, without asking the capture framework for anything
+    /// (the Mac or its displays are asleep, the screen is locked, or another session has the console: nothing on screen
+    /// is this session's to judge, and every display is covered whole meanwhile). A later start, newer than this, starts
+    /// them again; a start or top-up older than it is ignored, as for any start.
+    public func pause(generation g: Int) async {
+        guard !stopped, g > newestStart else { return }
+        newestStart = g
+        let old = streams.filter { $0.value.generation < g }
+        for id in old.keys { streams[id] = nil }
+        for (id, r) in old.sorted(by: { $0.key < $1.key }) {
+            await reports.stopped(id, r.generation, false)
+            await r.stream.close()
+        }
     }
 
     public func topUp(only: Set<UInt32>, generation g: Int) async {

@@ -6,6 +6,7 @@ What isn't built or proven yet, in plain words. It's kept short on purpose; the 
 ## Not proven
 
 - **Nothing has run on real hardware yet.** The screen cover and the Testing edition are checked by tests, a lab harness and CI, with synthetic screens. Neither app has been opened on a Mac with a live screen, so how it behaves there, and how long a picture shows before its cover, isn't known.
+- **Battery use isn't measured on a real Mac.** CPU time and memory were measured off the screen and in a virtual Mac; watts, the Neural Engine and a day on a MacBook Air's battery still need a real Mac ([ENERGY.md](ENERGY.md)).
 - **The catch rate isn't measured.** Nobody knows yet how many explicit pictures the detector misses. False covers were counted on harmless screens in the lab, not in daily use.
 
 ## The lock

@@ -25,6 +25,7 @@ public final class CaptureLink {
         self.coordinator = coordinator
         coordinator.restartCapture = { [weak self] g in self?.send { s, only in await s.start(only: only, generation: g) } }
         coordinator.topUpCapture = { [weak self] g in self?.send { s, only in await s.topUp(only: only, generation: g) } }
+        coordinator.pauseCapture = { [weak self] g in self?.send { s, _ in await s.pause(generation: g) } }
     }
 
     /// What a scheduler tells this link's coordinator.
@@ -70,3 +71,23 @@ public final class CaptureLink {
 
     private func keep(_ t: Task<Void, Never>) { if keepsRequests { requests.append(t) } }
 }
+
+/// A slow first warm-up (Core ML building its cache past `WARM_UP_LIMIT`), on the main thread: past the deadline it is a
+/// detector failure (covered whole, the repair card); if that same load's warm-up then ends well, covering may start
+/// after all. A load that really failed (it could not load, or its warm-up failed or ran past `WARM_UP_SLOW_LIMIT`)
+/// stays failed until Try again.
+@MainActor
+public final class WarmUpWatch {
+    private var slow: Int?
+    public nonisolated init() {}
+    /// The deadline passed for load `token` while it was still warming up.
+    public func deadlinePassed(_ token: Int) { slow = token }
+    /// Load `token` failed for real.
+    public func failed(_ token: Int) { if slow == token { slow = nil } }
+    /// Load `token` is ready. True when covering may start: it had not failed, or only its deadline had passed.
+    public func ready(_ token: Int, detectorFailed: Bool) -> Bool {
+        defer { if slow == token { slow = nil } }
+        return !detectorFailed || slow == token
+    }
+}
+
