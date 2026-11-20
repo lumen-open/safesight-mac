@@ -23,11 +23,12 @@ struct BenchOptions {
     var trials = 8
     var pages: String?
     var json: String?
-    var cases: Set<String> = ["single", "grid", "busy", "scroll", "reappear"]
+    var cases: Set<String> = ["single", "grid", "busy", "scroll", "reappear", "reuse"]
     var label = "bench"
     var busyPages = 6
     var scrollSpeeds = [8, 32, 96]
     var modelsNote = "null models (lab)"
+    var backgroundChecks = true
 }
 
 // MARK: Small helpers
@@ -97,7 +98,9 @@ final class Bench {
     }
 
     func pipeline(unlimited: Bool) -> DisplayPipeline {
-        DisplayPipeline(display: display, judger: detector, budgetShare: unlimited ? 1e9 : Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: detector, budgetShare: unlimited ? 1e9 : Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+        p.backgroundSecondChecks = o.backgroundChecks
+        return p
     }
 
     func frame(_ img: RGBAImage?, dirty: [PixelRect]?, status: FrameStatus = .complete, t: TimeInterval) -> CapturedFrame {
@@ -154,6 +157,7 @@ final class Bench {
         m("coverDrawMs") { $0.plans.last!.drawMs }
         m("processTotalMs") { $0.totalMs }
         m("judgements") { Double($0.pipe.judgements) }
+        m("secondCheckJudgements") { Double($0.judge.secondCheckJudgements) }
         m("overloaded") { Double($0.pipe.overloaded) }
         m("modelFaults") { Double($0.pipe.modelFaults) }
         m("cacheHits") { Double($0.judge.cacheHits) }
@@ -507,11 +511,13 @@ final class Bench {
     // MARK: Case 5: pictures already judged reappear (reload, window move, scrolling back)
 
     /// Judges until nothing is left unjudged (budget unlimited), so that every picture has a verdict.
+    /// Frames where nothing changes also give pictures seen clean once their second clean check in the background
+    /// (`DisplayPipeline`, step 3c), unless --no-background-checks.
     func settle(_ p: DisplayPipeline, from t: inout Double, snapshot snap: WindowSnapshot? = nil) {
         for _ in 0..<50 {
             t += 0.01
             let s = step(p, frame(nil, dirty: [], status: .idle, t: t), now: t, snapshot: snap)
-            if s.pipe.overloaded == 0 { return }
+            if s.pipe.overloaded == 0 && !p.secondChecksDue { return }
         }
     }
 
@@ -586,6 +592,185 @@ final class Bench {
         return out
     }
 
+    // MARK: Case 6: what reuse costs the detector, in judgements (exact counts)
+
+    /// Judges `img` within `area` until nothing is left unjudged (in one call, with no cap and no time limit):
+    /// the judgements, calls and time that took. Counts are exact and stable; only times vary from run to run.
+    func judgeFully(_ img: RGBAImage, _ ctx: JudgeContext, _ area: PixelRect) -> (judgements: Int, calls: Int, ms: Double, left: Int) {
+        var j = 0, calls = 0, ms = 0.0, left = 0
+        for _ in 0..<40 {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            let v = detector.judge(img, context: ctx, within: area, budget: Self.wholeCall)
+            ms += Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+            j += v.judgements; calls += 1; left = v.overloaded
+            if v.overloaded == 0 { break }
+        }
+        return (j, calls, ms, left)
+    }
+
+    /// Second clean checks in the background for everything seen clean once in `area` (none in builds without them).
+    func checkInBackground(_ img: RGBAImage, _ ctx: JudgeContext, _ area: PixelRect) -> Int {
+        guard o.backgroundChecks else { return 0 }
+        var n = 0
+        for _ in 0..<40 {
+            let v = detector.secondChecks(img, context: ctx, within: area, budget: Self.wholeCall)
+            n += v.judgements
+            if v.secondChecksLeft == 0 { break }
+        }
+        return n
+    }
+
+    /// Reload of a busy page, a window moved with the same content, and scrolling back, each judged in full at the
+    /// detector (no cover layer budget or time limit), so the judgements reuse costs are counted exactly. Each page is
+    /// first judged in full; with background checks, pictures seen clean once then get their second check (counted
+    /// apart); then the reuse is judged in full.
+    /// The reuse case judges in calls with no cap, so each picture is judged once per showing and nothing is left over.
+    static let wholeCall = 1_000_000
+
+    func reuse() -> [String: Any] {
+        let cap = detector.config.maxJudgementsPerCall
+        detector.labSetCallCap(Self.wholeCall)
+        defer { detector.labSetCallCap(cap) }
+        var out: [String: Any] = [:]
+        let pages = busyPages()
+        let whole = PixelRect(x: 0, y: 0, w: W, h: H)
+        var rows: [String: [Double]] = [:]
+        func add(_ k: String, _ v: Double) { rows[k, default: []].append(v) }
+        for page in pages {
+            detector.removeCachedVerdicts()
+            let ctx = JudgeContext(windowID: 1, startsCovered: false)
+            let first = judgeFully(page.img, ctx, whole)
+            add("firstJudgements", Double(first.judgements)); add("firstMs", first.ms)
+            add("backgroundJudgements", Double(checkInBackground(page.img, ctx, whole)))
+            let reload = judgeFully(page.img, ctx, whole)
+            add("reloadJudgements", Double(reload.judgements)); add("reloadMs", reload.ms); add("reloadCalls", Double(reload.calls))
+            let third = judgeFully(page.img, ctx, whole)
+            add("thirdShowJudgements", Double(third.judgements)); add("thirdShowMs", third.ms)
+        }
+        // Window move: a 1000 x 700 point window showing part of a busy page moves 120 x 30 points.
+        for page in pages {
+            detector.removeCachedVerdicts()
+            let a = CGRect(x: 100, y: 80, width: 1000, height: 700), b = a.offsetBy(dx: 120, dy: 30)
+            func scene(_ w: CGRect) -> RGBAImage {
+                var img = base
+                let x0 = Int(w.minX * scale), y0 = Int(w.minY * scale), ww = Int(w.width * scale), hh = Int(w.height * scale)
+                for y in 0..<hh { for x in 0..<ww {
+                    let d = ((y0 + y) * W + x0 + x) * 4, s = (y * W + x) * 4
+                    img.pixels[d] = page.img.pixels[s]; img.pixels[d + 1] = page.img.pixels[s + 1]; img.pixels[d + 2] = page.img.pixels[s + 2]
+                } }
+                return img
+            }
+            func px(_ w: CGRect) -> PixelRect { PixelRect(x: Int(w.minX * scale), y: Int(w.minY * scale), w: Int(w.width * scale), h: Int(w.height * scale)) }
+            func ctx(_ w: CGRect) -> JudgeContext { JudgeContext(windowID: 7, startsCovered: false, sliceAnchor: SliceAnchor(x: Int(w.minX * scale), y: Int(w.minY * scale))) }
+            let one = scene(a), two = scene(b)
+            _ = judgeFully(one, ctx(a), px(a))
+            add("moveBackgroundJudgements", Double(checkInBackground(one, ctx(a), px(a))))
+            let moved = judgeFully(two, ctx(b), px(b))
+            add("moveJudgements", Double(moved.judgements)); add("moveMs", moved.ms)
+        }
+        // Scrolling: down 900 pixels in steps of 150, then back up in steps of 150 (the same places) and of 100 (others).
+        for (name, upStep) in [("sameOffsets", 150), ("otherOffsets", 100)] {
+            detector.removeCachedVerdicts()
+            func ctx(_ off: Int) -> JudgeContext { JudgeContext(windowID: 1, startsCovered: false, sliceAnchor: SliceAnchor(x: 0, y: -off)) }
+            var bg = 0, back = 0, backMs = 0.0
+            for off in stride(from: 0, through: 900, by: 150) {
+                _ = judgeFully(viewport(off), ctx(off), whole)
+                bg += checkInBackground(viewport(off), ctx(off), whole)
+            }
+            for off in stride(from: 900 - upStep, through: 0, by: -upStep) {
+                let r = judgeFully(viewport(off), ctx(off), whole)
+                back += r.judgements; backMs += r.ms
+                bg += checkInBackground(viewport(off), ctx(off), whole)
+            }
+            out["scrollBack-\(name)"] = ["backJudgementsTotal": back, "backMsTotal": r1(backMs), "backgroundJudgementsTotal": bg]
+            print("reuse scroll back (\(name)): \(back) judgements, \(r1(backMs)) ms; background \(bg)")
+        }
+        for (k, v) in rows { out[k] = ["median": r1(median(v)), "worst": r1(worst(v)), "total": r1(v.reduce(0, +)), "n": v.count] }
+        print("reuse: reload median \(r1(median(rows["reloadJudgements"] ?? []))) judgements, \(r1(median(rows["reloadMs"] ?? []))) ms; window move median \(r1(median(rows["moveJudgements"] ?? []))) judgements")
+        return out
+    }
+
+    // MARK: Case 7: a busy page judged within the per-call cap
+
+    /// Each busy page judged at the detector in calls of `DETECTOR_CALL_CAP`, as the cover layer calls it, until nothing is
+    /// left (at most 40 calls), with what the first entry not reached would cost (`nextCost`). A page that does not finish
+    /// that way is then run through the cover layer, with the register's budget and a look at the still screen every
+    /// quarter second (simulated time), until nothing is left to look at or 300 s: there the budget is saved up for an
+    /// entry dearer than one call (`DisplayPipeline.saving`).
+    func capped() -> [String: Any] {
+        var rows: [[String: Any]] = []
+        let whole = PixelRect(x: 0, y: 0, w: W, h: H)
+        for page in busyPages() {
+            detector.removeCachedVerdicts()
+            let ctx = JudgeContext(windowID: 1, startsCovered: false)
+            var calls = 0, judgements = 0, left = 0, dearest = 0
+            for _ in 0..<40 {
+                let v = detector.judge(page.img, context: ctx, within: whole, budget: Register.DETECTOR_CALL_CAP)
+                calls += 1; judgements += v.judgements; left = v.overloaded; dearest = max(dearest, v.nextCost)
+                if v.overloaded == 0 { break }
+            }
+            var row: [String: Any] = ["page": page.name, "calls": calls, "judgements": judgements, "leftUnjudged": left, "dearestNotReached": dearest]
+            if left > 0 {
+                detector.removeCachedVerdicts()
+                let p = DisplayPipeline(display: display, judger: detector, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+                p.backgroundSecondChecks = o.backgroundChecks
+                var t = 0.0
+                var plan = p.process(frame(page.img, dirty: nil, t: t), snapshot: snapshot, now: t)
+                var looks = 0, judged = 0, restAt: Double?
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                while t < 300 {
+                    if !p.needsAnotherLook { restAt = t; break }
+                    t += 0.25; looks += 1
+                    plan = p.process(frame(nil, dirty: [], status: .idle, t: t), snapshot: snapshot, now: t)
+                    judged += p.lastTimings.judgements + p.lastTimings.secondCheckJudgements
+                }
+                row["coverLayer"] = ["looks": looks, "judgements": judged, "restAtS": restAt.map { r1($0) } as Any? ?? NSNull(),
+                                     "coversAtEnd": plan.wholeDisplay != nil ? -1 : plan.items.count,
+                                     "realS": r1(Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e9)]
+            }
+            print("capped \(page.name): \(calls) calls, \(judgements) judgements, \(left) left, dearest not reached \(dearest)\(row["coverLayer"].map { "; cover layer \($0)" } ?? "")")
+            rows.append(row)
+        }
+        return ["pages": rows]
+    }
+
+    // MARK: Case 8: a busy page opened while second checks wait
+
+    /// One busy page is shown and left still for 20 s (simulated) with the register's budget, so its pictures seen clean
+    /// once get their second checks from the spare half of the bucket; then the next busy page is opened. Measured: how
+    /// many judgements the new page's first call got, and how long (simulated, looks every 0.25 s) until nothing of it
+    /// was left unjudged. With --no-background-checks the bucket is full again by then, which is the comparison.
+    func pendingChecks() -> [String: Any] {
+        let pages = busyPages()
+        var rows: [[String: Any]] = []
+        for k in 0..<min(3, max(0, pages.count - 1)) {
+            detector.removeCachedVerdicts()
+            let p = DisplayPipeline(display: display, judger: detector, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+            p.backgroundSecondChecks = o.backgroundChecks
+            var t = 0.0
+            _ = p.process(frame(pages[k].img, dirty: nil, t: t), snapshot: snapshot, now: t)
+            var background = 0
+            while t < 20 { t += 0.25; _ = p.process(frame(nil, dirty: [], status: .idle, t: t), snapshot: snapshot, now: t); background += p.lastTimings.secondCheckJudgements }
+            let tokens = p.diagnostics.tokens
+            let whole = [PixelRect(x: 0, y: 0, w: W, h: H)]
+            t += 0.25
+            _ = p.process(frame(pages[k + 1].img, dirty: whole, t: t), snapshot: snapshot, now: t)
+            let firstCall = p.lastTimings.judgements
+            let opened = t
+            var judgedAt: Double?
+            if p.lastTimings.overloaded == 0 { judgedAt = 0 }
+            while judgedAt == nil && t < opened + 120 {
+                t += 0.25
+                _ = p.process(frame(nil, dirty: [], status: .idle, t: t), snapshot: snapshot, now: t)
+                if p.lastTimings.overloaded == 0 && p.lastTimings.judgements > 0 { judgedAt = t - opened }
+            }
+            rows.append(["pages": "\(pages[k].name) then \(pages[k + 1].name)", "tokensWhenOpened": r1(tokens), "backgroundJudgementsBefore": background,
+                         "firstCallJudgements": firstCall, "allJudgedAfterS": judgedAt.map { r1($0) } as Any? ?? NSNull()])
+            print("pending checks (\(o.backgroundChecks ? "background" : "on reuse")): tokens \(r1(tokens)), background \(background), first call \(firstCall), all judged after \(judgedAt.map { String(r1($0)) } ?? "-") s")
+        }
+        return ["runs": rows]
+    }
+
     // MARK: Run
 
     func run() {
@@ -597,6 +782,7 @@ final class Bench {
         doc["os"] = ProcessInfo.processInfo.operatingSystemVersionString
         doc["models"] = o.modelsNote
         doc["rule"] = detector.config.rule.rawValue
+        doc["backgroundSecondChecks"] = o.backgroundChecks
         doc["display"] = "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it"
         doc["notIncluded"] = "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window)."
         frameCopy()
@@ -614,6 +800,9 @@ final class Bench {
             doc["scroll"] = sc
         }
         if o.cases.contains("reappear") { doc["reappear"] = reappear() }
+        if o.cases.contains("reuse") { doc["reuse"] = reuse() }
+        if o.cases.contains("capped") { doc["capped"] = capped() }
+        if o.cases.contains("pending") { doc["pending"] = pendingChecks() }
         if let j = o.json {
             let data = try! JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys])
             try! data.write(to: URL(fileURLWithPath: j))

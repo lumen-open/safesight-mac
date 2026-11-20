@@ -25,6 +25,10 @@ import RegionFinder
         let whole = [PixelRect(x: 0, y: 0, w: 600, h: 400)]
         _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
         #expect(p.lastTimings.judgements > 0)
+        // Shown again: the harmless pictures get their second clean check (`VerdictCache.CLEAN_CHECKS`).
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: 0.5), snapshot: window, now: 0.5)
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: 0.6), snapshot: window, now: 0.6)
+        #expect(p.lastTimings.judgements > 0)
         _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: 1), snapshot: window, now: 1)
         d.resetTimings()
         let again = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: 2), snapshot: window, now: 2)
@@ -32,6 +36,198 @@ import RegionFinder
         #expect(d.timings.finderCacheHits == 1)
         #expect(again.covers(CGRect(x: 420, y: 40, width: 120, height: 120), kind: .plain), "a cached flag covers as before")
     }
+
+    /// While nothing changes, pictures seen clean once get their second clean check in the background (step 3c), so a
+    /// reload after that is served from the cache. Nothing is covered or judged in the foreground meanwhile.
+    @Test func aStillPageGetsItsSecondChecksInTheBackground() {
+        let d = Fixtures.detector()
+        let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
+        var page = Fixtures.blank(600, 400)
+        Fixtures.paint(&page, PixelRect(x: 40, y: 40, w: 120, h: 90), channel: nil, seed: 3)
+        Fixtures.paint(&page, PixelRect(x: 300, y: 200, w: 100, h: 100), channel: nil, seed: 4)
+        let whole = [PixelRect(x: 0, y: 0, w: 600, h: 400)]
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
+        #expect(p.secondChecksDue, "the harmless pictures were seen clean once")
+        var background = 0, t = 0.0
+        for _ in 0..<10 where p.secondChecksDue {
+            t += 0.1
+            let plan = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+            background += p.lastTimings.secondCheckJudgements
+            #expect(p.lastTimings.judgements == 0, "nothing in the foreground")
+            #expect(plan.items.isEmpty && plan.wholeDisplay == nil, "and nothing covered or blurred")
+        }
+        #expect(background > 0)
+        #expect(!p.secondChecksDue)
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: t + 1), snapshot: window, now: t + 1)
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: t + 2), snapshot: window, now: t + 2)
+        #expect(p.lastTimings.judgements == 0, "two clean checks: served from the cache")
+    }
+
+    /// With background checks off, the second check waits until the picture comes back.
+    @Test func withoutBackgroundChecksTheSecondCheckWaitsForThePictureToComeBack() {
+        let d = Fixtures.detector()
+        let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
+        p.backgroundSecondChecks = false
+        var page = Fixtures.blank(600, 400)
+        Fixtures.paint(&page, PixelRect(x: 300, y: 200, w: 100, h: 100), channel: nil, seed: 4)
+        let whole = [PixelRect(x: 0, y: 0, w: 600, h: 400)]
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: 0.1), snapshot: window, now: 0.1)
+        #expect(p.lastTimings.secondCheckJudgements == 0)
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: display, scale: 1, dirty: whole, t: 1), snapshot: window, now: 1)
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: 2), snapshot: window, now: 2)
+        #expect(p.lastTimings.judgements > 0, "judged again when it came back")
+    }
+
+    /// A background second check that flags covers at once; one that is clean clears nothing that was covered.
+    @Test func aBackgroundCheckThatFlagsCoversAtOnce() {
+        let a = SwitchModel(id: "fa", family: .a), b = SwitchModel(id: "fb", family: .b)
+        let c = Cutoffs(cover: 0.5, clean: 0.4, strike: 0.95, gridMember: 0.9, gridLow: 0.9)
+        let table = ThresholdTable(schema: "test", models: ["fa": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) }),
+                                                            "fb": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) })])
+        let d = Detector(models: ModelSet(models: [a, b], bundleVersion: "switch"), table: table, config: DetectorConfig(), finder: RegionFinder())
+        let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
+        var page = Fixtures.blank(600, 400)
+        let pic = PixelRect(x: 300, y: 200, w: 100, h: 100)
+        Fixtures.paint(&page, pic, channel: nil, seed: 4)
+        a.score = 0.1; b.score = 0.1
+        let shown = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
+        let g = CGRect(x: 300, y: 200, width: 100, height: 100)
+        #expect(!shown.covers(g), "shown on its clean verdict")
+        #expect(p.secondChecksDue)
+        // The next judgement, as jitter could make it, flags: the background check covers the picture.
+        a.score = 0.9; b.score = 0.9
+        let checked = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: 0.1), snapshot: window, now: 0.1)
+        #expect(p.lastTimings.secondCheckJudgements > 0)
+        #expect(checked.covers(g, kind: .plain), "covered at once")
+        // Clean again in later background frames: nothing is lifted by them (no second checks are due now).
+        a.score = 0.1; b.score = 0.1
+        let later = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: 0.2), snapshot: window, now: 0.2)
+        #expect(later.covers(g, kind: .plain))
+    }
+}
+
+/// Second clean checks as part of the looks at a still screen: they keep the looks going only until done or bounded, and
+/// they never count towards lifting a cover.
+@Suite struct SecondChecksInTheLooksTests {
+    let display = DisplayDescriptor(id: 5, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+    var window: WindowSnapshot { Fixtures.oneWindow(display.bounds) }
+
+    /// A judge whose second checks never finish (a Mac too slow for them, say).
+    final class NeverDone: Judging {
+        func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int, progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+            FrameVerdict(regions: [RegionVerdict(rect: area, display: .clear, reason: .judgedClean, pass: .whole)], coverWindow: false, strike: false,
+                         hot: false, judgements: 1, overloaded: 0, secondChecksLeft: 1)
+        }
+        func setRule(_ rule: DetectorRule) {}
+        var asked = 0
+        func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? {
+            asked += 1
+            return FrameVerdict(regions: [], coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: 0, secondChecksLeft: 1)
+        }
+    }
+
+    @Test func secondChecksKeepTheLooksGoingOnlyUntilTheirBound() {
+        let j = NeverDone()
+        let p = DisplayPipeline(display: display, judger: j, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
+        let page = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
+        #expect(p.needsAnotherLook, "a second check is something left to judge")
+        var t = 0.0
+        while t < DisplayPipeline.secondChecksFor - 1 {
+            t += 0.25
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+            #expect(p.needsAnotherLook)
+        }
+        #expect(j.asked > 0)
+        t = DisplayPipeline.secondChecksFor + 1
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+        #expect(p.lastTimings.secondChecksGivenUp == 1)
+        #expect(!p.needsAnotherLook, "past its bound the looks stop")
+        let asked = j.asked
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t + 1), snapshot: window, now: t + 1)
+        #expect(j.asked == asked, "and a look sent anyway does nothing")
+    }
+
+    /// Only still time counts towards the bound: after longer than the bound of activity (scrolling, a video), the first
+    /// looks at the still screen still give second checks, and the looks then stop within the bound of stillness.
+    @Test func activityLongerThanTheBoundThenStillnessStillGetsSecondChecks() {
+        let j = NeverDone()
+        let p = DisplayPipeline(display: display, judger: j, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
+        var page = Fixtures.blank(600, 400)
+        var t = 0.0
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: t), snapshot: window, now: t)
+        let whole = [PixelRect(x: 0, y: 0, w: 600, h: 400)]
+        while t < DisplayPipeline.secondChecksFor + 10 {
+            t += 0.25
+            page.pixels[(Int(t * 4) % 400) * 4] &+= 1   // something changes every frame
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: t), snapshot: window, now: t)
+        }
+        #expect(j.asked == 0, "no look while the screen changes")
+        #expect(p.needsAnotherLook)
+        let still = t
+        t += 0.25
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+        #expect(j.asked > 0, "the first still look gives second checks")
+        #expect(p.lastTimings.secondChecksGivenUp == 0)
+        while t < still + DisplayPipeline.secondChecksFor + 1 {
+            t += 0.25
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+        }
+        #expect(!p.needsAnotherLook, "and after the bound of stillness the looks stop, full re-judges included")
+    }
+
+    /// A change under a cover starts its count again; then it lifts after `VIDEO_VOTE` clean judgements of what it hides,
+    /// with background second checks or without: they are never counted towards a cover's lift directly.
+    @Test func aChangeUnderACoverLiftsAfterTheSameLooksWithOrWithoutBackgroundChecks() {
+        func run(background: Bool) -> (lifted: Int?, background: Int) {
+            let a = SwitchModel(id: "fa", family: .a), b = SwitchModel(id: "fb", family: .b)
+            let c = Cutoffs(cover: 0.5, clean: 0.4, strike: 0.95, gridMember: 0.9, gridLow: 0.9)
+            let table = ThresholdTable(schema: "test", models: ["fa": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) }),
+                                                                "fb": Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, c) })])
+            let d = Detector(models: ModelSet(models: [a, b], bundleVersion: "change"), table: table, config: DetectorConfig(), finder: RegionFinder())
+            let p = DisplayPipeline(display: display, judger: d, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
+            p.backgroundSecondChecks = background
+            let pic = PixelRect(x: 300, y: 200, w: 100, h: 100), g = CGRect(x: 300, y: 200, width: 100, height: 100)
+            var page = Fixtures.blank(600, 400)
+            Fixtures.paint(&page, PixelRect(x: 40, y: 40, w: 120, h: 90), channel: nil, seed: 3)
+            Fixtures.paint(&page, pic, channel: nil, seed: 4)
+            // Only the picture scores high: a flag over it.
+            a.score = 0.1; b.score = 0.1
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: 0), snapshot: window, now: 0)
+            a.score = 0.9; b.score = 0.9
+            var flagged = page
+            Fixtures.paint(&flagged, pic, channel: nil, seed: 5)
+            let covered = p.process(Fixtures.frame(flagged, display: display, scale: 1, dirty: [pic], t: 0.1), snapshot: window, now: 0.1)
+            #expect(covered.covers(g, kind: .plain))
+            // The picture under the cover changes to a harmless one.
+            a.score = 0.1; b.score = 0.1
+            var harmless = page
+            Fixtures.paint(&harmless, pic, channel: nil, seed: 6)
+            _ = p.process(Fixtures.frame(harmless, display: display, scale: 1, dirty: [pic], t: 0.2), snapshot: window, now: 0.2)
+            var bg = 0
+            for k in 1...20 {
+                let t = 0.2 + Double(k) * 0.25
+                let plan = p.process(Fixtures.frame(harmless, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+                bg += p.lastTimings.secondCheckJudgements
+                if !plan.covers(g) { return (k, bg) }
+            }
+            return (nil, bg)
+        }
+        let on = run(background: true), off = run(background: false)
+        #expect(on.lifted != nil, "it lifts")
+        #expect(on.lifted == off.lifted, "after the same number of looks: \(on.lifted ?? -1) with background checks, \(off.lifted ?? -1) without")
+        #expect(on.background > 0, "the background checks did run meanwhile")
+        #expect(off.background == 0)
+    }
+}
+
+/// A fake model with a score the test sets for every picture, whatever the jitter.
+final class SwitchModel: ScoringModel {
+    let id: String, family: Family, side = 32
+    var score: Float = 0
+    init(id: String, family: Family) { self.id = id; self.family = family }
+    func flagScores(_ tensors: [[UInt8]]) throws -> [Float] { tensors.map { _ in score } }
 }
 
 @Suite struct MotionTests {

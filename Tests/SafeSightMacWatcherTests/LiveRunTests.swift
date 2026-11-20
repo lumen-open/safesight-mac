@@ -97,6 +97,11 @@ final class SleepyJudge: Judging {
     }
     func setRule(_ rule: DetectorRule) { inner.setRule(rule) }
     func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { inner.pictureRegions(frame, within: area) }
+    func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? {
+        guard let v = inner.checkAgainInBackground(frame, context: context, within: area, budget: budget) else { return nil }
+        if v.judgements > 0 { usleep(useconds_t(Double(v.judgements) * ms * 1000)) }
+        return v
+    }
 }
 
 @Suite struct GatheredCleanJudgementTests {
