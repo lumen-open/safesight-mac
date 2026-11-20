@@ -77,8 +77,7 @@ final class TwoCleanChecksTests: XCTestCase {
         let second = d.judge(img, context: ctx)
         XCTAssertEqual(second.judgements, 4, "the same pixels are judged again, with fresh jitter")
         XCTAssertEqual(d.timings.cacheHits, 0)
-        XCTAssertGreaterThan(fa.calls, calls)
-        XCTAssertFalse(second.regions.contains { $0.reason == .cached })
+        XCTAssertEqual(fa.calls - calls, 2, "family A judged the region and the whole pass again, one piece each")
     }
 
     func testTwoClearlyCleanJudgementsInARowAreReused() {

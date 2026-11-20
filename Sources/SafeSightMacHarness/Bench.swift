@@ -734,6 +734,43 @@ final class Bench {
         return ["pages": rows]
     }
 
+    // MARK: Case 8: a busy page opened while second checks wait
+
+    /// One busy page is shown and left still for 20 s (simulated) with the register's budget, so its pictures seen clean
+    /// once get their second checks from the spare half of the bucket; then the next busy page is opened. Measured: how
+    /// many judgements the new page's first call got, and how long (simulated, looks every 0.25 s) until nothing of it
+    /// was left unjudged. With --no-background-checks the bucket is full again by then, which is the comparison.
+    func pendingChecks() -> [String: Any] {
+        let pages = busyPages()
+        var rows: [[String: Any]] = []
+        for k in 0..<min(3, max(0, pages.count - 1)) {
+            detector.removeCachedVerdicts()
+            let p = DisplayPipeline(display: display, judger: detector, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+            p.backgroundSecondChecks = o.backgroundChecks
+            var t = 0.0
+            _ = p.process(frame(pages[k].img, dirty: nil, t: t), snapshot: snapshot, now: t)
+            var background = 0
+            while t < 20 { t += 0.25; _ = p.process(frame(nil, dirty: [], status: .idle, t: t), snapshot: snapshot, now: t); background += p.lastTimings.secondCheckJudgements }
+            let tokens = p.diagnostics.tokens
+            let whole = [PixelRect(x: 0, y: 0, w: W, h: H)]
+            t += 0.25
+            _ = p.process(frame(pages[k + 1].img, dirty: whole, t: t), snapshot: snapshot, now: t)
+            let firstCall = p.lastTimings.judgements
+            let opened = t
+            var judgedAt: Double?
+            if p.lastTimings.overloaded == 0 { judgedAt = 0 }
+            while judgedAt == nil && t < opened + 120 {
+                t += 0.25
+                _ = p.process(frame(nil, dirty: [], status: .idle, t: t), snapshot: snapshot, now: t)
+                if p.lastTimings.overloaded == 0 && p.lastTimings.judgements > 0 { judgedAt = t - opened }
+            }
+            rows.append(["pages": "\(pages[k].name) then \(pages[k + 1].name)", "tokensWhenOpened": r1(tokens), "backgroundJudgementsBefore": background,
+                         "firstCallJudgements": firstCall, "allJudgedAfterS": judgedAt.map { r1($0) } as Any? ?? NSNull()])
+            print("pending checks (\(o.backgroundChecks ? "background" : "on reuse")): tokens \(r1(tokens)), background \(background), first call \(firstCall), all judged after \(judgedAt.map { String(r1($0)) } ?? "-") s")
+        }
+        return ["runs": rows]
+    }
+
     // MARK: Run
 
     func run() {
@@ -765,6 +802,7 @@ final class Bench {
         if o.cases.contains("reappear") { doc["reappear"] = reappear() }
         if o.cases.contains("reuse") { doc["reuse"] = reuse() }
         if o.cases.contains("capped") { doc["capped"] = capped() }
+        if o.cases.contains("pending") { doc["pending"] = pendingChecks() }
         if let j = o.json {
             let data = try! JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys])
             try! data.write(to: URL(fileURLWithPath: j))

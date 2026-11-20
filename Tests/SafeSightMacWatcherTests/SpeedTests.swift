@@ -149,8 +149,36 @@ import RegionFinder
         #expect(j.asked == asked, "and a look sent anyway does nothing")
     }
 
+    /// Only still time counts towards the bound: after longer than the bound of activity (scrolling, a video), the first
+    /// looks at the still screen still give second checks, and the looks then stop within the bound of stillness.
+    @Test func activityLongerThanTheBoundThenStillnessStillGetsSecondChecks() {
+        let j = NeverDone()
+        let p = DisplayPipeline(display: display, judger: j, budgetShare: 1e9, ignoredPIDs: [], callWallMs: .infinity)
+        var page = Fixtures.blank(600, 400)
+        var t = 0.0
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, t: t), snapshot: window, now: t)
+        let whole = [PixelRect(x: 0, y: 0, w: 600, h: 400)]
+        while t < DisplayPipeline.secondChecksFor + 10 {
+            t += 0.25
+            page.pixels[(Int(t * 4) % 400) * 4] &+= 1   // something changes every frame
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: whole, t: t), snapshot: window, now: t)
+        }
+        #expect(j.asked == 0, "no look while the screen changes")
+        #expect(p.needsAnotherLook)
+        let still = t
+        t += 0.25
+        _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+        #expect(j.asked > 0, "the first still look gives second checks")
+        #expect(p.lastTimings.secondChecksGivenUp == 0)
+        while t < still + DisplayPipeline.secondChecksFor + 1 {
+            t += 0.25
+            _ = p.process(Fixtures.frame(page, display: display, scale: 1, dirty: [], status: .idle, t: t), snapshot: window, now: t)
+        }
+        #expect(!p.needsAnotherLook, "and after the bound of stillness the looks stop, full re-judges included")
+    }
+
     /// A change under a cover starts its count again; then it lifts after `VIDEO_VOTE` clean judgements of what it hides,
-    /// with background second checks or without: they never count towards a cover's lift.
+    /// with background second checks or without: they are never counted towards a cover's lift directly.
     @Test func aChangeUnderACoverLiftsAfterTheSameLooksWithOrWithoutBackgroundChecks() {
         func run(background: Bool) -> (lifted: Int?, background: Int) {
             let a = SwitchModel(id: "fa", family: .a), b = SwitchModel(id: "fb", family: .b)

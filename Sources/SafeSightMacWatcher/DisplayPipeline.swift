@@ -103,10 +103,13 @@ public final class DisplayPipeline {
     /// Pictures seen clean once are waiting for their second clean check (`VerdictCache.CLEAN_CHECKS`), which the looks
     /// at a still screen give them in the background (step 3c), until `secondChecksUntil` at the latest.
     public private(set) var secondChecksDue = false
+    /// When the looks stop waiting for second checks: `secondChecksFor` after the first look at a still screen. Any run on a
+    /// frame with new pixels clears it, so only still time counts; looks (a full re-judge on a still screen included)
+    /// never push it back, so the looks always come to an end.
     var secondChecksUntil: TimeInterval?
-    /// How long second checks keep the looks at a still screen going after a picture was last seen clean once: on a slow
-    /// Mac the budget's spare half may not reach them all, and a still screen must still come to rest. One not given its
-    /// check by then gets it when it comes back. A working value, tied to `FULL_REJUDGE_SHOW_FIRST`.
+    /// How long, of still screen, second checks keep the looks going: on a slow Mac the budget's spare half may not reach
+    /// them all, and a still screen must still come to rest. One not given its check by then gets it when it comes back.
+    /// A working value, tied to `FULL_REJUDGE_SHOW_FIRST`.
     static let secondChecksFor: TimeInterval = Register.FULL_REJUDGE_SHOW_FIRST
     /// Whether step 3c runs. Off, a picture seen clean once gets its second check only when it comes back (the lab
     /// bench measures both).
@@ -150,12 +153,10 @@ public final class DisplayPipeline {
     var secondChecksWanted: Bool { secondChecksDue && backgroundSecondChecks }
 
     /// A judge call left pictures seen clean once: the looks at a still screen give them their second check, for at most
-    /// `secondChecksFor` from when they started waiting. Calls while they wait do not push that back (a full re-judge on a
-    /// still screen reports the same pictures), so the looks for them always come to an end.
+    /// `secondChecksFor` of still screen (`secondChecksUntil`).
     func noteSecondChecks(_ v: FrameVerdict, now: TimeInterval) {
-        guard v.secondChecksLeft > 0, !secondChecksDue else { return }
+        guard v.secondChecksLeft > 0 else { return }
         secondChecksDue = true
-        secondChecksUntil = now + Self.secondChecksFor
     }
 
     /// Every held cover as "target rect whole/kind clean", for the lab tools (geometry and counts only).
@@ -287,6 +288,8 @@ public final class DisplayPipeline {
         }
         runSerial += 1
         talliedThisRun = []
+        // Only still time counts towards the second checks' bound: a frame with new pixels starts it again.
+        if !idle { secondChecksUntil = nil }
         // Windows that moved or changed size since the last snapshot.
         var moved: [(JudgeTarget, CGRect, CGRect)] = []
         for (t, old) in lastBounds { if let nb = snapshot.bounds(of: t), nb != old { moved.append((t, old, nb)) } }
@@ -614,9 +617,13 @@ public final class DisplayPipeline {
         //     On a look where nothing changed, after everything above, the pictures on show that were seen clean once are
         //     judged once more, with fresh jitter, so that when they come back they are served from the cache. Low
         //     priority: only from judgements beyond half the bucket, and within the time left. Nothing is lifted or cleared
-        //     here, and no clean judgement is counted towards lifting a cover (nothing is shared into a cover's round): a
+        //     here, and no clean judgement here is counted towards lifting a cover (nothing is shared into a cover's round;
+        //     once an entry is reusable, a cover's own next check gets it from the cache, as any cache hit): a
         //     flag covers (or a blur blurs) at once, a model failure is left unjudged and judged again over the same area,
-        //     and a clean result only adds to the picture's count. Past `secondChecksFor` the looks stop for them.
+        //     and a clean result only adds to the picture's count. Past `secondChecksFor` of still screen the looks stop for them.
+        if idle, judged, secondChecksDue, backgroundSecondChecks, secondChecksUntil == nil {
+            secondChecksUntil = now + Self.secondChecksFor   // the first look at a still screen starts the clock
+        }
         if idle, judged, secondChecksDue, backgroundSecondChecks, now > (secondChecksUntil ?? now) {
             secondChecksDue = false; secondChecksUntil = nil
             timing.secondChecksGivenUp += 1
@@ -630,6 +637,9 @@ public final class DisplayPipeline {
                 let spare = bucket.available - Int(Register.JUDGEMENT_BURST / 2)
                 let budget = min(spare, Register.DETECTOR_CALL_CAP, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (callWallMs - spent) / msPerJudgement))))
                 guard budget > 0 else { left = true; break }
+                // The same context as this target's own calls in step 3, so the keys and rules match: every window here is
+                // show-first, on a trusted display, not judged as video. If covered-start apps, untrusted displays or video are
+                // ever wired into step 3, pass the real values here too (they decide where a blur rule applies).
                 let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
                                        sliceAnchor: sliceAnchor(p.target, snapshot, map))
                 tStage = PipelineTimings.now()
