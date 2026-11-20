@@ -111,6 +111,9 @@ public enum ModelSetFailure: Error, Equatable, Sendable {
     case tieBreakerWithOneFamily
     /// A small-picture model (`Family.student`) can add a cover but is never a family of its own.
     case studentAsFamily
+    /// Only a small-picture model (`Family.student`) goes among the students: a family model there would be asked only
+    /// for small pictures.
+    case familyAsStudent
 }
 
 /// The models each place runs. Two families are required, unless the sealed bundle declares one family
@@ -127,8 +130,9 @@ public struct ModelSet {
     public let singleFamily: Bool
 
     /// Checks that `models`, `students` and `referee` make a set the detector can judge with.
-    static func check(models: [ScoringModel], referee: ScoringModel?, singleFamily: Bool) throws {
+    static func check(models: [ScoringModel], students: [ScoringModel] = [], referee: ScoringModel?, singleFamily: Bool) throws {
         if models.contains(where: { $0.family == .student }) { throw ModelSetFailure.studentAsFamily }
+        if students.contains(where: { $0.family != .student }) { throw ModelSetFailure.familyAsStudent }
         let families = Set(models.map(\.family))
         if singleFamily {
             guard families.count == 1 else { throw ModelSetFailure.needsOneFamily }
@@ -140,7 +144,7 @@ public struct ModelSet {
 
     init(models: [ScoringModel], students: [ScoringModel] = [], referee: ScoringModel? = nil, bundleVersion: String,
          singleFamily: Bool = false) {
-        precondition((try? Self.check(models: models, referee: referee, singleFamily: singleFamily)) != nil,
+        precondition((try? Self.check(models: models, students: students, referee: referee, singleFamily: singleFamily)) != nil,
                      singleFamily ? "one model family is required" : "two model families are required")
         self.models = models; self.students = students; self.referee = referee; self.bundleVersion = bundleVersion
         self.singleFamily = singleFamily
@@ -150,7 +154,7 @@ public struct ModelSet {
     /// tie-breaker. Refused, never trapped, when the families do not make a set the rule can run with.
     public init(scorers: [ScoringModel], students: [ScoringModel] = [], tieBreaker: ScoringModel? = nil,
                 singleFamily: Bool = false, bundleVersion: String) throws {
-        try Self.check(models: scorers, referee: tieBreaker, singleFamily: singleFamily)
+        try Self.check(models: scorers, students: students, referee: tieBreaker, singleFamily: singleFamily)
         self.init(models: scorers, students: students, referee: tieBreaker, bundleVersion: bundleVersion, singleFamily: singleFamily)
     }
 

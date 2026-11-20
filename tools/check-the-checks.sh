@@ -211,6 +211,26 @@ python3 -I "$here/conformance/bundle.py" seal "$tmp/bundle" "$tmp/crepo" >/dev/n
 expect pass "conformance: the seal names the manifest"         grep -q '  bundle-manifest\.json$' "$tmp/crepo/Sources/SafeSightMacWatcher/CommittedModelData.swift"
 expect pass "conformance: the sealed list matches the bundle"  sh -c 'cd "$1" && shasum -a 256 -c "$2" >/dev/null' _ "$tmp/bundle" "$tmp/crepo/models/watcher-models.sha256"
 
+# --- check-no-score-api.sh: no floating-point type in DetectorCore's public API but the reviewed ones -------------
+sa="$tmp/scoreapi"; mkdir -p "$sa/ok" "$sa/float" "$sa/ext"
+sym() { # path spelling access: one symbol graph entry
+  printf '{"kind":{"identifier":"swift.property"},"identifier":{"precise":"id:%s"},"pathComponents":["%s"],"accessLevel":"%s","names":{"title":"%s"},"declarationFragments":[{"kind":"typeIdentifier","spelling":"%s"}]}' "$1" "$1" "$3" "$1" "$2"
+}
+printf '{"symbols":[%s,%s]}' "$(sym ok Int public)" "$(sym ms Double public)" > "$sa/ok/DetectorCore.symbols.json"
+printf '{"symbols":[%s,%s]}' "$(sym ms Double public)" "$(sym score Float open)" > "$sa/float/DetectorCore.symbols.json"
+printf '{"symbols":[%s]}' "$(sym ms Double public)" > "$sa/ext/DetectorCore.symbols.json"
+printf '{"symbols":[%s]}' "$(sym level CGFloat public)" > "$sa/ext/DetectorCore@Swift.symbols.json"
+printf 'ms: Double\n' > "$sa/allow.txt"
+printf 'ms: Double\ngone: Float\n' > "$sa/allow-stale.txt"
+scan="$here/score_api_scan.py"
+expect pass "score api: the scanner's own self-test"           python3 -I "$scan" --self-test
+expect pass "score api: only reviewed floating-point uses"     python3 -I "$scan" "$sa/ok" "$sa/allow.txt"
+expect fail "score api: an open Float not on the list"         python3 -I "$scan" "$sa/float" "$sa/allow.txt"
+expect fail "score api: a CGFloat in a public extension"       python3 -I "$scan" "$sa/ext" "$sa/allow.txt"
+expect fail "score api: a stale allow-list entry"              python3 -I "$scan" "$sa/ok" "$sa/allow-stale.txt"
+expect fail "score api: no symbol graph"                       python3 -I "$scan" "$sa/none" "$sa/allow.txt"
+expect fail "score api: a folder without the module's graph"   sh "$here/check-no-score-api.sh" --graphs "$tmp/repo"
+
 # --- site/check.mjs ---------------------------------------------------------------------------------------------
 expect pass "site: its own self-test (refresh and others)" node "$root/site/check.mjs" --self-test
 

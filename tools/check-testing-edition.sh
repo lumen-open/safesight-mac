@@ -163,6 +163,8 @@ grep '^\./Contents/Resources/models' "$tmp/all.txt" > "$tmp/models.txt" || true
 printf '%s\n' ./Contents ./Contents/Info.plist ./Contents/MacOS ./Contents/MacOS/safesight-mac ./Contents/Resources \
   ./Contents/_CodeSignature ./Contents/_CodeSignature/CodeResources | sort > "$tmp/shape-want.txt"
 diff -u "$tmp/shape-want.txt" "$tmp/shape.txt" || bad "the bundle holds something other than the app itself (no Library, PlugIns, XPCServices, Helpers or Frameworks)"
+# Today's three models are named on purpose: this is stricter than reading the names from the sealed manifest. A
+# maintainer who brings their own models widens this list by name, in a reviewed change.
 models_ok='^\./Contents/Resources/models(/compiled\.sha256|/bundle-manifest\.json|/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector)'
 models_ok="$models_ok"'(/(marqo-vit-tiny-384|nsfwjs-mobilenet-v2|bumble-private-detector\.fp32)\.mlmodelc(/.*)?)?)?$'
 if grep -vE "$models_ok" "$tmp/models.txt"; then

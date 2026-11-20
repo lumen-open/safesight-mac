@@ -50,4 +50,8 @@ public enum Register {
     /// A cover judged on its own and found flagged on a place that has not changed is judged again this often (a
     /// borderline place is not covered for good). Not in the register; a working value.
     public static let RECHECK_FLAGGED_EVERY: TimeInterval = 3
+    /// How long the models may take to warm up when the detector loads (`Detector.warmUp`), every display covered whole
+    /// meanwhile. Past it, the detector counts as failed: the displays stay covered whole and the repair card offers to
+    /// try again. Not in the register; a working value, well above the measured warm-up (spec/detector-contract.md).
+    public static let WARM_UP_LIMIT: TimeInterval = 10
 }

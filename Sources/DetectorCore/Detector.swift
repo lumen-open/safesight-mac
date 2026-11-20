@@ -125,6 +125,22 @@ public final class Detector {
         }
     }
 
+    /// Runs every model on a blank tensor before anything is judged, and says whether each gave a usable score, all
+    /// within `limit` seconds. A model's first prediction pays for loading it (on the Neural Engine Core ML can time
+    /// that one out under load), so a model that fails is asked once more while time is left; a second failure, or
+    /// running past `limit`, is a fault. Every failure is counted in `modelFaults`. Nothing is judged and nothing is
+    /// cached; the caller keeps every display covered until this returns true.
+    public func warmUp(limit: TimeInterval) -> Bool {
+        let start = Date()
+        for m in models.models + models.students + (models.referee.map { [$0] } ?? []) {
+            let blank = [[UInt8](repeating: 128, count: 3 * m.side * m.side)]
+            var ok = usableScores(m, blank) != nil
+            if !ok && Date().timeIntervalSince(start) < limit { ok = usableScores(m, blank) != nil }
+            guard ok, Date().timeIntervalSince(start) <= limit else { return false }
+        }
+        return true
+    }
+
     /// The picture regions the finder sees in `area`, through the finder cache, so the judge call that follows on the same
     /// pixels finds them there. No model runs.
     public func pictures(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect] {

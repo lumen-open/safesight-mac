@@ -29,6 +29,10 @@ enum Bundles {
     }
     /// The lab build's converted models, where this Mac has them (never on CI).
     static let lab = repo.appendingPathComponent("../v3-detector/models/converted").standardized
+    /// Whether this Mac has the lab's models; tests that need them are skipped (and shown as skipped) without.
+    static var hasLab: Bool { FileManager.default.fileExists(atPath: lab.path) }
+    /// The bundle tools/conformance/run.sh plugs in, if any.
+    static var pluggedIn: String? { ProcessInfo.processInfo.environment["SAFESIGHTMAC_BUNDLE"] }
 
     /// A temporary models folder holding `files` (path to text).
     static func folder(_ files: [String: Data]) throws -> URL {
@@ -247,8 +251,9 @@ enum Bundles {
 
     /// The manifest's models and the old hard-coded ones, loaded from the same files: the same scores, bit for bit, on
     /// the same tensors, and the same verdicts on the synthetic fixtures.
-    @Test func theRealModelsBehaveAsBefore() throws {
-        guard let dir = try Bundles.stagedLab() else { return }   // not on CI
+    @Test(.enabled(if: Bundles.hasLab, "needs the lab's converted models (not on CI)"))
+    func theRealModelsBehaveAsBefore() throws {
+        let dir = try #require(try Bundles.stagedLab())
         defer { try? fm.removeItem(at: dir) }
         Bundles.realModels.lock(); defer { Bundles.realModels.unlock() }
         let keys = try WatcherModels.packageKeys(WatcherModels.committedHashList)
@@ -277,8 +282,8 @@ enum Bundles {
         #expect(v1.coverWindow == v2.coverWindow && v1.overloaded == v2.overloaded)
     }
 
-    @Test func aRealModelOfAnotherShapeIsRefusedWhenItLoads() throws {
-        guard FileManager.default.fileExists(atPath: Bundles.lab.path) else { return }   // not on CI
+    @Test(.enabled(if: Bundles.hasLab, "needs the lab's converted models (not on CI)"))
+    func aRealModelOfAnotherShapeIsRefusedWhenItLoads() throws {
         Bundles.realModels.lock(); defer { Bundles.realModels.unlock() }
         let url = Bundles.lab.appendingPathComponent("nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage")
         let key = try WatcherModels.packageKeys(WatcherModels.committedHashList)["nsfwjs-mobilenet-v2/nsfwjs-mobilenet-v2.mlpackage"]

@@ -151,14 +151,21 @@ public enum WatcherModels {
         let uncut = manifest.modelsMissingCutoffs(in: committedThresholds)
         guard uncut.isEmpty else { throw ModelCheckFailure.manifest("the sealed cut-off table has no cut-offs for \(uncut.joined(separator: ", "))") }
         let keys = compiled ? [:] : try packageKeys(hashList)
+        let detector: Detector
         do {
             let set = try ModelSet.bundle(manifest, directory: folder, bundleVersion: "practice-" + String(sha256(Data(hashList.utf8)).prefix(12)),
                                           compiled: compiled, keys: keys)
             var cfg = DetectorConfig(); cfg.rule = rule
-            return try Detector(models: set, thresholdsJSON: committedThresholds, config: cfg)
+            detector = try Detector(models: set, thresholdsJSON: committedThresholds, config: cfg)
         } catch {
             throw ModelCheckFailure.loadFailed(String(describing: type(of: error)))
         }
+        // Packages are read again when Core ML compiles them, after they were checked: check them once more now that
+        // they are loaded, and refuse the lot if anything changed in between. (Core ML loads from a path, not from the
+        // bytes that were hashed, so this narrows the gap rather than closing it; an app's compiled models are inside
+        // its signed bundle.)
+        if !compiled { try verify(folder: folder, hashList: hashList) }
+        return detector
     }
 
     static func sha256(of url: URL) -> String? {

@@ -14,9 +14,12 @@ import Testing
 @Suite(.serialized) struct PluggedInBundleTests {
     let fm = FileManager.default
 
+    /// Whether there is a bundle to test: one plugged in, or the lab's models on this Mac.
+    static var available: Bool { Bundles.pluggedIn != nil || Bundles.hasLab }
+
     /// The bundle under test, cloned into a temporary folder the test may change, or nil.
     func bundle() throws -> URL? {
-        if let p = ProcessInfo.processInfo.environment["SAFESIGHTMAC_BUNDLE"] {
+        if let p = Bundles.pluggedIn {
             let dir = fm.temporaryDirectory.appendingPathComponent("safesightmac-plugged-\(UUID().uuidString)")
             try fm.copyItem(at: URL(fileURLWithPath: p), to: dir)
             return dir
@@ -24,8 +27,9 @@ import Testing
         return try Bundles.stagedLab()
     }
 
-    @Test func itLoadsAndKeepsTheContract() throws {
-        guard let dir = try bundle() else { return }
+    @Test(.enabled(if: available, "needs a plugged-in bundle or the lab's converted models (not on CI)"))
+    func itLoadsAndKeepsTheContract() throws {
+        let dir = try #require(try bundle())
         defer { try? fm.removeItem(at: dir) }
         Bundles.realModels.lock(); defer { Bundles.realModels.unlock() }
         let m = try WatcherModels.readManifest(folder: dir)
@@ -54,36 +58,47 @@ import Testing
     }
 
     /// Each drill changes one thing in a clone of the bundle; each must be refused.
-    @Test func faultDrillsAreRefused() throws {
-        guard let base = try bundle() else { return }
+    @Test(.enabled(if: available, "needs a plugged-in bundle or the lab's converted models (not on CI)"))
+    func faultDrillsAreRefused() throws {
+        let base = try #require(try bundle())
         defer { try? fm.removeItem(at: base) }
         Bundles.realModels.lock(); defer { Bundles.realModels.unlock() }
         let m = try WatcherModels.readManifest(folder: base)
         let smallest = try #require(m.files.min { (size($0.path, in: base)) < (size($1.path, in: base)) })
-        func drill(_ name: String, _ change: (URL) throws -> Void, hashList: ((URL) throws -> String)? = nil) throws {
+        /// Changes one thing in a clone of the bundle; loading it must fail exactly as `expected` says.
+        func drill(_ name: String, expected: (ModelCheckFailure) -> Bool, _ change: (URL) throws -> Void,
+                   hashList: ((URL) throws -> String)? = nil) throws {
             let dir = fm.temporaryDirectory.appendingPathComponent("safesightmac-drill-\(UUID().uuidString)")
             try fm.copyItem(at: base, to: dir)
             defer { try? fm.removeItem(at: dir) }
             try change(dir)
             let list = try hashList?(dir) ?? WatcherModels.committedHashList
-            #expect(throws: ModelCheckFailure.self, "\(name)") { try WatcherModels.loadDetector(folder: dir, rule: .balanced, hashList: list) }
+            do {
+                _ = try WatcherModels.loadDetector(folder: dir, rule: .balanced, hashList: list)
+                Issue.record("\(name): the bundle loaded")
+            } catch let f as ModelCheckFailure {
+                #expect(expected(f), "\(name): refused, but as \(f)")
+            } catch {
+                Issue.record("\(name): refused with \(error), not a ModelCheckFailure")
+            }
         }
-        try drill("a missing file") { try fm.removeItem(at: $0.appendingPathComponent(smallest.path)) }
-        try drill("a changed byte") { d in
+        let unlisted = m.models[0].package + "/extra.bin"
+        try drill("a missing file", expected: { $0 == .missingFile(smallest.path) }) { try fm.removeItem(at: $0.appendingPathComponent(smallest.path)) }
+        try drill("a changed byte", expected: { $0 == .hashMismatch(smallest.path) }) { d in
             let u = d.appendingPathComponent(smallest.path)
             var b = try Data(contentsOf: u); b[0] ^= 0x01; try fm.removeItem(at: u); try b.write(to: u)
         }
-        try drill("an unlisted file") { d in
-            try Data("x".utf8).write(to: d.appendingPathComponent(m.models[0].package).appendingPathComponent("extra.bin"))
+        try drill("an unlisted file", expected: { $0 == .unlistedFile(unlisted) }) { d in
+            try Data("x".utf8).write(to: d.appendingPathComponent(unlisted))
         }
-        try drill("an edited manifest") { d in
+        try drill("an edited manifest", expected: { $0 == .hashMismatch(ModelManifest.fileName) }) { d in
             let u = d.appendingPathComponent(ModelManifest.fileName)
             var b = try Data(contentsOf: u); b.append(0x20); try fm.removeItem(at: u); try b.write(to: u)
         }
         // A failed load: the files and the manifest are consistent and sealed (in a list made for the drill), but the
         // manifest gives the first model the wrong input side, so its shape check refuses it as it loads.
         let wrongSide = m.models[0].inputSide == 224 ? 256 : 224
-        try drill("a model that fails to load", { d in
+        try drill("a model that fails to load", expected: { if case .loadFailed = $0 { return true }; return false }, { d in
             let u = d.appendingPathComponent(ModelManifest.fileName)
             var text = try String(contentsOf: u, encoding: .utf8)
             let from = "\"inputSide\": \(m.models[0].inputSide)"

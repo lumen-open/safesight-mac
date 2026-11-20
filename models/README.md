@@ -8,7 +8,7 @@ No model weights are ever committed. This folder holds only:
 - `bundle-manifest.json`: which models the watcher runs, in which slot (family A, family B, tie-breaker), with their input sides, flag classes, compute units and the hash of every file ([spec/detector-contract.md](../spec/detector-contract.md)).
 - `watcher-models.sha256`: the hash list the watcher checks every model file, and the manifest, against before it loads anything. An edited manifest is refused like an edited model.
 
-At run time the watcher loads the converted Core ML models from a local models folder (`--models DIR`, default `models/local/`), laid out as:
+The app reads its models only from inside its own bundle (`Contents/Resources/models`, put there compiled by `tools/make-app.sh`); lab builds may name another folder with `SAFESIGHTMAC_MODELS`. The harness and the tests take a models folder (`--models DIR`), laid out as:
 
 ```
 DIR/marqo-vit-tiny-384/marqo-vit-tiny-384.mlpackage

@@ -2,7 +2,8 @@
 // The harness's part of the conformance kit (tools/conformance/run.sh, spec/detector-contract.md).
 //
 //   bundlecheck --models DIR   loads DIR exactly as the app does: the sealed hash list, the sealed manifest, every
-//                              model's shape, the sealed cut-off table. Prints what it holds; exits 1 if refused.
+//                              model's shape, the sealed cut-off table, then the warm-up. Prints what it holds and how
+//                              long loading and warming up took; exits 1 if refused.
 //   parity --bundle DIR        (lab build only) each model against its reference outputs (conformance/<id>/
 //                              reference.json) on every compute unit the reference lists; the declared units must pass,
 //                              and every broken control must fail: the kit's own (red and blue swapped) and any shipped
@@ -22,8 +23,17 @@ enum Conformance {
 
     static func bundleCheck(folder: URL, rule: DetectorRule) -> Never {
         do {
-            _ = try WatcherModels.loadDetector(folder: folder, rule: rule)
-            print("bundle loads: \(describe(folder: folder)); sealed list, manifest, shapes and cut-off table checked")
+            let t0 = Date()
+            let d = try WatcherModels.loadDetector(folder: folder, rule: rule)
+            let t1 = Date()
+            let warm = d.warmUp(limit: Register.WARM_UP_LIMIT)
+            let loadMs = Int(t1.timeIntervalSince(t0) * 1000), warmMs = Int(Date().timeIntervalSince(t1) * 1000)
+            guard warm else {
+                print("FAIL: the models did not warm up within \(Int(Register.WARM_UP_LIMIT)) s (every display would stay covered whole)")
+                exit(1)
+            }
+            print("bundle loads: \(describe(folder: folder)); sealed list, manifest, shapes and cut-off table checked; "
+                  + "load \(loadMs) ms, warm-up \(warmMs) ms")
             exit(0)
         } catch {
             print("FAIL: the bundle was refused (every display would be covered whole): \(error)")

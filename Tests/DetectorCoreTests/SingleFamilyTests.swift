@@ -122,6 +122,13 @@ final class SingleFamilyTests: XCTestCase {
             XCTAssertEqual($0 as? ModelSetFailure, .tieBreakerWithOneFamily)
         }
         XCTAssertThrowsError(try ModelSet(scorers: [a, b, s], bundleVersion: "x")) { XCTAssertEqual($0 as? ModelSetFailure, .studentAsFamily) }
+        XCTAssertThrowsError(try ModelSet(scorers: [a, b], students: [QuietModel(id: "a2", family: .a)], bundleVersion: "x")) {
+            XCTAssertEqual($0 as? ModelSetFailure, .familyAsStudent)
+        }
+        XCTAssertThrowsError(try ModelSet(scorers: [a], students: [QuietModel(id: "b2", family: .b)], singleFamily: true, bundleVersion: "x")) {
+            XCTAssertEqual($0 as? ModelSetFailure, .familyAsStudent)
+        }
+        XCTAssertNoThrow(try ModelSet(scorers: [a, b], students: [s], bundleVersion: "x"))
         XCTAssertNoThrow(try ModelSet(scorers: [a, b], tieBreaker: QuietModel(id: "t", family: .b), bundleVersion: "x"))
         XCTAssertNoThrow(try ModelSet(scorers: [a, QuietModel(id: "a2", family: .a)], singleFamily: true, bundleVersion: "x"))
     }

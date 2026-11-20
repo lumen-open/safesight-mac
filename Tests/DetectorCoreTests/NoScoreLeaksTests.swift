@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // No score and no cut-off leaves DetectorCore (spec/detector-contract.md). Scores come in through `ScoringModel` and
-// stop there: every verdict and every progress report is classes, rectangles, counts and times. Two checks: what a
-// judge call hands back holds no Float anywhere, and no public declaration outside the lab-only code names a Float.
+// stop there: every verdict and every progress report is classes, rectangles, counts and times. Here: what a judge
+// call hands back holds no Float anywhere. tools/check-no-score-api.sh checks the public API itself.
 import Foundation
 import XCTest
 @testable import DetectorCore
@@ -37,25 +37,6 @@ final class NoScoreLeaksTests: XCTestCase {
         }
     }
 
-    /// The module's public surface, read from its sources: outside `#if KESTREL_LAB` (absent from release builds) no
-    /// public declaration names a Float, which is the type every score and cut-off has. `ScoringModel.flagScores`
-    /// returns Floats into the module; protocol requirements carry no `public` of their own, so it is not counted.
-    func testNoPublicDeclarationNamesAScore() throws {
-        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Sources/DetectorCore").standardized
-        let files = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".swift") }
-        XCTAssertFalse(files.isEmpty)
-        var found: [String] = []
-        for f in files {
-            let text = try String(contentsOf: dir.appendingPathComponent(f), encoding: .utf8)
-            var labDepth = 0, depth = 0
-            for (n, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-                let t = line.trimmingCharacters(in: .whitespaces)
-                if t.hasPrefix("#if") { depth += 1; if t.contains("KESTREL_LAB") && labDepth == 0 { labDepth = depth } ; continue }
-                if t.hasPrefix("#endif") { if depth == labDepth { labDepth = 0 }; depth -= 1; continue }
-                if labDepth > 0 || t.hasPrefix("//") { continue }
-                if t.contains("public ") && t.range(of: #"\bFloat\b"#, options: .regularExpression) != nil { found.append("\(f):\(n + 1): \(t)") }
-            }
-        }
-        XCTAssertEqual(found, [], "a public declaration names a Float")
-    }
+    // The module's public API is checked from the compiler's symbol graph by tools/check-no-score-api.sh, which CI runs:
+    // no public or open declaration names a floating-point type except the reviewed ones in tools/no-score-api-allow.txt.
 }

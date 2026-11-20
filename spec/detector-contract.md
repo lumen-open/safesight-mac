@@ -17,7 +17,7 @@ These hold for every model and every detector. They are why people trust the app
 - **Classes only leave the detector.** It answers `clear`, `contain` (a soft blur until cleared) or `cover`, with a reason and a rectangle. No score, no cut-off and no probability ever crosses the module's boundary, reaches the interface or is written to a log.
 - **A fault covers more, never less.** A model that fails to load, a file that doesn't match its hash, an edited manifest, a model of the wrong shape: each one covers every display whole. A model that throws or returns a score that isn't a number from 0 to 1 at run time leaves that picture covered or blurred and judged again, never shown as clean.
 - **Unjudged means covered.** When there is more on screen than the budget allows, what wasn't judged yet is covered or blurred, never shown.
-- **Fewer models never means less covering.** With two families, the owner's rule decides (Balanced or Either). With one family, its flag alone covers.
+- **Fewer models never means less covering.** With two families, the owner's rule decides (Balanced or Either). With one family, a single model covers whatever it flags, under either rule.
 - **Nothing leaves the Mac,** and nothing that reads the screen has any networking code.
 
 ## Level 1: a drop-in model
@@ -117,7 +117,7 @@ You may add deliberately broken controls (`conformance/<id>/broken/*.mlpackage`,
 
 ### 6. Speed
 
-About 10 ms a tile or less on an M1 Neural Engine or GPU, at batch sizes 1 to 8, with the memory it needs stated. The watcher's budget is 40 judgements a second sustained, with bursts of 400, and the goal is about a tenth of a second from a new picture to its cover.
+About 10 ms a tile or less on an M1 Neural Engine or GPU, at batch sizes 1 to 8, with the memory it needs stated. When the app starts, it runs every model once before judging anything, with every display covered meanwhile; a model that can't give a usable score within `Register.WARM_UP_LIMIT` (10 s) counts as failed, and the displays stay covered. Today's three models warm up in about 0.2 s. The watcher's budget is 40 judgements a second sustained, with bursts of 400, and the goal is about a tenth of a second from a new picture to its cover.
 
 ### 7. Determinism
 
@@ -125,13 +125,13 @@ The same bytes in give the same class out on the same compute unit.
 
 ## Single-family mode
 
-If you have one strong model rather than two different ones, set `"families": 1` and put every model in one slot, with no tie-breaker. Then that family's flag alone covers under every rule, as the Either rule does, and it makes a window cautious ("hot") as both families agreeing would. There is never a dispute to settle. Two families remain the default and the recommendation, because two different kinds of model rarely miss the same picture, but one family never covers less than its own flag.
+If you have one strong model rather than two different ones, set `"families": 1` and put every model in one slot, with no tie-breaker. Then that family's flag alone covers under every rule, as the Either rule does, and it makes a window cautious ("hot") as both families agreeing would. There is never a dispute to settle. Two families remain the default and the recommendation, because two different kinds of model rarely miss the same picture. A single model covers whatever it flags, under either rule.
 
 Single-family mode is off unless the sealed manifest declares it.
 
 ## Level 2: a drop-in detector
 
-If you replace the whole judge, your type takes an `RGBAImage` and a `JudgeContext`, honours the caller's `budget`, and returns a `FrameVerdict` holding **classes only**. It must keep every promise above, and pass the rules in `Tests/DetectorCoreTests/ContractTests.swift`, `RuleTests.swift` and `NoScoreLeaksTests.swift`:
+If you replace the whole judge, your type takes an `RGBAImage` and a `JudgeContext`, honours the caller's `budget`, and returns a `FrameVerdict` holding **classes only**. It must keep every promise above, and pass the rules in `Tests/DetectorCoreTests/ContractTests.swift`, `RuleTests.swift` and `NoScoreLeaksTests.swift`, and `tools/check-no-score-api.sh`, which reads the module's public API from the compiler:
 
 - unjudged or over budget means covered or blurred, never clear;
 - a fault means more covering, never less;

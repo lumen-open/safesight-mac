@@ -175,8 +175,9 @@ struct FakeFolder: LaunchFolderProbe {
     }
 
     /// Local only: the lab build's converted models, cloned beside the committed manifest, match the sealed list.
-    @Test func theLabBuildsConvertedModelsMatchTheSealedList() throws {
-        guard let dir = try Bundles.stagedLab() else { return }   // not on CI
+    @Test(.enabled(if: Bundles.hasLab, "needs the lab's converted models (not on CI)"))
+    func theLabBuildsConvertedModelsMatchTheSealedList() throws {
+        let dir = try #require(try Bundles.stagedLab())
         defer { try? FileManager.default.removeItem(at: dir) }
         try WatcherModels.verify(folder: dir)
         _ = try WatcherModels.readManifest(folder: dir)

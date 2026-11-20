@@ -55,7 +55,7 @@ The licence policy for new dependencies: Apache-2.0, MIT, BSD, ISC or similar; n
 | Bundle identifier | `tools/make-app.sh` takes it as an argument | None has been chosen, so pick your own reverse-domain prefix |
 | The keeper's launch file, `<prefix>.safesightmac.keeper.plist` | `Sources/SafeSightMacWatcher/PracticeState.swift` | Any prefix is accepted already; the `safesightmac` stem must match the keeper's launch label once it exists |
 | Executables and packages | `Package.swift` (`safesight-mac`, `safesightmac-harness`, `safesightmac-hello`), `keeper/Cargo.toml` (`safesightmac-keeper`), `.github/workflows/build-release.yml` | Rename together |
-| Development switches | `SAFESIGHTMAC_LAB`, `SAFESIGHTMAC_MODELS`, `SAFESIGHTMAC_COVER_FORM` | Developer-facing only |
+| Development switches | `SAFESIGHTMAC_LAB`, `SAFESIGHTMAC_MODELS` (lab builds only), `SAFESIGHTMAC_COVER_FORM` | Developer-facing only |
 
 **Don't rename the format tags** inside data: the keeper's record tag `SSMK`, the keyholder codes' tag `SM`, and the detector's `kestrel-*` format names. They identify file and wire formats, not the brand. Renaming them breaks compatibility and counts as a change to the lock.
 

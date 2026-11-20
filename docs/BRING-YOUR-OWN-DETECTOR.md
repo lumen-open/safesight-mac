@@ -20,7 +20,7 @@ conformance/your-model/inputs/...     the harmless pictures they were made from 
 conformance/your-model/broken/...     optional: deliberately broken copies, which must fail parity
 ```
 
-Start the manifest from [models/bundle-manifest.json](../models/bundle-manifest.json), which describes today's three models. With two different models, use slots `A` and `B` and keep `"families": 2`; add a `tie-breaker` if you have one. With one strong model, use `"families": 1`: its flag alone then covers, so one model never covers less than its own flag.
+Start the manifest from [models/bundle-manifest.json](../models/bundle-manifest.json), which describes today's three models. With two different models, use slots `A` and `B` and keep `"families": 2`; add a `tie-breaker` if you have one. With one strong model, use `"families": 1`: a single model covers whatever it flags, under either rule.
 
 Leave each model's `files` empty and let the kit fill them in:
 
