@@ -2,7 +2,11 @@
   "budget": {
     "frameCopyCpuMs2880x1800": 3,
     "reloadCpuSeconds": 2,
-    "settleWithinSeconds": 300,
+    "settleWithinSeconds": {
+      "battery": 300,
+      "full": 300,
+      "low": 600
+    },
     "settledJudgementsPerMinute": 0,
     "settledLooksPerMinute": 0,
     "settledTimerWakeupsPerMinute": 240,
@@ -12,30 +16,29 @@
     "settlingLooksPerMinute": 60,
     "videoCpuShareOfOneCore": 1
   },
-  "budgetNote": "checked against 300 s when run; the settle-time budget for Low Power Mode and heat is now 600 s (EnergyBudget.settleWithin)",
-  "footprintAfterModelsMB": 718,
-  "label": "this branch, Low Power Mode or hot (looks every 2 s)",
+  "footprintAfterModelsMB": 659.6,
+  "label": "this branch, Low Power Mode or hot: a look every 2 s only once nothing but covers waits",
   "machine": "Apple M1 Max, macOS Version 26.3 (Build 25D125)",
-  "overBudget": [],
-  "overBudgetAtTheTime": [
-    "still: settled at 389.021303292 s, budget 300.0 s"
+  "note": "checked against the earlier 18 CPU-s a minute when run; the budget is now 30",
+  "overBudget": [
+    "still: 21.16 CPU-s a minute while settling, budget 18.0"
   ],
-  "peakFootprintMB": 879.8,
-  "sharedMac": "the developer Mac was shared with other work while this ran (load average about 4 to 16); CPU times are the process's own",
+  "peakFootprintMB": 841.38,
+  "sharedMac": "the developer Mac was shared with other work while this ran (load average about 18 to 23); CPU times are the process's own",
   "simulatedClock": true,
   "still": {
     "budgetWatch": {
-      "calls": 1769,
+      "calls": 8508,
       "callsOverBudget": 0,
       "judgementsOverBudget": 0,
       "secondCheckJudgementsOverBudget": 0
     },
     "file": "04-lab-start.png",
     "firstFrame": {
-      "cpuSeconds": 0.13,
-      "judgements": 40
+      "cpuSeconds": 0.35,
+      "judgements": 36
     },
-    "footprintMB": 803.68,
+    "footprintMB": 731.6,
     "power": "low",
     "rest": {
       "budgetUnitsPerSecond": 0,
@@ -53,20 +56,20 @@
       "simulatedSeconds": 60
     },
     "settling": {
-      "budgetUnitsPerSecond": 24.1,
-      "budgetUnitsSpent": 9376,
-      "cpuSeconds": 41.67,
-      "cpuSecondsPerMinute": 6.43,
-      "cpuShareOfOneCore": 0.11,
+      "budgetUnitsPerSecond": 41,
+      "budgetUnitsSpent": 7638,
+      "cpuSeconds": 65.68,
+      "cpuSecondsPerMinute": 21.16,
+      "cpuShareOfOneCore": 0.35,
       "framesJudged": 0,
-      "judgements": 9376,
-      "judgementsPerMinute": 1446.09,
-      "looks": 235,
-      "looksPerMinute": 36.24,
+      "judgements": 7638,
+      "judgementsPerMinute": 2460.09,
+      "looks": 362,
+      "looksPerMinute": 116.59,
       "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
-      "secondCheckJudgements": 3214,
-      "settledAtSeconds": 389.02,
-      "simulatedSeconds": 389.02
+      "secondCheckJudgements": 2526,
+      "settledAtSeconds": 186.29,
+      "simulatedSeconds": 186.29
     }
   },
   "what": "safesightmac-harness energy"

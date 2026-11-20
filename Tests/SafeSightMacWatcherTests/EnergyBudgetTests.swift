@@ -36,8 +36,10 @@ import Testing
                 plans.append(p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t), snapshot: snap, now: t))
                 continue
             }
-            let every = p.hasLeftOverWork ? Register.TICK : mode.lookEvery
-            guard p.needsAnotherLook, t - lastLook >= every - 1e-9 else { continue }
+            // The app's own pace (`LookPace`, what `WatcherController.askForLooks` runs).
+            let due = LookPace.due(now: t, mode: mode, wants: p.needsAnotherLook ? [d.id] : [], leftOver: p.hasLeftOverWork ? [d.id] : [],
+                                   lastAt: [d.id: lastLook], busy: [], waiting: [], holding: false)
+            guard !due.offered.isEmpty else { continue }
             lastLook = t; looks += 1
             plans.append(p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t), snapshot: snap, now: t))
         }
@@ -173,4 +175,62 @@ import Testing
         }
         #expect(judge.serial > before)
     }
+
+    // MARK: The app's pace of looks (`LookPace`, run by `WatcherController.askForLooks`)
+
+    @Test func noLookIsAskedForWhileAHoldIsOn() {
+        let due = LookPace.due(now: 100, mode: .full, wants: [1, 2], leftOver: [1], lastAt: [1: 0, 2: 0], busy: [], waiting: [], holding: true)
+        #expect(due.touched.isEmpty && due.offered.isEmpty, "asleep, locked or switched away: the judging queue is not woken")
+        let free = LookPace.due(now: 100, mode: .full, wants: [1, 2], leftOver: [1], lastAt: [1: 0, 2: 0], busy: [], waiting: [], holding: false)
+        #expect(free.offered == [1, 2])
+    }
+
+    @Test func thePaceIsEveryTickForLeftOverWorkAndSlowerOtherwise() {
+        func offered(_ mode: EnergyMode, leftOver: Bool, after dt: Double) -> Bool {
+            !LookPace.due(now: 10 + dt, mode: mode, wants: [1], leftOver: leftOver ? [1] : [], lastAt: [1: 10], busy: [], waiting: [],
+                          holding: false).offered.isEmpty
+        }
+        for m in EnergyMode.allCases {
+            #expect(offered(m, leftOver: true, after: Register.TICK), "left-over work: every tick in \(m)")
+            #expect(!offered(m, leftOver: false, after: Register.TICK), "only covers waiting: not every tick in \(m)")
+            #expect(offered(m, leftOver: false, after: m.lookEvery))
+        }
+        // Busy or waiting: the interval counts (touched), but no frame is sent on top of the one already there.
+        let due = LookPace.due(now: 20, mode: .full, wants: [1, 2], leftOver: [], lastAt: [1: 10, 2: 10], busy: [1], waiting: [2], holding: false)
+        #expect(due.touched == [1, 2] && due.offered.isEmpty)
+        // No frame yet from a display: no look.
+        #expect(LookPace.due(now: 20, mode: .full, wants: [3], leftOver: [], lastAt: [:], busy: [], waiting: [], holding: false).touched.isEmpty)
+    }
+
+    /// Background clean checks of pictures shown clear keep the quick pace: one that flags covers as soon as on main.
+    @Test func backgroundCleanChecksAreLookedAtEveryTick() {
+        let judge = CostJudge(entries: StillScreenSettlesTests.grid(PixelRect(x: 0, y: 30, w: 600, h: 370)), wholeCost: StillScreenSettlesTests.wholeCost)
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: [desktop], time: 0), now: 0)
+        p.pending = []; p.dueAgain = []
+        #expect(!p.hasLeftOverWork)
+        var v = FrameVerdict(regions: [], coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: 0)
+        v.secondChecksLeft = 3
+        p.noteSecondChecks(v, now: 1)
+        #expect(p.hasLeftOverWork, "pictures waiting for a background clean check: every tick")
+        p.backgroundSecondChecks = false
+        #expect(!p.hasLeftOverWork)
+    }
+
+    /// After a hold (sleep, lock, another session) the display needs a frame of a new stream, and that first frame is
+    /// judged whole: the frame from before the hold says nothing about what the screen shows now.
+    @Test func theFirstFrameAfterAResumeIsJudgedWhole() {
+        let judge = CostJudge(entries: [], blindCalls: 0)
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        p.clock = { [unowned judge] in judge.clockNs }
+        let snap = Fixtures.oneWindow(d.bounds)
+        let img = Fixtures.blank(600, 400)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, t: 0, generation: 1), snapshot: snap, now: 0)
+        p.cover(because: .displayChanging, until: 2)
+        judge.log = []
+        let small = PixelRect(x: 10, y: 10, w: 8, h: 8)
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [small], t: 5, generation: 2), snapshot: snap, now: 5)
+        #expect(judge.log.contains { $0.area.w >= 600 && $0.area.h >= 400 }, "judged whole, not only the reported change: \(judge.log.map(\.area))")
+    }
 }
+

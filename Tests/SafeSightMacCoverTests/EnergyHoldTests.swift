@@ -99,4 +99,110 @@ import Testing
         await s.start(only: [1, 2], generation: 7)
         #expect(await s.running == [1: 7, 2: 7])
     }
+
+    // MARK: A slow first warm-up
+
+    /// The models' warm-up ran past its limit (a detector failure) and ends well while the displays sleep, or at the lock
+    /// screen: the failure is over, but the hold stays. Capture does not start until the hold ends, and every display stays
+    /// covered whole until a frame of the new streams is judged.
+    @Test(arguments: [HoldReason.displaysAsleep, .sleep, .locked])
+    func aSlowWarmUpEndingDuringAHoldNeverStartsCapture(_ reason: HoldReason) async throws {
+        let capture = FakeCapture([1, 2])
+        let r = LinkRig(DisplayList(displays: [a, x], main: 1), capture: capture)
+        r.coordinator.start()
+        r.coordinator.detectorFailed()            // the warm-up deadline passed
+        if reason == .locked {
+            r.os.state.screenLocked = true
+            r.os.now += 0.25
+            r.coordinator.tick()
+        } else {
+            r.os.state.displaysAsleep = true
+            r.coordinator.willChange(reason)
+        }
+        // The warm-up ends well: as the watcher does it.
+        let watch = WarmUpWatch()
+        watch.deadlinePassed(7)
+        #expect(watch.ready(7, detectorFailed: true))
+        r.coordinator.detectorRecovered()
+        r.link.ready = true
+        r.coordinator.restartNow()
+        for _ in 0..<20 { r.os.now += 0.25; r.coordinator.tick() }
+        await r.link.settled()
+        #expect(capture.streams.isEmpty, "no capture during the hold")
+        #expect(r.coordinator.coverage.hold != nil, "the hold is kept")
+        #expect(r.presenter.applied.last?.allSatisfy { $0.wholeDisplay != nil } ?? true, "covered whole (or, at the lock screen, nothing drawn)")
+        // The hold ends: capture starts, and the displays stay covered until judged.
+        r.os.state = SystemState(displaysAsleep: false, sessionOnConsole: true)
+        if reason != .locked { r.coordinator.didChange(reason) }
+        for _ in 0..<3 { r.os.now += CoverCoordinator.settle; r.coordinator.tick() }
+        await r.link.settled()
+        let g = try #require(capture.generation(of: 1))
+        #expect(r.presenter.whole(1) != nil && r.presenter.whole(2) != nil)
+        r.coordinator.deliver(.clear(a), generation: g)
+        #expect(r.presenter.whole(1) == nil)
+    }
+
+    @Test func aRealFailureAfterTheDeadlineStaysFailed() {
+        let w = WarmUpWatch()
+        #expect(w.ready(1, detectorFailed: false), "a warm-up within the limit")
+        w.deadlinePassed(2)
+        #expect(w.ready(2, detectorFailed: true), "past the limit, then ended well")
+        w.deadlinePassed(3)
+        w.failed(3)
+        #expect(!w.ready(3, detectorFailed: true), "past the limit, then failed: stays failed")
+        #expect(!w.ready(4, detectorFailed: true), "a failure with no deadline (the load itself failed) stays failed")
+        w.deadlinePassed(5)
+        #expect(!w.ready(6, detectorFailed: true), "only the load whose deadline passed may recover")
+    }
+
+    // MARK: Holds and capture, in awkward orders
+
+    @Test func aPauseArrivingWhileAStartIsPartWayStopsWhatItStarts() async {
+        let log = ReportLog(), capture = FakeCapture([1, 2])
+        let gate = Gate()
+        capture.openGate = gate
+        let s = StreamScheduler(backend: capture, reports: log.reports)
+        let start = Task { await s.start(only: [1, 2], generation: 5) }
+        await gate.reached(1)
+        await s.pause(generation: 6)
+        await gate.open()
+        await start.value
+        #expect(await s.running.isEmpty, "nothing kept running after the pause")
+        #expect(capture.streams.allSatisfy { $0.closed }, "the stream opened part-way was closed")
+    }
+
+    @Test func aDisplayChangeDuringSleepDoesNotStartCapture() async throws {
+        let (r, capture, _) = try await rig()
+        r.os.state.displaysAsleep = true
+        r.coordinator.willChange(.displaysAsleep)
+        await r.link.settled()
+        let opened = capture.streams.count
+        r.coordinator.willChange(.change)
+        r.coordinator.didChange(.change)
+        for _ in 0..<12 { r.os.now += CoverCoordinator.settle; r.coordinator.tick() }
+        await r.link.settled()
+        #expect(capture.streams.count == opened, "no stream while the displays sleep, display change or not")
+        #expect(r.presenter.whole(1) != nil && r.presenter.whole(2) != nil)
+    }
+
+    /// The displays wake while the screen is still locked (the wake notice comes before the lock screen is seen gone):
+    /// capture waits for the unlock.
+    @Test func aWakeNoticeAtTheLockScreenWaitsForTheUnlock() async throws {
+        let (r, capture, _) = try await rig()
+        r.os.state = SystemState(displaysAsleep: true, sessionOnConsole: true, screenLocked: true)
+        r.coordinator.willChange(.displaysAsleep)
+        await r.link.settled()
+        let opened = capture.streams.count
+        r.os.state.displaysAsleep = false
+        r.coordinator.didChange(.displaysAsleep)
+        for _ in 0..<8 { r.os.now += CoverCoordinator.settle; r.coordinator.tick() }
+        await r.link.settled()
+        #expect(capture.streams.count == opened, "still locked: no capture")
+        r.os.state.screenLocked = false
+        for _ in 0..<3 { r.os.now += CoverCoordinator.settle; r.coordinator.tick() }
+        await r.link.settled()
+        #expect(capture.streams.count > opened, "unlocked: capture starts")
+        #expect(r.presenter.whole(1) != nil, "covered until judged")
+    }
 }
+

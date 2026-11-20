@@ -133,13 +133,11 @@ enum Energy {
         while t < until {
             if !p.needsAnotherLook && plan.wholeDisplay == nil && plan.items.isEmpty { return t }
             guard p.needsAnotherLook else { return nil }   // something drawn, nothing to look at: it will never settle
-            // The next tick at least `lookEvery` after the last look.
+            // The next tick at which the app's own pace (`LookPace`) asks for a look.
             let tick = Register.TICK
             var next = (t / tick).rounded(.up) * tick
-            // Lab knob: ENERGY_LOOK_EVERY (seconds) tries another cadence for the looks that only let covers lift.
-            let settleEvery = ProcessInfo.processInfo.environment["ENERGY_LOOK_EVERY"].flatMap(Double.init) ?? mode.lookEvery
-            let every = p.hasLeftOverWork ? Register.TICK : settleEvery
-            if next < lastLook + every - 1e-9 { next = ((lastLook + every) / tick - 1e-9).rounded(.up) * tick }
+            while LookPace.due(now: next, mode: mode, wants: [1], leftOver: p.hasLeftOverWork ? [1] : [], lastAt: [1: lastLook],
+                               busy: [], waiting: [], holding: false).offered.isEmpty { next += tick }
             t = next
             lastLook = t
             let f = CapturedFrame(display: display, status: .idle, image: nil, map: nil, dirty: [], time: t)
@@ -212,7 +210,7 @@ enum Energy {
         let ceiling = EnergyBudget.settlingJudgements(seconds: settledAt ?? s.maxSettleSeconds)
         if Double(settling.budgetUnits) > ceiling { over.append("still: \(settling.budgetUnits) judgements charged while settling, budget \(Int(ceiling))") }
         let looksPerMin = Double(settling.looks) / max(settledAt ?? s.maxSettleSeconds, 1) * 60
-        if s.power == .full, looksPerMin > Double(EnergyBudget.SETTLING_LOOKS_PER_MINUTE) * 1.5 { over.append("still: \(Int(looksPerMin)) looks a minute while settling") }
+        if looksPerMin > Double(EnergyBudget.SETTLING_LOOKS_PER_MINUTE) { over.append("still: \(Int(looksPerMin)) looks a minute while settling") }
         if resting.judgements > EnergyBudget.SETTLED_JUDGEMENTS_PER_MINUTE { over.append("still: \(resting.judgements) judgements at rest") }
         if Double(wanted) / s.restSeconds * 60 > Double(EnergyBudget.SETTLED_LOOKS_PER_MINUTE) { over.append("still: \(wanted) looks wanted at rest") }
         let cpuMin = settling.cpu / max(settledAt ?? s.maxSettleSeconds, 1) * 60

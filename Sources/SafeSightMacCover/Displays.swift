@@ -233,6 +233,15 @@ public final class CoverCoordinator {
         present(urgent: true)
     }
 
+    /// A warm-up that ran past `WARM_UP_LIMIT` has ended well: the detector failure it caused is over. Unlike `restart`,
+    /// every hold (asleep, locked, another session, a display change) stays: the displays stay covered whole, and capture
+    /// restarts only through `restartNow`, which waits for the holds to end.
+    public func detectorRecovered() {
+        guard running else { return }
+        coverage.detectorFailed = false
+        present(urgent: true)
+    }
+
     // MARK: Display changes
 
     /// macOS announced a change (`.change`), or the Mac or its displays are going to sleep, or the session is going

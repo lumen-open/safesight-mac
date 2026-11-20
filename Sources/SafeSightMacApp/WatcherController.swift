@@ -217,8 +217,8 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     /// Counts loads, so that only the latest one's outcome counts (main thread only).
     private var loadToken = 0
-    /// The load whose warm-up ran past `WARM_UP_LIMIT` and is still going: if it ends well, covering starts after all.
-    private var slowWarmUp: Int?
+    /// A load whose warm-up ran past `WARM_UP_LIMIT` and is still going: if it ends well, covering starts after all.
+    private let warmUp = WarmUpWatch()
 
     /// Loads the detector and warms its models up before anything is judged. Every display stays covered whole until
     /// it is ready: a load that fails, a warm-up that fails or one that runs past `Register.WARM_UP_LIMIT` is a
@@ -253,14 +253,15 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             }
             DispatchQueue.main.async {
                 guard self.running, token == self.loadToken else { return }
-                if self.detectorFailed {
-                    // Only a warm-up that ran past the limit and then ended well recovers by itself; any other failure stays.
-                    guard self.slowWarmUp == token else { return }
+                // Only a warm-up that ran past the limit and then ended well recovers by itself; any other failure stays.
+                let wasFailed = self.detectorFailed
+                guard self.warmUp.ready(token, detectorFailed: wasFailed) else { return }
+                if wasFailed {
+                    // Every hold stays (asleep, locked, another session): `restartNow` waits for them to end.
                     self.detectorFailed = false
-                    self.coordinator.restart()
+                    self.coordinator.detectorRecovered()
                     self.onChange?()
                 }
-                self.slowWarmUp = nil
                 self.link.ready = true
                 self.coordinator.restartNow()
             }
@@ -269,7 +270,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
 
     @MainActor private func loadFailed(_ token: Int) {
         guard token == loadToken else { return }
-        slowWarmUp = nil
+        warmUp.failed(token)
         reportDetectorFailure()
     }
 
@@ -277,7 +278,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     @MainActor private func armWarmUpDeadline(_ token: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + Register.WARM_UP_LIMIT + 1) { [weak self] in
             guard let self, token == self.loadToken, !self.link.ready, !self.detectorFailed else { return }
-            self.slowWarmUp = token
+            self.warmUp.deadlinePassed(token)
             self.reportDetectorFailure()
         }
     }
@@ -414,16 +415,16 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// something left to judge, with no frame waiting or being judged and none for `energy.lookEvery`, a "nothing changed"
     /// frame of its current stream is queued, and judged on the last frame's pixels like any idle frame. It never carries
     /// pixels, so it can never replace a frame waiting to be judged, and a frame from an older stream is never judged.
+    /// While a hold is on (asleep, locked, another session, a display change) no look is asked for (`LookPace`).
     @MainActor private func askForLooks(now: TimeInterval) {
-        let waiting = frames.waiting(now: now)
-        for id in wantsLook {
-            let last: (display: DisplayDescriptor, generation: Int, at: TimeInterval)? = seenLock.withLock {
-                let every = leftOver.contains(id) ? Register.TICK : energy.lookEvery
-                guard let l = lastFrame[id], now - l.at >= every - 0.01 else { return nil }
-                lastFrame[id]?.at = now
-                return l
-            }
-            guard let last, busySince[id] == nil, waiting[id] == nil else { continue }
+        let waiting = Set(frames.waiting(now: now).keys)
+        let offers: [(display: DisplayDescriptor, generation: Int)] = seenLock.withLock {
+            let due = LookPace.due(now: now, mode: energy, wants: wantsLook, leftOver: leftOver, lastAt: lastFrame.mapValues(\.at),
+                                   busy: Set(busySince.keys), waiting: waiting, holding: coordinator.coverage.hold != nil)
+            for id in due.touched { lastFrame[id]?.at = now }
+            return due.offered.sorted().compactMap { id in lastFrame[id].map { ($0.display, $0.generation) } }
+        }
+        for last in offers {
             let f = CapturedFrame(display: last.display, status: .idle, image: nil, map: nil, dirty: [], time: now, generation: last.generation)
             if frames.offer(f, now: now) { judgeQueue.async { [weak self] in self?.judgeNext() } }
         }
