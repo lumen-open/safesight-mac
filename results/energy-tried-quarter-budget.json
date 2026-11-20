@@ -1,0 +1,76 @@
+{
+  "budget": {
+    "frameCopyMs2880x1800": 4,
+    "reloadCpuSeconds": 15,
+    "settleWithinSeconds": 300,
+    "settledJudgementsPerMinute": 0,
+    "settledLooksPerMinute": 0,
+    "settledTimerWakeupsPerMinute": 240,
+    "settlingCpuSecondsPerMinute": 30,
+    "settlingJudgementsPerMinute": {
+      "battery": 1600,
+      "full": 2800,
+      "low": 1000
+    },
+    "videoCpuShareOfOneCore": 1
+  },
+  "footprintAfterModelsMB": 659.28,
+  "label": "tried and dropped: settling at a quarter of the budget, looks every 4 s",
+  "machine": "Apple M1 Max, macOS Version 26.3 (Build 25D125)",
+  "overBudget": [
+    "still: settled at never, budget 1200.0 s",
+    "still: 242 judgements at rest",
+    "still: 13 looks wanted at rest"
+  ],
+  "peakFootprintMB": 845.97,
+  "postProcessed": "judgements corrected: this harness build counted second clean checks twice; judgements = the detector's count, second checks included once",
+  "sharedMac": "the developer Mac was shared with other work while this ran (load average about 4 to 16); CPU times are the process's own",
+  "simulatedClock": true,
+  "still": {
+    "budgetWatch": {
+      "calls": 1466,
+      "callsOverBudget": 0,
+      "judgementsOverBudget": 0,
+      "secondCheckJudgementsOverBudget": 0
+    },
+    "file": "04-lab-start.png",
+    "firstFrame": {
+      "cpuSeconds": 0.16,
+      "judgements": 28
+    },
+    "footprintMB": 727.93,
+    "power": "low",
+    "rest": {
+      "budgetUnitsPerSecond": 4.03,
+      "budgetUnitsSpent": 242,
+      "cpuSeconds": 2.84,
+      "cpuSecondsPerMinute": 2.84,
+      "cpuShareOfOneCore": 0.05,
+      "framesJudged": 0,
+      "judgements": 242,
+      "judgementsPerMinute": 242.0,
+      "looks": 13,
+      "looksPerMinute": 13,
+      "note": "a 'nothing changed' frame every tick, as if the capture sent one; the watcher itself asks for none at rest",
+      "secondCheckJudgements": 0,
+      "simulatedSeconds": 60
+    },
+    "settling": {
+      "budgetUnitsPerSecond": 7.31,
+      "budgetUnitsSpent": 8772,
+      "cpuSeconds": 94.33,
+      "cpuSecondsPerMinute": 4.72,
+      "cpuShareOfOneCore": 0.08,
+      "framesJudged": 0,
+      "judgements": 8772,
+      "judgementsPerMinute": 438.6,
+      "looks": 361,
+      "looksPerMinute": 18.05,
+      "note": "judgements: model runs counted by the detector (tie-breaker runs included); budgetUnits: what the judge calls charged to the budget",
+      "secondCheckJudgements": 2542,
+      "settledAtSeconds": -1,
+      "simulatedSeconds": 1200
+    }
+  },
+  "what": "safesightmac-harness energy"
+}

@@ -3,9 +3,9 @@
 // the detector's order of work and costs (`CostJudge`). Time is simulated; synthetic rectangles only.
 //
 // - A settled still screen judges nothing and asks for no look.
-// - While a still screen settles, judgements stay within the budget for the energy mode.
-// - Saving energy only slows the settling: the same four clean rounds before a cover lifts, a flag stays covered, and
-//   new pictures are judged at the full budget.
+// - While a still screen settles, judgements stay within the budget, in every energy mode.
+// - Saving energy only makes the looks rarer: the same four clean rounds before a cover lifts, a flag stays covered, and
+//   new pictures left over are looked at every tick.
 import CoreGraphics
 import Foundation
 import Preprocess
@@ -23,7 +23,6 @@ import Testing
     /// One complete frame at t = 0, then a look every `mode.lookEvery` while the pipeline wants one (as the watcher asks),
     /// (every tick while new pictures are left over), for `seconds`; and after it settles, a "nothing changed" frame every tick anyway (as if the capture sent them).
     func still(_ p: DisplayPipeline, _ judge: CostJudge, _ snap: WindowSnapshot, mode: EnergyMode, seconds: Double) -> Run {
-        p.energy = mode
         // The fake judge's clock times the looks, as in StillScreenSettlesTests: the same on any machine.
         p.clock = { [unowned judge] in judge.clockNs }
         var plans = [p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)]
@@ -61,11 +60,10 @@ import Testing
         #expect(EnergyMode.from(onBattery: false, lowPowerMode: true, thermal: .nominal) == .low)
         #expect(EnergyMode.from(onBattery: true, lowPowerMode: false, thermal: .serious) == .low)
         #expect(EnergyMode.from(onBattery: false, lowPowerMode: false, thermal: .critical) == .low)
-        // Saving only ever slows: never a larger share, never quicker looks.
-        for m in EnergyMode.allCases {
-            #expect(m.settleRateScale > 0 && m.settleRateScale <= 1)
-            #expect(m.lookEvery >= Register.TICK)
-        }
+        // Saving only ever makes the looks rarer, never more frequent.
+        #expect(EnergyMode.battery.lookEvery >= EnergyMode.full.lookEvery)
+        #expect(EnergyMode.low.lookEvery >= EnergyMode.battery.lookEvery)
+        for m in EnergyMode.allCases { #expect(m.lookEvery >= Register.TICK) }
     }
 
     @Test(arguments: EnergyMode.allCases)
@@ -81,7 +79,7 @@ import Testing
         let (run, _, _) = desktopRun(mode, seconds: 900)
         let at = try! #require(run.settledAt)
         // Judgements over the whole settling, against the mode's rate for that long, plus the bucket's first burst.
-        let allowed = (Register.JUDGEMENT_BUDGET * mode.settleRateScale) * at + Register.JUDGEMENT_BURST
+        let allowed = EnergyBudget.settlingJudgements(seconds: at)
         #expect(Double(run.judgements) <= allowed, "\(run.judgements) judgements in \(at) s, budget \(allowed)")
         // Looks: at most one a tick, and far fewer than that once only covers wait to lift.
         #expect(Double(run.looks) <= at / Register.TICK + 1)
@@ -91,7 +89,7 @@ import Testing
         let full = desktopRun(.full, seconds: 900).0, battery = desktopRun(.battery, seconds: 900).0, low = desktopRun(.low, seconds: 900).0
         let f = try! #require(full.settledAt), b = try! #require(battery.settledAt), l = try! #require(low.settledAt)
         #expect(b >= f && l >= b, "full \(f) s, battery \(b) s, low \(l) s")
-        #expect(l <= EnergyBudget.SETTLE_WITHIN / EnergyMode.low.settleRateScale)
+        #expect(l <= EnergyBudget.settleWithin(.low))
     }
 
     /// The same evidence in every mode: every picture judged clean four times before the screen is clear.
@@ -101,7 +99,7 @@ import Testing
         let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
         let run = still(p, judge, Fixtures.oneWindow(d.bounds), mode: mode, seconds: 1500)
         let at = try! #require(run.settledAt)
-        let least = (Double(4 * 2 * judge.entries.count) - Register.JUDGEMENT_BURST) / (Register.JUDGEMENT_BUDGET * mode.settleRateScale)
+        let least = (Double(4 * 2 * judge.entries.count) - Register.JUDGEMENT_BURST) / Register.JUDGEMENT_BUDGET
         // (Roughly: judging left over from the first frame's new pictures runs at the full rate.)
         #expect(at >= least * 0.8, "not before four whole rounds at the mode's rate: \(at) s against \(least) s")
         #expect(judge.judgedCount.values.allSatisfy { $0 >= Register.VIDEO_VOTE })
@@ -116,25 +114,18 @@ import Testing
         #expect(p.needsAnotherLook)
     }
 
-    /// Only the settling slows: with work left over from new pictures, or a frame with new pixels, the full budget.
-    @Test func newPicturesAreJudgedAtTheFullBudgetWhenSaving() {
+    /// Work left over from new pictures is new content waiting (blurred meanwhile): the watcher looks every tick for it in
+    /// every mode, and slows down only once nothing is left but covers waiting to lift.
+    @Test func newPicturesLeftOverAreLookedAtEveryTick() {
         let judge = CostJudge(entries: StillScreenSettlesTests.grid(PixelRect(x: 0, y: 30, w: 600, h: 370)), wholeCost: StillScreenSettlesTests.wholeCost)
         let p = DisplayPipeline(display: d, judger: judge, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
-        p.energy = .low
         let snap = WindowSnapshot(windows: [desktop, menuBar], time: 0)
         _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
-        #expect(p.bucket.rate == Register.JUDGEMENT_BUDGET, "a frame with new pixels: full rate")
         p.pending = [CGRect(x: 10, y: 40, width: 50, height: 50)]
-        _ = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 1), snapshot: snap, now: 1)
-        #expect(p.bucket.rate == Register.JUDGEMENT_BUDGET, "work left over from new pictures: full rate")
-        p.pending = []
-        #expect(!p.held.isEmpty, "covers wait to lift")
-        _ = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 2), snapshot: snap, now: 2)
-        #expect(p.bucket.rate == Register.JUDGEMENT_BUDGET * EnergyMode.low.settleRateScale, "covers waiting to lift: the mode's share")
-        var img = Fixtures.blank(600, 400)
-        Fixtures.paint(&img, PixelRect(x: 100, y: 100, w: 40, h: 40), channel: 0, seed: 3)
-        _ = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 100, y: 100, w: 40, h: 40)], t: 3), snapshot: snap, now: 3)
-        #expect(p.bucket.rate == Register.JUDGEMENT_BUDGET, "new pixels again: full rate")
+        #expect(p.hasLeftOverWork)
+        p.pending = []; p.dueAgain = []
+        #expect(!p.hasLeftOverWork)
+        #expect(p.needsAnotherLook, "covers still wait to lift: looked at every `lookEvery`")
     }
 
     /// Fewer, larger looks while only covers wait to lift: each look's fixed cost (the window split, finding pictures,

@@ -96,8 +96,8 @@ enum Energy {
 
     static func r2(_ x: Double) -> Double { x.isFinite ? (x * 100).rounded() / 100 : -1 }
 
-    /// Judgements the detector made since its timings were last reset (fresh and second checks).
-    static func judgements(_ d: Detector) -> Int { d.timings.judgements + d.timings.secondCheckJudgements }
+    /// Judgements the detector made since its timings were last reset (second clean checks are among them).
+    static func judgements(_ d: Detector) -> Int { d.timings.judgements }
 
     /// A simulated clock and the CPU time spent inside the watcher's work.
     struct Meter {
@@ -120,7 +120,7 @@ enum Energy {
                     "judgementsPerMinute": Energy.r2(Double(judgements) / m), "framesJudged": frames, "looks": looks,
                     "looksPerMinute": Energy.r2(Double(looks) / m), "secondCheckJudgements": secondChecks,
                     "budgetUnitsSpent": budgetUnits, "budgetUnitsPerSecond": Energy.r2(Double(budgetUnits) / max(seconds, 1e-9)),
-                    "note": "judgements: model runs counted by the detector (tie-breaker runs included); budgetUnits: what the judge calls charged to the budget"]
+                    "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget"]
         }
     }
 
@@ -136,7 +136,9 @@ enum Energy {
             // The next tick at least `lookEvery` after the last look.
             let tick = Register.TICK
             var next = (t / tick).rounded(.up) * tick
-            let every = p.hasLeftOverWork ? Register.TICK : mode.lookEvery
+            // Lab knob: ENERGY_LOOK_EVERY (seconds) tries another cadence for the looks that only let covers lift.
+            let settleEvery = ProcessInfo.processInfo.environment["ENERGY_LOOK_EVERY"].flatMap(Double.init) ?? mode.lookEvery
+            let every = p.hasLeftOverWork ? Register.TICK : settleEvery
             if next < lastLook + every - 1e-9 { next = ((lastLook + every) / tick - 1e-9).rounded(.up) * tick }
             t = next
             lastLook = t
@@ -152,9 +154,7 @@ enum Energy {
     static func makePipeline(_ display: DisplayDescriptor, _ d: Detector, mode: EnergyMode) -> DisplayPipeline {
         let w = BudgetWatch(d)
         watch = w
-        let p = DisplayPipeline(display: display, judger: w, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
-        p.energy = mode
-        return p
+        return DisplayPipeline(display: display, judger: w, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
     }
 
     static func map(_ display: DisplayDescriptor, _ img: RGBAImage, scale: CGFloat) -> CaptureMap {
@@ -207,11 +207,12 @@ enum Energy {
                      s.power.rawValue, settledAt.map { String(format: "%.1f", $0) } ?? "never", settling.judgements,
                      Double(settling.judgements) / max(settledAt ?? s.maxSettleSeconds, 1) * 60,
                      settling.cpu / max(settledAt ?? s.maxSettleSeconds, 1) * 60, resting.judgements, wanted))
-        let b = s.power == .full ? EnergyBudget.SETTLE_WITHIN : EnergyBudget.SETTLE_WITHIN / s.power.settleRateScale
+        let b = EnergyBudget.settleWithin(s.power)
         if settledAt == nil || settledAt! > b { over.append("still: settled at \(settledAt.map { "\($0) s" } ?? "never"), budget \(b) s") }
-        let perMin = Double(settling.budgetUnits) / max(settledAt ?? s.maxSettleSeconds, 1) * 60
-        let ceiling = EnergyBudget.settlingJudgementsPerMinute(s.power)
-        if perMin > ceiling { over.append("still: \(Int(perMin)) budget units a minute while settling, budget \(Int(ceiling))") }
+        let ceiling = EnergyBudget.settlingJudgements(seconds: settledAt ?? s.maxSettleSeconds)
+        if Double(settling.budgetUnits) > ceiling { over.append("still: \(settling.budgetUnits) judgements charged while settling, budget \(Int(ceiling))") }
+        let looksPerMin = Double(settling.looks) / max(settledAt ?? s.maxSettleSeconds, 1) * 60
+        if s.power == .full, looksPerMin > Double(EnergyBudget.SETTLING_LOOKS_PER_MINUTE) * 1.5 { over.append("still: \(Int(looksPerMin)) looks a minute while settling") }
         if resting.judgements > EnergyBudget.SETTLED_JUDGEMENTS_PER_MINUTE { over.append("still: \(resting.judgements) judgements at rest") }
         if Double(wanted) / s.restSeconds * 60 > Double(EnergyBudget.SETTLED_LOOKS_PER_MINUTE) { over.append("still: \(wanted) looks wanted at rest") }
         let cpuMin = settling.cpu / max(settledAt ?? s.maxSettleSeconds, 1) * 60
@@ -312,9 +313,9 @@ enum Energy {
             let cpuMs = (cpuSeconds() - c0) * 1000 / 20
             let ms = median(times)
             o["\(w)x\(h)"] = ["ms": r2(ms), "worstMs": r2(worst(times)), "cpuMsPerFrame": r2(cpuMs),
-                              "coreShareAt60fps": r2(ms * 60 / 1000), "coreShareAt120fps": r2(ms * 120 / 1000)]
-            print(String(format: "copy %dx%d: %.2f ms a frame, %.0f%% of a core at 60 fps, %.0f%% at 120 fps", w, h, ms, ms * 6, ms * 12))
-            if w == 2880, ms > EnergyBudget.FRAME_COPY_MS { over.append("copy: \(r2(ms)) ms a 2880x1800 frame, budget \(EnergyBudget.FRAME_COPY_MS) ms") }
+                              "coreShareAt60fps": r2(cpuMs * 60 / 1000), "coreShareAt120fps": r2(cpuMs * 120 / 1000)]
+            print(String(format: "copy %dx%d: %.2f ms a frame (%.2f CPU-ms), %.0f%% of a core at 60 fps, %.0f%% at 120 fps", w, h, ms, cpuMs, cpuMs * 6, cpuMs * 12))
+            if w == 2880, cpuMs > EnergyBudget.FRAME_COPY_CPU_MS { over.append("copy: \(r2(cpuMs)) CPU-ms a 2880x1800 frame, budget \(EnergyBudget.FRAME_COPY_CPU_MS) ms") }
         }
         out["copy"] = o
     }

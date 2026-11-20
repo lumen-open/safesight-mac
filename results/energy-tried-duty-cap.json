@@ -1,0 +1,131 @@
+{
+  "budget": {
+    "frameCopyMs2880x1800": 4,
+    "reloadCpuSeconds": 15,
+    "settleWithinSeconds": 300,
+    "settledJudgementsPerMinute": 0,
+    "settledLooksPerMinute": 0,
+    "settledTimerWakeupsPerMinute": 240,
+    "settlingCpuSecondsPerMinute": 30,
+    "settlingJudgementsPerMinute": {
+      "battery": 1600,
+      "full": 2800,
+      "low": 1000
+    },
+    "videoCpuShareOfOneCore": 1
+  },
+  "copy": {
+    "2880x1800": {
+      "coreShareAt120fps": 0.09,
+      "coreShareAt60fps": 0.05,
+      "cpuMsPerFrame": 3.42,
+      "ms": 0.78,
+      "worstMs": 1.17
+    },
+    "5120x2880": {
+      "coreShareAt120fps": 0.25,
+      "coreShareAt60fps": 0.12,
+      "cpuMsPerFrame": 11.5,
+      "ms": 2.05,
+      "worstMs": 6.74
+    }
+  },
+  "footprintAfterModelsMB": 659.55,
+  "label": "tried and dropped: settling capped at a quarter of the judging time, looks every 0.25 s",
+  "machine": "Apple M1 Max, macOS Version 26.3 (Build 25D125)",
+  "overBudget": [
+    "still: settled at 841.7500145 s, budget 300.0 s"
+  ],
+  "peakFootprintMB": 910.71,
+  "postProcessed": "not corrected: this run's harness had no separate count of second clean checks, so its judgements count them twice; measured on this branch before main's #31 was merged",
+  "reuse": {
+    "firstShowing": {
+      "cpuSeconds": 69.83,
+      "cpuSecondsPerMinute": 28.11,
+      "cpuShareOfOneCore": 0.47,
+      "framesJudged": 1,
+      "judgements": 5764,
+      "judgementsPerMinute": 2320.05,
+      "looks": 340,
+      "looksPerMinute": 136.85,
+      "restedAfterSeconds": 149.07,
+      "simulatedSeconds": 149.07
+    },
+    "footprintMB": 699.32,
+    "page": "busiest held-out page",
+    "power": "full",
+    "reload": {
+      "cpuSeconds": 0.08,
+      "cpuSecondsPerMinute": 4906680000,
+      "cpuShareOfOneCore": 81778000,
+      "framesJudged": 1,
+      "judgements": 12,
+      "judgementsPerMinute": 720000000000,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "restedAfterSeconds": 0,
+      "simulatedSeconds": 0
+    }
+  },
+  "sharedMac": "the developer Mac was shared with other work while this ran (load average about 4 to 16); CPU times are the process's own",
+  "simulatedClock": true,
+  "still": {
+    "file": "04-lab-start.png",
+    "firstFrame": {
+      "cpuSeconds": 0.36,
+      "judgements": 36
+    },
+    "footprintMB": 708.18,
+    "power": "full",
+    "rest": {
+      "cpuSeconds": 0,
+      "cpuSecondsPerMinute": 0,
+      "cpuShareOfOneCore": 0,
+      "framesJudged": 0,
+      "judgements": 0,
+      "judgementsPerMinute": 0,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "note": "a 'nothing changed' frame every tick, as if the capture sent one; the watcher itself asks for none at rest",
+      "simulatedSeconds": 60
+    },
+    "settling": {
+      "cpuSeconds": 418.85,
+      "cpuSecondsPerMinute": 29.86,
+      "cpuShareOfOneCore": 0.5,
+      "framesJudged": 0,
+      "judgements": 8690,
+      "judgementsPerMinute": 619.42,
+      "looks": 2236,
+      "looksPerMinute": 159.38,
+      "settledAtSeconds": 841.75,
+      "simulatedSeconds": 841.75
+    }
+  },
+  "tick": {
+    "cpuMsPerTick": 0.37,
+    "cpuSecondsPerMinute": 0.09,
+    "msPerTick": 1.3,
+    "note": "the OS reads the quarter-second tick makes at a settled screen (display lists, session state); the stall and wait checks besides are arithmetic",
+    "ticksPerSecond": 4
+  },
+  "video": {
+    "area": "1280x720 px at 30 fps over a 2880x1800 page",
+    "footprintMB": 777.07,
+    "judged": {
+      "cpuSeconds": 55.26,
+      "cpuSecondsPerMinute": 55.26,
+      "cpuShareOfOneCore": 0.92,
+      "framesCapturedPerMinute": 1800,
+      "framesJudged": 152,
+      "judgements": 888,
+      "judgementsPerMinute": 888,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "simulatedSeconds": 60,
+      "videoCoveredOrBlurredShareAtEnd": 1
+    },
+    "power": "full"
+  },
+  "what": "safesightmac-harness energy"
+}

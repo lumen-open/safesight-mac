@@ -45,9 +45,9 @@ public struct RGBAImage: Sendable {
             var dst = vImage_Buffer(data: out.baseAddress!, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: width * 4)
             // BGRA (bytes 0, 1, 2, 3) to RGBA: take bytes 2, 1, 0, 3.
             let map: [UInt8] = [2, 1, 0, 3]
-            guard vImagePermuteChannels_ARGB8888(&src, &dst, map, vImage_Flags(kvImageNoFlags)) == kvImageNoError else { return false }
+            guard vImagePermuteChannels_ARGB8888(&src, &dst, map, vImage_Flags(kvImageDoNotTile)) == kvImageNoError else { return false }
             // The fourth byte of each pixel (mask bit 0x1, the last channel) set to 255.
-            return vImageOverwriteChannelsWithScalar_ARGB8888(255, &dst, &dst, 0x1, vImage_Flags(kvImageNoFlags)) == kvImageNoError
+            return vImageOverwriteChannelsWithScalar_ARGB8888(255, &dst, &dst, 0x1, vImage_Flags(kvImageDoNotTile)) == kvImageNoError
         }
         if !ok { return fromBGRAScalar(width: width, height: height, bytesPerRow: bytesPerRow, base: base) }
         return RGBAImage(width: width, height: height, pixels: px)

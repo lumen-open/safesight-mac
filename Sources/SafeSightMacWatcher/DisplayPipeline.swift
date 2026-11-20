@@ -159,18 +159,11 @@ public final class DisplayPipeline {
                 callWallMs: Double = Register.JUDGE_CALL_WALL * 1000) {
         self.display = display; self.judger = judger; self.ignoredPIDs = ignoredPIDs; self.callWallMs = callWallMs
         self.bucket = TokenBucket(rate: budgetShare)
-        self.budgetShare = budgetShare
         // A display starts covered whole until its first judged frame.
         self.lastPlan = .covered(display, because: .notYetJudged)
     }
 
-    public func setBudgetShare(_ rate: Double) { budgetShare = rate; bucket.rate = rate }
-    /// This display's share of `JUDGEMENT_BUDGET`.
-    public private(set) var budgetShare: Double
-    /// How hard the looks at a still screen may work (`EnergyMode`). Only the looks that let covers lift slow down.
-    public var energy = EnergyMode.full
-    /// Judgements a second for the looks that only let covers lift: the mode's share of the budget.
-    public var settleRate: Double { budgetShare * energy.settleRateScale }
+    public func setBudgetShare(_ rate: Double) { bucket.rate = rate }
     /// Work left over from new pictures (or parts of a full re-judge a look had no time for): the watcher then looks every
     /// tick, not every `energy.lookEvery`, as it is new content waiting (blurred or shown as judged before meanwhile).
     public var hasLeftOverWork: Bool { !pending.isEmpty || !dueAgain.isEmpty }
@@ -264,9 +257,6 @@ public final class DisplayPipeline {
             // Pictures seen clean once get their second clean check meanwhile (step 3c).
             guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap,
                   !(held.isEmpty && pending.isEmpty && dueAgain.isEmpty && !secondChecksWanted) else { return lastPlan }
-            // Saving energy slows only the settling: with nothing new left to judge, the budget comes in at the mode's
-            // share, so covers already up lift later (never sooner). Work left over from new pictures keeps the full rate.
-            bucket.rate = pending.isEmpty ? settleRate : budgetShare
             return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer,
                        idle: true, provisional: provisional)
         case .complete:
@@ -276,8 +266,6 @@ public final class DisplayPipeline {
             // The first frame of another stream, or of another map (size, scale or place) on the same stream, is judged
             // whole, with no motion carried over: what changed cannot be read against the last frame.
             let sameStream = judgedGeneration == f.generation
-            // New pixels are judged at the full budget in every energy mode.
-            bucket.rate = budgetShare
             let sameMap = lastMap.map { $0 == map } == true
             let previous = sameStream && sameMap ? lastImage : nil
             var dirty = previous != nil ? f.dirty : nil

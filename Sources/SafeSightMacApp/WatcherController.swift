@@ -77,13 +77,11 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     func capturedCounts() -> [String: Int] { seenLock.withLock { captured } }
     /// Displays whose pipeline still has something to judge on a still screen (main thread only).
     private var wantsLook: Set<UInt32> = []
-    /// How hard the looks at a still screen work (main thread; `energyOnJudging` is the judging queue's copy). On battery,
-    /// in Low Power Mode or when the Mac is hot, the looks that let covers lift come less often and use less of the
-    /// budget: covers stay up longer, and nothing is shown sooner.
+    /// How often the watcher looks at a still screen while only covers wait to lift (main thread): once a second, and less
+    /// often in Low Power Mode or when the Mac is hot. Covers stay up a little longer; nothing is shown sooner.
     @MainActor private(set) var energy = EnergyMode.full
     /// Displays with new pictures left over to judge: looked at every tick, whatever the mode (main thread only).
     private var leftOver: Set<UInt32> = []
-    private var energyOnJudging = EnergyMode.full
     /// What every display shows now: one plan per display the OS lists.
     @MainActor var plans: [CoverPlan] { coordinator.shown }
 
@@ -213,13 +211,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// The Mac or its displays woke, or the session came back: as a display change, for that reason.
     @MainActor func resume(_ reason: HoldReason) { coordinator.didChange(reason) }
 
-    @MainActor func setEnergy(_ mode: EnergyMode) {
-        energy = mode
-        judgeQueue.async { [weak self] in
-            self?.energyOnJudging = mode
-            self?.pipelines.values.forEach { $0.energy = mode }
-        }
-    }
+    @MainActor func setEnergy(_ mode: EnergyMode) { energy = mode }
 
     func setRule(_ rule: DetectorRule) { judgeQueue.async { [weak self] in self?.detector?.setRule(rule) } }
 
@@ -348,7 +340,6 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             p = DisplayPipeline(display: f.display, judger: det, budgetShare: Register.JUDGEMENT_BUDGET / Double(max(1, judgedIDs.count)),
                                 ignoredPIDs: [ownPID])
             p.cover(because: .notYetJudged, until: need)
-            p.energy = energyOnJudging
             pipelines[id] = p
         }
         let start = ProcessInfo.processInfo.systemUptime
