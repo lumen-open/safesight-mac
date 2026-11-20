@@ -34,10 +34,14 @@ final class CostJudge: Judging {
     /// How often each picture has been judged (freshly), and model faults so far.
     var judgedCount: [PixelRect: Int] = [:]
     var faults = 0
-    /// Real time each judgement takes (a slow Mac), so a call's time limit caps what it can judge, as it does there; and
-    /// real time each call takes whatever it judges (finding pictures, hashing).
+    /// The time each judgement takes (a slow Mac), so a call's time limit caps what it can judge, as it does there; and the
+    /// time each call takes whatever it judges (finding pictures, hashing). It is counted on `clockNs`, a clock only this
+    /// judge moves, never slept: `still` gives it to the pipeline, so a look's time limit depends on these costs alone,
+    /// never on how busy the machine running the tests is.
     var msPerJudgement = 0.0
     var msPerCall = 0.0
+    var clockNs: UInt64 = 1_000_000_000
+    func spend(ms: Double) { clockNs += UInt64(max(0, ms) * 1_000_000) }
     /// Every call: its area, the budget it was given, and the look it was made in (`look`, set by the test).
     var log: [(area: PixelRect, budget: Int, look: Int)] = []
     var look = 0
@@ -50,7 +54,7 @@ final class CostJudge: Judging {
                    progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
         serial += 1
         log.append((area, budget, look))
-        if msPerCall > 0 { usleep(useconds_t(msPerCall * 1000)) }
+        spend(ms: msPerCall)
         let inside = entries.filter { $0.rect.intersection(area) == $0.rect }
         var tasks: [(Key, Int)] = [(Key(pass: .whole, rect: area), wholeCost(area))] + inside.map { (Key(pass: .region, rect: $0.rect), $0.cost) }
         if blindCalls > 0 {
@@ -90,7 +94,7 @@ final class CostJudge: Judging {
         }
         // The whole pass first, so a cover for it is made before the pictures' covers that it holds.
         out.sort { ($0.pass == .whole ? 0 : 1) < ($1.pass == .whole ? 0 : 1) }
-        if judgements > 0 && msPerJudgement > 0 { usleep(useconds_t(Double(judgements) * msPerJudgement * 1000)) }
+        spend(ms: Double(judgements) * msPerJudgement)
         return FrameVerdict(regions: out, coverWindow: false, strike: false, hot: false, judgements: judgements, overloaded: overloaded,
                             modelFaults: faultsHere, nextCost: nextCost)
     }
@@ -123,6 +127,8 @@ final class CostJudge: Judging {
     func still(_ p: DisplayPipeline, _ img: RGBAImage, _ snap: WindowSnapshot, seconds: Double,
                each: ((Int, inout RGBAImage) -> [PixelRect]?)? = nil) -> [CoverPlan] {
         var img = img
+        // A fake judge's clock times the looks, so what a look has time for is the same on any machine.
+        if let judge = p.judger as? CostJudge { p.clock = { [unowned judge] in judge.clockNs } }
         var plans = [p.process(Fixtures.frame(img, display: d, scale: 1, t: 0), snapshot: snap, now: 0)]
         for k in 1...Int(seconds * 4) {
             let t = Double(k) * 0.25
