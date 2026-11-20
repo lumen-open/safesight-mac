@@ -100,6 +100,20 @@ public final class DisplayPipeline {
     var saving: [CallKey: Int] = [:]
     /// Held covers (by index) already judged in this run by their window's own call.
     var talliedThisRun: Set<Int> = []
+    /// Pictures seen clean once are waiting for their second clean check (`VerdictCache.CLEAN_CHECKS`), which the looks
+    /// at a still screen give them in the background (step 3c), until `secondChecksUntil` at the latest.
+    public private(set) var secondChecksDue = false
+    /// When the looks stop waiting for second checks: `secondChecksFor` after the first look at a still screen. Any run on a
+    /// frame with new pixels clears it, so only still time counts; looks (a full re-judge on a still screen included)
+    /// never push it back, so the looks always come to an end.
+    var secondChecksUntil: TimeInterval?
+    /// How long, of still screen, second checks keep the looks going: on a slow Mac the budget's spare half may not reach
+    /// them all, and a still screen must still come to rest. One not given its check by then gets it when it comes back.
+    /// A working value, tied to `FULL_REJUDGE_SHOW_FIRST`.
+    static let secondChecksFor: TimeInterval = Register.FULL_REJUDGE_SHOW_FIRST
+    /// Whether step 3c runs. Off, a picture seen clean once gets its second check only when it comes back (the lab
+    /// bench measures both).
+    public var backgroundSecondChecks = true
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
     public private(set) var judged = false
     /// Frames from streams older than this generation are never judged here: the display has changed since they
@@ -133,7 +147,17 @@ public final class DisplayPipeline {
     /// True while something is still to be judged with nothing new on screen: covers waiting to lift, or entries left for
     /// a later call. The capture sends no frame while the screen is still, so the watcher then asks for a look at the last
     /// frame itself (an idle frame); without one a still screen would never settle.
-    public var needsAnotherLook: Bool { judged && !(held.isEmpty && pending.isEmpty) }
+    /// Pictures seen clean once waiting for their second clean check count as something left (step 3c), until they have
+    /// had it or until `secondChecksFor` has passed.
+    public var needsAnotherLook: Bool { judged && (!(held.isEmpty && pending.isEmpty) || secondChecksWanted) }
+    var secondChecksWanted: Bool { secondChecksDue && backgroundSecondChecks }
+
+    /// A judge call left pictures seen clean once: the looks at a still screen give them their second check, for at most
+    /// `secondChecksFor` of still screen (`secondChecksUntil`).
+    func noteSecondChecks(_ v: FrameVerdict, now: TimeInterval) {
+        guard v.secondChecksLeft > 0 else { return }
+        secondChecksDue = true
+    }
 
     /// Every held cover as "target rect whole/kind clean", for the lab tools (geometry and counts only).
     public var heldLines: [String] {
@@ -169,7 +193,7 @@ public final class DisplayPipeline {
     public func reset() {
         held = []; pending = []; lastImage = nil; lastMap = nil; lastFullPass = nil
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
-        judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []
+        judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []; secondChecksDue = false; secondChecksUntil = nil
         cover(because: .notYetJudged)
     }
 
@@ -199,8 +223,11 @@ public final class DisplayPipeline {
             return judged ? lastPlan : cover(because: .notYetJudged)
         case .idle:
             // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels (of this stream only).
-            guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap, !(held.isEmpty && pending.isEmpty) else { return lastPlan }
-            return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
+            // Pictures seen clean once get their second clean check meanwhile (step 3c).
+            guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap,
+                  !(held.isEmpty && pending.isEmpty && !secondChecksWanted) else { return lastPlan }
+            return run(img, previous: nil, frameInterval: 0, map: map, dirty: [], snapshot: snapshot, now: now, date: date, pointer: pointer,
+                       idle: true, provisional: provisional)
         case .complete:
             guard let img = f.image, let map = f.map, map.pixelWidth == img.width, map.pixelHeight == img.height, map.coversDisplay else {
                 return cover(because: .badFrameMetadata)
@@ -237,7 +264,7 @@ public final class DisplayPipeline {
     }
 
     func run(_ img: RGBAImage, previous: RGBAImage?, frameInterval: TimeInterval, map: CaptureMap, dirty: [PixelRect]?, snapshot: WindowSnapshot,
-             now: TimeInterval, date: Date, pointer: CGPoint? = nil, provisional: ((CoverPlan) -> Void)?) -> CoverPlan {
+             now: TimeInterval, date: Date, pointer: CGPoint? = nil, idle: Bool = false, provisional: ((CoverPlan) -> Void)?) -> CoverPlan {
         var timing = PipelineTimings()
         let tRun = PipelineTimings.now()
         defer {
@@ -261,6 +288,8 @@ public final class DisplayPipeline {
         }
         runSerial += 1
         talliedThisRun = []
+        // Only still time counts towards the second checks' bound: a frame with new pixels starts it again.
+        if !idle { secondChecksUntil = nil }
         // Windows that moved or changed size since the last snapshot.
         var moved: [(JudgeTarget, CGRect, CGRect)] = []
         for (t, old) in lastBounds { if let nb = snapshot.bounds(of: t), nb != old { moved.append((t, old, nb)) } }
@@ -511,6 +540,7 @@ public final class DisplayPipeline {
             timing.judgements += v.judgements
             timing.overloaded += v.overloaded
             timing.modelFaults += v.modelFaults
+            noteSecondChecks(v, now: now)
             tStage = PipelineTimings.now()
             defer { timing.planMs += PipelineTimings.ms(since: tStage) }
             if judged { bucket.spend(v.judgements) }
@@ -571,6 +601,7 @@ public final class DisplayPipeline {
             timing.rechecks += 1
             checked += 1
             if judged { afterAgain(callKey, given: budget, v) }
+            noteSecondChecks(v, now: now)
             if judged { bucket.spend(v.judgements) }
             share(v, target: held[i].target, map: map, except: i)
             if tally(i, v, over: g, map: map, img: img) == .flagged {
@@ -581,6 +612,57 @@ public final class DisplayPipeline {
             }
         }
         if !waiting.isEmpty { recheckTurn = (recheckTurn + max(1, checked)) % max(1, waiting.count) }
+
+        // 3c. Second clean checks, as part of the looks at a still screen (`needsAnotherLook`; `VerdictCache.CLEAN_CHECKS`).
+        //     On a look where nothing changed, after everything above, the pictures on show that were seen clean once are
+        //     judged once more, with fresh jitter, so that when they come back they are served from the cache. Low
+        //     priority: only from judgements beyond half the bucket, and within the time left. Nothing is lifted or cleared
+        //     here, and no clean judgement here is counted towards lifting a cover (nothing is shared into a cover's round;
+        //     once an entry is reusable, a cover's own next check gets it from the cache, as any cache hit): a
+        //     flag covers (or a blur blurs) at once, a model failure is left unjudged and judged again over the same area,
+        //     and a clean result only adds to the picture's count. Past `secondChecksFor` of still screen the looks stop for them.
+        if idle, judged, secondChecksDue, backgroundSecondChecks, secondChecksUntil == nil {
+            secondChecksUntil = now + Self.secondChecksFor   // the first look at a still screen starts the clock
+        }
+        if idle, judged, secondChecksDue, backgroundSecondChecks, now > (secondChecksUntil ?? now) {
+            secondChecksDue = false; secondChecksUntil = nil
+            timing.secondChecksGivenUp += 1
+        } else if idle, judged, secondChecksDue, backgroundSecondChecks {
+            var left = false
+            bucket.refill(now: now)
+            for p in snapshot.split(changed: [d], display: display, ignoring: ignoredPIDs) {
+                guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
+                      let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
+                let spent = PipelineTimings.ms(since: tRun)
+                let spare = bucket.available - Int(Register.JUDGEMENT_BURST / 2)
+                let budget = min(spare, Register.DETECTOR_CALL_CAP, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (callWallMs - spent) / msPerJudgement))))
+                guard budget > 0 else { left = true; break }
+                // The same context as this target's own calls in step 3, so the keys and rules match: every window here is
+                // show-first, on a trusted display, not judged as video. If covered-start apps, untrusted displays or video are
+                // ever wired into step 3, pass the real values here too (they decide where a blur rule applies).
+                let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
+                                       sliceAnchor: sliceAnchor(p.target, snapshot, map))
+                tStage = PipelineTimings.now()
+                guard let v = judger.checkAgainInBackground(img, context: ctx, within: area, budget: budget) else { continue }
+                let callMs = PipelineTimings.ms(since: tStage)
+                timing.judgeMs += callMs
+                if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
+                timing.secondCheckJudgements += v.judgements
+                timing.modelFaults += v.modelFaults
+                bucket.spend(v.judgements)
+                if v.secondChecksLeft > 0 { left = true }
+                // A model failure in a second check is a fault like any other: the entry is blurred or covered and judged
+                // again in the next call.
+                if v.overloaded > 0 { pending.append(map.toGlobal(area).intersection(visBox)) }
+                let wasHot = hot.contains(p.target)
+                if v.hot { hot.insert(p.target) }
+                if v.hot && !wasHot { pending += p.visible }
+                newCovers += covers(from: v, target: p.target, origin: origin(of: p.target, snapshot), img: img, map: map,
+                                callArea: map.toGlobal(area), visibleBox: visBox)
+            }
+            secondChecksDue = left
+            if !left { secondChecksUntil = nil }
+        }
         saving = saving.filter { savingUsed.contains($0.key) }
         judged = true
         tStage = PipelineTimings.now()

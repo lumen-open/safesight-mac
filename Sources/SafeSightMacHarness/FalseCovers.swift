@@ -28,6 +28,12 @@ final class RecordingJudger: Judging {
         return v
     }
     func setRule(_ rule: DetectorRule) { inner.setRule(rule) }
+    /// Second clean checks in the background are judgements too: their verdicts are recorded with the rest.
+    func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? {
+        let v = inner.secondChecks(frame, context: context, within: area, budget: budget)
+        verdicts.append(v)
+        return v
+    }
 }
 
 enum FalseCovers {

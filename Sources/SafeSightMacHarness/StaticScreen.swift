@@ -38,6 +38,14 @@ final class SlowJudger: Judging {
     }
     func setRule(_ rule: DetectorRule) { inner.setRule(rule) }
     func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? { inner.pictureRegions(frame, within: area) }
+    /// Second clean checks, slowed down the same way.
+    var secondCheckJudgements = 0
+    func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? {
+        guard let v = inner.checkAgainInBackground(frame, context: context, within: area, budget: budget) else { return nil }
+        secondCheckJudgements += v.judgements
+        if v.judgements > 0 { usleep(useconds_t(Double(v.judgements) * msPerJudgement * 1000)) }
+        return v
+    }
 }
 
 enum StaticScreen {
@@ -76,6 +84,9 @@ enum StaticScreen {
         let start = ProcessInfo.processInfo.systemUptime
         var provisional: [CoverPlan] = [], finals = 0, settledAt: Double?, unsettled = 0
         var lastPrint = -1
+        // When the pipeline last wanted another look (anything left to judge, second checks included), and what was
+        // judged after that: nothing, if the looks stop.
+        var lastWanted: Double?, secondChecks = 0, lastSecondCheck: Double?, judgedAfterRest = 0, resting = false, lastRecord = PipelineTimings()
         var n = 0
         while true {
             let now = ProcessInfo.processInfo.systemUptime
@@ -89,6 +100,15 @@ enum StaticScreen {
             let plan = p.process(f, snapshot: snapshot, now: now) { provisional.append($0) }
             finals += 1
             n += 1
+            // `lastTimings` is that of the last frame the pipeline judged: a frame it did not judge (nothing to look at) leaves
+            // it as it was, so only a changed record is a judged frame.
+            let ran = p.lastTimings != lastRecord
+            lastRecord = p.lastTimings
+            // A frame that came while the pipeline wanted no look (the app would not have asked for it) should judge nothing.
+            if resting && ran { judgedAfterRest += 1 }
+            resting = !p.needsAnotherLook
+            if !resting { lastWanted = t }
+            if ran && p.lastTimings.secondCheckJudgements > 0 { secondChecks += p.lastTimings.secondCheckJudgements; lastSecondCheck = t }
             let calm = plan.wholeDisplay == nil && plan.items.isEmpty && provisional.allSatisfy { $0.wholeDisplay == nil && $0.items.isEmpty }
             if calm { if settledAt == nil { settledAt = t } } else { if settledAt != nil { unsettled += 1 }; settledAt = nil }
             if Int(t) != lastPrint {
@@ -110,6 +130,8 @@ enum StaticScreen {
             let wait = next - ProcessInfo.processInfo.systemUptime
             if wait > 0 { usleep(useconds_t(wait * 1_000_000)) }
         }
+        print(String(format: "looks: last wanted at t=%@; second checks: %d judgements, the last at t=%@; frames judged after no look was wanted: %d",
+                     lastWanted.map { String(format: "%.1f", $0) } ?? "-", secondChecks, lastSecondCheck.map { String(format: "%.1f", $0) } ?? "-", judgedAfterRest))
         if let at = settledAt {
             print(String(format: "settled: no cover from t=%.1f s to the end (%.0f s); it came back %d times before that", at, s.seconds - at, unsettled))
         } else {

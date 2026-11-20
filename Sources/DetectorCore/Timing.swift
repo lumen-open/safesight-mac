@@ -28,6 +28,9 @@ public struct JudgeTimings: Sendable, Equatable {
     /// Calls whose picture-finder result was reused (every pixel the finder reads was the same).
     public var finderCacheHits = 0
     public var judgements = 0
+    /// Of `judgements`: those spent on pictures seen clean once, for their second clean check
+    /// (`VerdictCache.CLEAN_CHECKS`), in a judge call and in the background (`secondChecks`).
+    public var secondCheckJudgements = 0
     public var overloaded = 0
     /// Entries the budget did not reach that were shown as judged earlier on the same pixels (`Reason.judgedEarlier`).
     public var judgedEarlier = 0
@@ -38,6 +41,7 @@ public struct JudgeTimings: Sendable, Equatable {
     public mutating func add(_ o: JudgeTimings) {
         calls += o.calls; finderMs += o.finderMs; cacheMs += o.cacheMs; decisionMs += o.decisionMs; totalMs += o.totalMs
         cacheHits += o.cacheHits; cacheMisses += o.cacheMisses; finderCacheHits += o.finderCacheHits; judgements += o.judgements; overloaded += o.overloaded; judgedEarlier += o.judgedEarlier
+        secondCheckJudgements += o.secondCheckJudgements
         for (k, v) in o.preprocessMs { preprocessMs[k, default: 0] += v }
         for (k, v) in o.inferenceMs { inferenceMs[k, default: 0] += v }
         for (k, v) in o.tiles { tiles[k, default: 0] += v }

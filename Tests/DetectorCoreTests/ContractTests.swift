@@ -35,7 +35,7 @@ final class ContractTests: XCTestCase {
         var img = canvas(400, 300)
         paint(&img, PixelRect(x: 40, y: 40, w: 96, h: 96), channel: 0, seed: 1)
         let (d, _, _) = detector()
-        _ = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false))
+        for _ in 0..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)) }
         XCTAssertEqual(d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)).judgements, 0, "cached")
         d.setRule(.either)
         XCTAssertGreaterThan(d.judge(img, context: JudgeContext(windowID: 1, startsCovered: false)).judgements, 0, "cache emptied")
