@@ -160,8 +160,8 @@ import Testing
         #expect(at > 0)
     }
 
-    /// At a settled screen, frames whose every pixel is the last judged frame's judge nothing, however long it lasts (no
-    /// full re-judge every `FULL_REJUDGE`); a frame that says nothing changed while its pixels did is judged as before.
+    /// At a settled screen, frames whose every pixel is the last judged frame's judge nothing, however long it lasts; a frame
+    /// that says nothing changed while its pixels did is judged.
     @Test func unchangedFramesAtASettledScreenJudgeNothing() {
         let (run, judge, p) = desktopRun(.full, seconds: 360)
         let at = try! #require(run.settledAt)
@@ -175,7 +175,6 @@ import Testing
             #expect(plan.items.isEmpty && plan.wholeDisplay == nil)
         }
         #expect(judge.serial == before, "no judge call in five minutes of unchanged frames")
-        #expect(p.unchangedFrames == 5 * 60 * 4)
         // The capture says nothing changed, but a pixel did: judged.
         var other = img
         Fixtures.paint(&other, PixelRect(x: 200, y: 200, w: 8, h: 8), channel: 1, seed: 5)
@@ -196,6 +195,5 @@ import Testing
             _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, dirty: [], t: t), snapshot: snap, now: t)
         }
         #expect(judge.serial > before)
-        #expect(p.unchangedFrames == 0)
     }
 }

@@ -88,4 +88,13 @@ import Testing
         #expect(!TestingFacts.macModel().isEmpty)
         #expect(TestingFacts.cpuSeconds() > 0)
     }
+
+    /// Third live run: at the lock screen every canvas was off the screen, but the report still said "covered whole".
+    @Test func whenEveryCanvasIsTakenOffTheReportSaysNothingIsDrawn() {
+        var s = TestingStats()
+        s.recordDrawn([.init(display: 1, whole: "displayChanging", covers: 0, blurs: 0)])
+        s.recordDrawn([])
+        #expect(s.now.isEmpty)
+        #expect(TestingReport.text(facts: facts, stats: s, running: 60, cpu: 1, note: "").contains("On screen now: nothing drawn"))
+    }
 }

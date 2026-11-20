@@ -391,3 +391,22 @@ import Testing
         #expect(r.presenter.whole(1) != nil)
     }
 }
+
+/// What the Testing report hears from the presenter: every update drawn, and nothing drawn once every canvas is taken
+/// off (at the lock screen the report said "covered whole" while no canvas was up).
+@MainActor @Suite struct WatchedPresenterTests {
+    @Test func takingEveryCanvasOffReportsNothingDrawn() {
+        let inner = RecordingPresenter()
+        let w = WatchedPresenter(inner)
+        var drawn: [[CoverPlan]] = [], shown: [Bool] = []
+        w.onDrawn = { drawn.append($0) }
+        w.onCoversShown = { shown.append($0) }
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 300, height: 200))
+        w.apply([.covered(d, because: .displayChanging)])
+        #expect(drawn.last?.first?.wholeDisplay == .displayChanging)
+        w.removeAll()
+        #expect(inner.removed == 1)
+        #expect(drawn.last == [], "nothing drawn")
+        #expect(shown.last == false)
+    }
+}

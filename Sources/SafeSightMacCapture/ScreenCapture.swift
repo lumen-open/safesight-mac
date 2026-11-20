@@ -76,6 +76,9 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
     private var ended = false
     /// Set when capture starts and taken when it is closed, under `lock`: `start` and `close` can run on different threads.
     private var stream: SCStream?
+    /// The last complete frame's pixels (capture queue only), to find what really changed in the next. Held in memory only.
+    private var previous: RGBAImage?
+    private var previousMap: CaptureMap?
 
     init(display: SCDisplay, excluding own: [SCRunningApplication], sink: CaptureSink, generation: Int,
          stoppedByItself: @escaping @Sendable () -> Void) {
@@ -161,8 +164,15 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate, CaptureSt
         let map = meta.map(displayBounds: bounds, pixelWidth: w, pixelHeight: h)
         // The detector copies the pixels it needs; the buffer is released as soon as this returns.
         let img = RGBAImage.fromBGRA(width: w, height: h, bytesPerRow: CVPixelBufferGetBytesPerRow(pb), base: base)
+        // What changed is read from the pixels, against this stream's previous complete frame, not taken from the reported
+        // areas: in a virtual Mac every frame reports the whole display, and a frame caused only by the app's own covers
+        // (left out of capture) reports a change where no pixel differs. Such a frame says nothing changed, so it is not
+        // judged again, and the covers do not keep the screen busy. The first frame of a stream is judged whole.
+        // Another map (size, scale or place) on the same stream is "everything changed" too.
+        let dirty = previousMap == map ? previous.flatMap { DirtyRegions.changedBlocks(old: $0, new: img) } : nil
+        previous = img; previousMap = map
         sink.capture(CapturedFrame(display: desc, status: .complete, image: img, map: map,
-                                   dirty: meta.dirtyPixels(width: w, height: h), time: now, generation: generation))
+                                   dirty: dirty, time: now, generation: generation))
     }
 
     // MARK: SCStreamDelegate

@@ -76,8 +76,6 @@ public final class DisplayPipeline {
     var checkBase: (image: RGBAImage, map: CaptureMap, generation: Int)?
     var reportedSince: [PixelRect] = []
     public private(set) var dirtyMismatches = 0
-    /// Frames at a settled screen whose pixels were all the last judged frame's: not judged (a count only).
-    public private(set) var unchangedFrames = 0
     var lastFrameTime: TimeInterval?
     /// Cover first when judging a window's new pictures would end later than this after the frame arrived
     /// (`COVER_GOAL`; tests that run unoptimised builds raise it).
@@ -85,6 +83,10 @@ public final class DisplayPipeline {
     /// How long one `process` call may judge (`JUDGE_CALL_WALL`); what is left is blurred and judged next time. Tests
     /// that run unoptimised builds pass a longer limit when they make the pipeline.
     public var callWallMs: Double
+    /// The monotonic clock (nanoseconds) that times each look against `callWallMs` and measures the stage timings. Tests
+    /// pass a clock that only their fake judge moves, so what a look has time for never depends on how busy the machine is.
+    var clock: () -> UInt64 = PipelineTimings.now
+    func msSince(_ t: UInt64) -> Double { Double(clock() &- t) / 1_000_000 }
     /// About how long one model judgement takes here (fading average), to keep a call within `callWallMs`.
     var msPerJudgement = 5.0
     /// The covers' window level (`CoverLevel.canvas`). Another app's window at or above it that overlaps a cover would
@@ -273,25 +275,29 @@ public final class DisplayPipeline {
             guard let img = f.image, let map = f.map, map.pixelWidth == img.width, map.pixelHeight == img.height, map.coversDisplay else {
                 return cover(because: .badFrameMetadata)
             }
-            // The first frame of another stream is judged whole, with no motion carried over from the old stream.
+            // The first frame of another stream, or of another map (size, scale or place) on the same stream, is judged
+            // whole, with no motion carried over: what changed cannot be read against the last frame.
             let sameStream = judgedGeneration == f.generation
-            // A settled screen (nothing held, nothing left, nothing due) and a frame whose every pixel is the last judged
-            // frame's: nothing on screen has changed, so it is what a still screen that sends no frame is, and nothing is
-            // judged. Without this, such a frame (the capture sends them, for instance when the covers' own windows are
-            // redrawn) made a full re-judge of the whole display every `FULL_REJUDGE`. The pixels are compared, every
-            // one, so a frame that only claims nothing changed is judged as before.
-            if judged, sameStream, f.dirty?.isEmpty == true, held.isEmpty, pending.isEmpty, dueAgain.isEmpty, !secondChecksWanted,
-               let last = lastImage, lastMap == map, !DirtyRegions.changedOutside(old: last, new: img, reported: []) {
-                unchangedFrames += 1
-                return lastPlan
-            }
             // New pixels are judged at the full budget in every energy mode.
             bucket.rate = budgetShare
-            let previous = sameStream && lastMap.map { $0 == map } == true ? lastImage : nil
+            let sameMap = lastMap.map { $0 == map } == true
+            let previous = sameStream && sameMap ? lastImage : nil
+            var dirty = previous != nil ? f.dirty : nil
+            // A frame that reports nothing changed is compared with the last judged frame here too. Where no pixel changed,
+            // it is a "nothing changed" frame: what is held or waiting is judged again, as on an idle frame, and nothing
+            // else is. Where pixels changed, those places are judged (everything, when the comparison cannot say).
+            if f.dirty?.isEmpty == true, judged, let prev = previous {
+                let found = DirtyRegions.changedBlocks(old: prev, new: img)
+                if found == [] {
+                    return process(CapturedFrame(display: f.display, status: .idle, image: nil, map: nil, dirty: [], time: f.time,
+                                                 generation: f.generation, windows: f.windows),
+                                   snapshot: snapshot, now: now, date: date, pointer: pointer, provisional: provisional)
+                }
+                dirty = found
+            }
             // The reported changed areas are checked against the pixels now and then: this frame is compared with the frame
             // of the last check, outside every area reported since. A change anywhere else, in any frame between, means they
             // cannot be trusted, and the whole frame is judged.
-            var dirty = sameStream ? f.dirty : nil
             if let reported = dirty, let base = checkBase, base.map == map, base.generation == f.generation {
                 reportedSince += reported
                 if reportedSince.count > 256 { reportedSince = DirtyRegions.prepare(reportedSince, width: img.width, height: img.height) }
@@ -319,9 +325,9 @@ public final class DisplayPipeline {
     func run(_ img: RGBAImage, previous: RGBAImage?, frameInterval: TimeInterval, map: CaptureMap, dirty: [PixelRect]?, snapshot: WindowSnapshot,
              now: TimeInterval, date: Date, pointer: CGPoint? = nil, idle: Bool = false, provisional: ((CoverPlan) -> Void)?) -> CoverPlan {
         var timing = PipelineTimings()
-        let tRun = PipelineTimings.now()
+        let tRun = clock()
         defer {
-            timing.totalMs = PipelineTimings.ms(since: tRun); lastTimings = timing
+            timing.totalMs = msSince(tRun); lastTimings = timing
             runEstimateMs = max(timing.totalMs, 0.8 * runEstimateMs)
             overrunFrames = timing.totalMs > coverGoalMs ? overrunFrames + 1 : 0
         }
@@ -444,12 +450,12 @@ public final class DisplayPipeline {
             parts.removeAll { p in promoted.contains { $0.target == p.target } }
             parts.insert(contentsOf: promoted, at: min(firstNotHot, parts.count))
         }
-        timing.changeMs = PipelineTimings.ms(since: tStage)
+        timing.changeMs = msSince(tStage)
 
         // 2a. A window moved: its covers are drawn at its new place (and its old one) now, before anything is judged.
         if judged, !moved.isEmpty, let provisional {
             provisional(guarded(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: [])), snapshot))
-            timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
+            timing.provisionalMs.append(msSince(tRun))
         }
 
         // 2b. Content that moved by a translation (scrolling): its covers move with it now, in this update,
@@ -457,12 +463,12 @@ public final class DisplayPipeline {
         //     motion, for this update, as far as the content will go before the next plan.
         var lead: [Held] = []
         if judged, let prev = previous, dirty != nil {
-            tStage = PipelineTimings.now()
+            tStage = clock()
             lead = followMotion(prev, img, parts: parts, map: map, snapshot: snapshot, frameInterval: frameInterval, reported: reported)
-            timing.translateMs = PipelineTimings.ms(since: tStage)
+            timing.translateMs = msSince(tStage)
             if !lead.isEmpty, let provisional {
                 provisional(guarded(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead)), snapshot))
-                timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
+                timing.provisionalMs.append(msSince(tRun))
             }
         }
 
@@ -474,7 +480,7 @@ public final class DisplayPipeline {
         func publishEarly() {
             guard let provisional, judged else { return }
             provisional(guarded(CoverPlan(display: display, items: drawItems(snapshot, visible, map, moved: moved, lead: lead + newCovers) + early), snapshot))
-            timing.provisionalMs.append(PipelineTimings.ms(since: tRun))
+            timing.provisionalMs.append(msSince(tRun))
         }
         // Cover first, for the whole frame, on pictures only. When recent frames took longer than the goal, a large changed
         // part (a quarter of the display or more, where the picture finder itself takes a while) is blurred whole at once,
@@ -586,7 +592,7 @@ public final class DisplayPipeline {
         for p in parts {
             guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
                   let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
-            let spentMs = PipelineTimings.ms(since: tRun)
+            let spentMs = msSince(tRun)
             if spentMs >= partsWallMs {
                 // At a still screen, a part only due to be judged again (the `FULL_REJUDGE` rhythm) with nothing in it left
                 // unjudged shows what was judged before, unchanged, until its turn (at most `JUDGING_STALL`): it is not
@@ -634,7 +640,7 @@ public final class DisplayPipeline {
                         let gr = map.toGlobal(r).insetBy(dx: map.pointsPerPixel, dy: map.pointsPerPixel)
                         return !shown.contains { $0.contains(gr) }
                     }.flatMap { item($0, .plain) }
-                    let spent = PipelineTimings.ms(since: tRun)
+                    let spent = self.msSince(tRun)
                     // Cover first is for new pictures: a part only judged again has nothing new to blur first.
                     if !pending.isEmpty && partIsFresh && spent + estimatedMs > self.coverGoalMs {
                         added += pending.flatMap { item($0, blur($0)) }
@@ -647,9 +653,9 @@ public final class DisplayPipeline {
                     publishEarly()
                 }
             }
-            tStage = PipelineTimings.now()
+            tStage = clock()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: progress)
-            let callMs = PipelineTimings.ms(since: tStage)
+            let callMs = msSince(tStage)
             timing.judgeMs += callMs
             if again { afterAgain(callKey, given: budget, v) }
             // A part is judged again only by a call with budget. At a still look one given none (the bucket was empty) waits
@@ -680,8 +686,8 @@ public final class DisplayPipeline {
             timing.overloaded += v.overloaded
             timing.modelFaults += v.modelFaults
             noteSecondChecks(v, now: now)
-            tStage = PipelineTimings.now()
-            defer { timing.planMs += PipelineTimings.ms(since: tStage) }
+            tStage = clock()
+            defer { timing.planMs += msSince(tStage) }
             if judged { bucket.spend(v.judgements) }
             let wasHot = hot.contains(p.target)
             if v.hot { hot.insert(p.target) } else { hot.remove(p.target) }
@@ -728,7 +734,7 @@ public final class DisplayPipeline {
         var checked = 0, inTurn = 0
         for i in turns {
             // At least one takes its turn every frame, however long the rest took, so none waits for ever.
-            let spent = PipelineTimings.ms(since: tRun)
+            let spent = msSince(tRun)
             guard spent < callWallMs || checked == 0 else { break }
             guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
             if held[i].flaggedAt == g, !reported.contains(where: { $0.intersects(g) }), !moved.contains(where: { $0.0 == held[i].target }),
@@ -743,9 +749,9 @@ public final class DisplayPipeline {
             let callKey = CallKey(target: held[i].target, area: area)
             if judged { budget = againBudget(callKey, normal: budget) }
             let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
-            tStage = PipelineTimings.now()
+            tStage = clock()
             let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: nil)
-            let callMs = PipelineTimings.ms(since: tStage)
+            let callMs = msSince(tStage)
             timing.judgeMs += callMs
             if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
             timing.calls += 1; timing.judgements += v.judgements; timing.overloaded += v.overloaded
@@ -785,7 +791,7 @@ public final class DisplayPipeline {
             for p in snapshot.split(changed: [d], display: display, ignoring: ignoredPIDs) {
                 guard let changedBox = p.changed.boundingBox, let visBox = p.visible.boundingBox,
                       let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
-                let spent = PipelineTimings.ms(since: tRun)
+                let spent = msSince(tRun)
                 let spare = bucket.available - Int(Register.JUDGEMENT_BURST / 2)
                 let budget = min(spare, Register.DETECTOR_CALL_CAP, Int(min(Double(Register.DETECTOR_CALL_CAP), max(0, (callWallMs - spent) / msPerJudgement))))
                 guard budget > 0 else { left = true; break }
@@ -794,9 +800,9 @@ public final class DisplayPipeline {
                 // ever wired into step 3, pass the real values here too (they decide where a blur rule applies).
                 let ctx = JudgeContext(windowID: p.target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date,
                                        sliceAnchor: sliceAnchor(p.target, snapshot, map))
-                tStage = PipelineTimings.now()
+                tStage = clock()
                 guard let v = judger.checkAgainInBackground(img, context: ctx, within: area, budget: budget) else { continue }
-                let callMs = PipelineTimings.ms(since: tStage)
+                let callMs = msSince(tStage)
                 timing.judgeMs += callMs
                 if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
                 timing.secondCheckJudgements += v.judgements
@@ -817,8 +823,8 @@ public final class DisplayPipeline {
         }
         saving = saving.filter { savingUsed.contains($0.key) || ($0.key == nextSaver && coverCalls.contains($0.key)) }
         judged = true
-        tStage = PipelineTimings.now()
-        defer { timing.planMs += PipelineTimings.ms(since: tStage) }
+        tStage = clock()
+        defer { timing.planMs += msSince(tStage) }
 
         // 4. Lifted regions are gone; add the new covers, merging with any they overlap. A cover whose window has gone
         //    from the list stays where it stood until that place has been judged clean `VIDEO_VOTE` times, or the window
