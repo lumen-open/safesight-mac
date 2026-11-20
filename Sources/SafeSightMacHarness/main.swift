@@ -31,6 +31,9 @@
 //   safesightmac-harness parity --bundle DIR [--json FILE]
 //            (lab build only) a bundle's models against the reference outputs shipped with them, with broken controls
 //            that must fail (spec/detector-contract.md); see Conformance.swift
+//   safesightmac-harness energy FILE --models DIR [--windows FILE] [--pages DIR] [--power full|battery|low]
+//            [--cases still,reuse,video,copy,tick] [--rest S] [--json FILE] [--check]
+//            (lab build only) CPU time, memory and judgements on a simulated clock, against the energy budget; see Energy.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
 //            --models DIR (real models, checked against the sealed hash list)  --null-models (lab build only)
@@ -74,6 +77,15 @@ struct Options {
     var cleanMargin: Float?
     var cleanChecks: Int?
     var cleanSticky = false
+    var energy = EnergySettingsParsed()
+}
+
+/// `energy` options, parsed in every build so that a release build can refuse `energy` plainly.
+struct EnergySettingsParsed {
+    var power = "full"
+    var cases: [String]?
+    var rest = 60.0
+    var check = false
 }
 
 /// `static` options, parsed in every build so that a release build can refuse `static` plainly.
@@ -137,7 +149,7 @@ func parse() -> Options {
         case "--jsonl": o.jsonl = v()
         case "--pages": o.bench.pages = v()
         case "--json": o.bench.json = v()
-        case "--cases": o.bench.cases = v().split(separator: ",").map(String.init)
+        case "--cases": o.bench.cases = v().split(separator: ",").map(String.init); o.energy.cases = o.bench.cases
         case "--label": o.bench.label = v()
         case "--busy-pages": o.bench.busyPages = Int(v()) ?? 6
         case "--no-background-checks": o.bench.backgroundChecks = false
@@ -156,6 +168,9 @@ func parse() -> Options {
         case "--fps": o.still.fps = max(0.5, Double(v()) ?? 4)
         case "--frames": o.still.frames = v(); if !["idle", "empty", "none"].contains(o.still.frames) { fail("--frames idle|empty|none") }
         case "--windows": o.still.windows = v()
+        case "--power": o.energy.power = v(); if !["full", "battery", "low"].contains(o.energy.power) { fail("--power full|battery|low") }
+        case "--check": o.energy.check = true
+        case "--rest": o.energy.rest = Double(v()) ?? 60
         case "--help", "-h": print("see the header of Sources/SafeSightMacHarness/main.swift"); exit(0)
         default:
             if k.hasPrefix("--") { fail("unknown option \(k)") }
@@ -331,6 +346,21 @@ if o.command == "static" {
     exit(0)
     #else
     fail("static needs a lab build: SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness static")
+    #endif
+}
+
+if o.command == "energy" {
+    #if SAFESIGHTMAC_LAB
+    var e = EnergySettings()
+    e.power = EnergyMode(rawValue: o.energy.power) ?? .full
+    if let c = o.energy.cases { e.cases = c }
+    e.restSeconds = o.energy.rest; e.check = o.energy.check
+    MainActor.assumeIsolated {
+        Energy.run(detector: detector, files: o.files, windows: o.still.windows, pages: o.bench.pages, scale: o.scale, s: e, json: o.bench.json)
+    }
+    exit(0)
+    #else
+    fail("energy needs a lab build: SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness energy")
     #endif
 }
 

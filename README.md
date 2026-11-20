@@ -60,7 +60,7 @@ Most blockers fall to a five-minute trick, and everyone who's needed one knows t
 
 ## Where things stand
 
-This is an early preview, and there's no download yet. The screen cover is built and tested in the lab; the lock is being built now. For the details, see [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md). What isn't built or proven yet is listed plainly in [docs/KNOWN-GAPS.md](docs/KNOWN-GAPS.md).
+This is an early preview, and there's no download yet. The screen cover is built and tested in the lab; the lock is being built now. For the details, see [docs/STEP-1-STATUS.md](docs/STEP-1-STATUS.md). What isn't built or proven yet is listed plainly in [docs/KNOWN-GAPS.md](docs/KNOWN-GAPS.md). What it costs your Mac in CPU, memory and battery, and how to measure it, is in [docs/ENERGY.md](docs/ENERGY.md).
 
 The first full release brings the screen cover; the lock, with your wait and the optional friend; site blocking through the browser extension and your Mac's hosts file; optional switches to turn off ways of sending files, like AirDrop; and safe admin tasks through Apple's own routes. After it come cinema mode for films in your browser, checking and locking downloaded files, a filter for your whole Mac's network, instant installs of parts from known vendors, and the Hardcore lock.
 
