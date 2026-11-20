@@ -36,11 +36,11 @@ struct TileOutcome: Sendable, Equatable {
     /// The referee was asked (only for disputes) and confirmed.
     var refereeRan = false, refereeFlag = false
     /// Whether this judgement counts for the verdict cache, decided where it was judged (`Detector.judgeTask`):
-    /// it covers, or every model's score was below half its cover cut-off (the margin rule). A flag, not a
+    /// it covers, or every model's score was below `CLEAN_CACHE_MARGIN` (a quarter) of its cover cut-off (the margin rule). A flag, not a
     /// score. False unless set, so an outcome nobody marked is judged again.
     var cacheable = false
     /// Whether this judgement was also clearly clean where a blur can apply (a small picture in a hot window
-    /// or a covered-start context): every model's score was also below half the entry's containment cut-off
+    /// or a covered-start context): every model's score was also below that share of the entry's containment cut-off
     /// (`VerdictCache.cleanLevel`). An outcome that covers is settled. False unless set: where a blur can
     /// apply, an outcome nobody marked is judged again. On an outcome the cache hands back, it says whether
     /// `CLEAN_CHECKS` judgements in a row were settled.
@@ -178,7 +178,15 @@ final class VerdictCache {
     /// and up, 20 draws each): of 25 crossings, 10 had two draws in a row under half, so they could still be cached
     /// clean within 20 showings. The chance of a crossing being cached clean on its first showing(s) fell from 4.7
     /// to 1.5 in 25. (docs/STEP-1-STATUS.md, "Two clean checks".)
-    static let CLEAN_CACHE_MARGIN: Float = 0.5
+    ///
+    /// The founder's decision of 20 November 2026, after the grid measurement (results/jitter-clean-margin.json, 40 draws
+    /// an entry; docs/STEP-1-STATUS.md, "Closing the clean-cache gap"): the strictest rule measured that still caches,
+    /// a quarter of the cut-off, with three checks and sticky (`CLEAN_CHECKS`, `CLEAN_STICKY`). Of 48 harmless crossings,
+    /// 3 had any draw under a quarter, and the expected number cached clean falls from 14.8 to about 0.001. It costs
+    /// about 2.1 times the judging on a reload and about a minute more for a still screen to settle. It does not close
+    /// the gap for certain: the lowest draw of a crossing was 0.206 of its cut-off, and a picture whose first three
+    /// judgements all land under a quarter is still cached clean.
+    static let CLEAN_CACHE_MARGIN: Float = 0.25
 
     /// The lowest cut-off at which a model's score changes an entry's outcome: the cover cut-off, or the
     /// containment cut-off when a blur can apply to the entry (`containable`) and it is lower.
@@ -190,8 +198,7 @@ final class VerdictCache {
 
     /// `CLEAN_CHECKS`: how many clearly clean judgements in a row, each with fresh jitter, a picture needs before
     /// its clean verdict is reused. Two was the founder's decision of 20 November 2026; three with `CLEAN_STICKY` is
-    /// strictly stricter and, on the lab benches, costs no more on a reload or a window move (docs/STEP-1-STATUS.md,
-    /// "Closing the clean-cache gap"). Until the last, an entry is "waiting for clean checks" and never reused; the
+    /// stricter (docs/STEP-1-STATUS.md, "Closing the clean-cache gap"). Until the last, an entry is "waiting for clean checks" and never reused; the
     /// next time the pixels come back they are judged again, and the looks at a still screen give it its checks in the
     /// background (`DisplayPipeline`, step 3c). Where a blur can apply, a reused clean verdict also needs that many in
     /// a row clearly clean for the containment cut-off (`settledForBlur`).
@@ -202,7 +209,8 @@ final class VerdictCache {
     /// only if its first `CLEAN_CHECKS` judgements were all clearly clean; one that has ever been borderline is judged
     /// afresh, with fresh jitter, every time it comes back, and gets no more background checks. A model failure keeps
     /// the mark. Measured (results/jitter-clean-margin.json): of 48 harmless crossings, the expected number cached
-    /// clean falls from 14.8 (two checks, restarting, within 20 showings) to 0.87, for good.
+    /// clean, at half the cut-off, falls from 14.8 (two checks, restarting, within 20 showings) to 0.87, for good; at a
+    /// quarter (the default) to about 0.001.
     ///
     /// The mark is held in the bounded cache, like the counts. When the cache drops an entry (`Generations`, oldest
     /// first, or emptied whole by `removeAll`), nothing at all is left for those pixels: they are judged again as if

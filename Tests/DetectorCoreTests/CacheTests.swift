@@ -278,23 +278,23 @@ final class CleanCacheMarginTests: XCTestCase {
 
     func over(_ v: FrameVerdict) -> RegionVerdict? { v.regions.first { $0.pass == .region && $0.rect.intersects(r) } }
 
-    func testTheMarginIsHalfTheLowestActionCutOff() {
-        XCTAssertEqual(VerdictCache.CLEAN_CACHE_MARGIN, 0.5)
+    func testTheMarginIsAQuarterOfTheLowestActionCutOff() {
+        XCTAssertEqual(VerdictCache.CLEAN_CACHE_MARGIN, 0.25)
         let c = Cutoffs(cover: 0.8, clean: 0.3, strike: 0.9, gridMember: 0.8, gridLow: 0.8)
         XCTAssertEqual(VerdictCache.actionCutoff(c, containable: true), 0.3, "where a blur can apply, containment acts first")
         XCTAssertEqual(VerdictCache.actionCutoff(c, containable: false), 0.8)
-        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: true), 0.15)
-        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false), 0.4)
+        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: true), 0.075)
+        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false), 0.2)
         // A containment cut-off above the cover cut-off never raises the level.
         let high = Cutoffs(cover: 0.5, clean: 0.7, strike: 0.9, gridMember: 0.5, gridLow: 0.5)
-        XCTAssertEqual(VerdictCache.cleanLevel(high, containable: true), 0.25)
+        XCTAssertEqual(VerdictCache.cleanLevel(high, containable: true), 0.125)
     }
 
     func testASmallPictureJustUnderTheContainmentCutOffIsJudgedAgainWhereABlurCanApply() {
         // The region (96 px) can be blurred in a hot window, and its containment cut-off (0.3) is under its cover
-        // cut-off (0.5). Family A scores 0.2: under both, so it is shown; under half the cover cut-off (0.25), so
-        // it is kept; but not under half the containment cut-off (0.15), so it is not settled for a blur.
-        let (d, fa, _, _) = scored(0.2, 0, table: cutoffs(0.5, clean: 0.3))
+        // cut-off (0.5). Family A scores 0.1: under both, so it is shown; under a quarter of the cover cut-off (0.125),
+        // so it is kept; but not under a quarter of the containment cut-off (0.075), so it is not settled for a blur.
+        let (d, fa, _, _) = scored(0.1, 0, table: cutoffs(0.5, clean: 0.3))
         let first = d.judge(img, context: ctx)
         XCTAssertEqual(over(first)?.display, .clear)
         XCTAssertEqual(first.judgements, 4, "the region and the whole pass, two models each")
@@ -318,11 +318,11 @@ final class CleanCacheMarginTests: XCTestCase {
 
     func testASmallPictureIsJudgedAgainInACoveredStartContext() {
         // A 48-pixel picture in a covered-start context is blurred when a model scores it over the containment
-        // cut-off. Kept from a show-first window (0.2 < 0.25), it is not reused here (0.2 >= 0.15).
+        // cut-off. Kept from a show-first window (0.1 < 0.125), it is not reused here (0.1 >= 0.075).
         var small = canvas(400, 300)
         let rs = PixelRect(x: 60, y: 60, w: 48, h: 48)
         paint(&small, rs, channel: nil, seed: 5)
-        let (d, fa, _, _) = scored(0.2, 0, table: cutoffs(0.5, clean: 0.3))
+        let (d, fa, _, _) = scored(0.1, 0, table: cutoffs(0.5, clean: 0.3))
         let show = d.judge(small, context: ctx)
         XCTAssertEqual(show.regions.filter { $0.pass == .region }.map(\.rect), [rs], "one region, as the setup expects")
         for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = d.judge(small, context: ctx) }
@@ -335,18 +335,18 @@ final class CleanCacheMarginTests: XCTestCase {
     }
 
     func testOnlyPictureRegionsThatCanBeBlurredAreHeldToTheContainmentCutOff() {
-        // 0.1 is under half of both cut-offs (0.3 and 0.5): the small picture is settled, and reused even in a hot
+        // 0.05 is under a quarter of both cut-offs (0.3 and 0.5): the small picture is settled, and reused even in a hot
         // window.
-        let (d, _, _, _) = scored(0.1, 0.1, table: cutoffs(0.5, clean: 0.3))
+        let (d, _, _, _) = scored(0.05, 0.05, table: cutoffs(0.5, clean: 0.3))
         for _ in 0..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: ctx) }
         d.hot.mark(ctx.windowID, ctx.now)
         XCTAssertEqual(d.judge(img, context: ctx).judgements, 0, "clearly clean for both actions: reused in a hot window")
-        // A 160-pixel picture is never blurred (128 and up), so only its cover cut-off counts: 0.2 is under half
-        // of it (0.25), though over its containment cut-off (0.1). The same for the whole pass.
+        // A 160-pixel picture is never blurred (128 and up), so only its cover cut-off counts: 0.1 is under a quarter
+        // of it (0.125), though over its containment cut-off (0.05). The same for the whole pass.
         var big = canvas(400, 300)
         let rb = PixelRect(x: 60, y: 60, w: 160, h: 160)
         paint(&big, rb, channel: nil, seed: 5)
-        let (e, _, _, _) = scored(0.2, 0.2, table: cutoffs(0.5, clean: 0.1))
+        let (e, _, _, _) = scored(0.1, 0.1, table: cutoffs(0.5, clean: 0.05))
         let first = e.judge(big, context: ctx)
         XCTAssertEqual(first.regions.filter { $0.pass == .region }.map(\.rect), [rb], "one region, as the setup expects")
         XCTAssertFalse(first.regions.contains { $0.display != .clear })
@@ -355,7 +355,7 @@ final class CleanCacheMarginTests: XCTestCase {
         XCTAssertEqual(e.judge(big, context: ctx).judgements, 0, "reused, hot window or not")
         // The same scores on the 96-pixel picture, which can be blurred: reused in a show-first window, judged
         // again in a hot one (the whole pass is not).
-        let (f, _, _, _) = scored(0.2, 0.2, table: cutoffs(0.5, clean: 0.1))
+        let (f, _, _, _) = scored(0.1, 0.1, table: cutoffs(0.5, clean: 0.05))
         for _ in 0..<VerdictCache.CLEAN_CHECKS { _ = f.judge(img, context: ctx) }
         XCTAssertEqual(f.judge(img, context: ctx).judgements, 0)
         f.hot.mark(ctx.windowID, ctx.now)
@@ -363,10 +363,10 @@ final class CleanCacheMarginTests: XCTestCase {
     }
 
     func testAWindowThatTurnsHotBlursASmallPictureNotSettledForABlur() {
-        // A green 96-pixel picture scores 0.2 on family A: kept (under 0.225), not settled for a blur (over 0.15).
+        // A green 96-pixel picture scores 0.1 on family A: kept (under 0.1125), not settled for a blur (over 0.075).
         // Then a red 48-pixel picture both families flag appears in the same window. It is judged first (smaller
         // first) and turns the window hot in that call, so the green picture, reused from the cache, is blurred.
-        let a = ColorScoreModel(id: "fa", family: .a, scores: [0: 0.9, 1: 0.2]), b = ColorScoreModel(id: "fb", family: .b, scores: [0: 0.9])
+        let a = ColorScoreModel(id: "fa", family: .a, scores: [0: 0.9, 1: 0.1]), b = ColorScoreModel(id: "fb", family: .b, scores: [0: 0.9])
         let d = Detector(models: ModelSet(models: [a, b], bundleVersion: "hot"), table: cutoffs(0.45, clean: 0.3), config: DetectorConfig(), finder: RegionFinder())
         var page = canvas(600, 300)
         let green = PixelRect(x: 40, y: 60, w: 96, h: 96), red = PixelRect(x: 420, y: 160, w: 48, h: 48)
@@ -384,7 +384,7 @@ final class CleanCacheMarginTests: XCTestCase {
         XCTAssertEqual(second.regions.first { $0.rect == green }?.reason, .hotContext)
         XCTAssertGreaterThan(d.timings.cacheHits, 0)
         // In the next call the window is hot already: the green picture is judged again, and its fresh score
-        // (0.2, under the containment cut-off) shows it.
+        // (0.1, under the containment cut-off) shows it.
         let third = d.judge(page, context: ctx)
         XCTAssertEqual(third.regions.first { $0.rect == green }?.display, .clear)
     }
@@ -410,7 +410,7 @@ final class CleanCacheMarginTests: XCTestCase {
     }
 
     func testAClearlyCleanOutcomeIsCached() {
-        let (d, fa, fb, _) = scored(0.1, 0.2)
+        let (d, fa, fb, _) = scored(0.05, 0.1)
         let first = d.judge(img, context: ctx)
         XCTAssertEqual(over(first)?.display, .clear)
         XCTAssertGreaterThan(first.judgements, 0)
@@ -425,9 +425,9 @@ final class CleanCacheMarginTests: XCTestCase {
     }
 
     func testEveryModelMustBeBelowTheMarginStrictly() {
-        // (family A, family B, cached?) against a cut-off of 0.5, so the margin is 0.25. A score that is not a
+        // (family A, family B, cached?) against a cut-off of 0.5, so the margin is 0.125. A score that is not a
         // number is no clean score at all: it is a model failure, never clear and never cached (ModelFaultTests).
-        for (a, b, cached) in [(Float(0.1), Float(0.2499), true), (0.1, 0.25, false), (0.25, 0.1, false), (0, 0.49, false),
+        for (a, b, cached) in [(Float(0.1), Float(0.1249), true), (0.1, 0.125, false), (0.125, 0.1, false), (0, 0.49, false),
                                (0.49, 0, false), (0, 0, true)] {
             let (d, _, _, _) = scored(a, b)
             let first = d.judge(img, context: ctx)

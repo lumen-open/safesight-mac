@@ -615,8 +615,8 @@ public final class Detector {
         if let s = standIn, t.pieces.contains(where: { s.detects(frame, $0) }) { o.forced = true }
         #endif
         var strikeA = false, strikeB = false
-        // Clearly clean: every model's top score below half its cover cut-off for this band. Settled for a blur
-        // too: below half its lowest action cut-off. A picture region this small can be blurred (in a hot window
+        // Clearly clean: every model's top score below `CLEAN_CACHE_MARGIN` of its cover cut-off for this band. Settled for a blur
+        // too: below that share of its lowest action cut-off. A picture region this small can be blurred (in a hot window
         // or a covered-start context) when a score passes the containment cut-off, so that cut-off acts on it.
         var clearlyClean = true, settledForBlur = true
         let containable = t.pass == .region && t.rect.shortSide < max(config.containBelow, config.hotBelow)

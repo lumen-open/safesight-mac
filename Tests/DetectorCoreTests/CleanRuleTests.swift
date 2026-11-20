@@ -24,21 +24,22 @@ final class CleanRuleTests: XCTestCase {
     }
 
     func testTheDefaultIsStickyWithThreeChecks() {
-        XCTAssertEqual(VerdictCache.CLEAN_CACHE_MARGIN, 0.5)
+        XCTAssertEqual(VerdictCache.CLEAN_CACHE_MARGIN, 0.25)
         XCTAssertEqual(VerdictCache.CLEAN_CHECKS, 3)
         XCTAssertTrue(VerdictCache.CLEAN_STICKY)
-        XCTAssertEqual(VerdictCache.CleanRule.standard, .init(margin: 0.5, checks: 3, sticky: true))
+        XCTAssertEqual(VerdictCache.CleanRule.standard, .init(margin: 0.25, checks: 3, sticky: true))
         XCTAssertEqual(VerdictCache().rule, .standard, "every build starts with the standard rule")
         let c = Cutoffs(cover: 0.8, clean: 0.3, strike: 0.95, gridMember: 0.3, gridLow: 0.2)
-        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false), 0.4)
-        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false, margin: 0.25), 0.2)
+        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false), 0.2)
+        XCTAssertEqual(VerdictCache.cleanLevel(c, containable: false, margin: 0.125), 0.1)
     }
 
     func testOnlyAStricterRuleCanBeSet() {
         let c = VerdictCache()
-        XCTAssertFalse(c.setRule(.init(margin: 0.6, checks: 3, sticky: true)), "a higher margin is refused")
-        XCTAssertFalse(c.setRule(.init(margin: 0.5, checks: 2, sticky: true)), "fewer checks are refused")
-        XCTAssertFalse(c.setRule(.init(margin: 0.5, checks: 3, sticky: false)), "restarting instead of sticky is refused")
+        XCTAssertFalse(c.setRule(.init(margin: 0.3, checks: 3, sticky: true)), "a higher margin is refused")
+        XCTAssertFalse(c.setRule(.init(margin: 0.5, checks: 3, sticky: true)), "the old margin is refused")
+        XCTAssertFalse(c.setRule(.init(margin: 0.25, checks: 2, sticky: true)), "fewer checks are refused")
+        XCTAssertFalse(c.setRule(.init(margin: 0.25, checks: 3, sticky: false)), "restarting instead of sticky is refused")
         XCTAssertFalse(c.setRule(.init(margin: .nan, checks: 3, sticky: true)))
         XCTAssertFalse(c.setRule(.init(margin: -0.1, checks: 3, sticky: true)))
         XCTAssertEqual(c.rule, .standard, "a refused rule changes nothing")
@@ -50,7 +51,7 @@ final class CleanRuleTests: XCTestCase {
         let c = VerdictCache()
         for _ in 0..<3 { c.put(key(), clean()) }
         XCTAssertNotNil(c.get(key()))
-        c.setRule(.init(margin: 0.4, checks: 3, sticky: true))
+        XCTAssertTrue(c.setRule(.init(margin: 0.2, checks: 3, sticky: true)))
         XCTAssertNil(c.checks(key()))
     }
 
@@ -134,7 +135,7 @@ final class CleanRuleTests: XCTestCase {
             m[id] = Dictionary(uniqueKeysWithValues: Band.allCases.map { ($0.rawValue, Cutoffs(cover: 0.5, clean: 0.5, strike: 0.95, gridMember: 0.3, gridLow: 0.2)) })
         }
         func run(_ margin: Float?) -> Bool {
-            let fa = FaultyModel(id: "fa", family: .a, score: 0.2), fb = FaultyModel(id: "fb", family: .b, score: 0.2)
+            let fa = FaultyModel(id: "fa", family: .a, score: 0.1), fb = FaultyModel(id: "fb", family: .b, score: 0.1)
             let d = Detector(models: ModelSet(models: [fa, fb], bundleVersion: "rule"), table: ThresholdTable(schema: "test", models: m),
                              config: DetectorConfig(), finder: RegionFinder())
             if let margin { XCTAssertTrue(d.cache.setRule(.init(margin: margin, checks: 3, sticky: true))) }
@@ -144,7 +145,7 @@ final class CleanRuleTests: XCTestCase {
             for _ in 0..<4 { _ = d.judge(i, context: ctx) }
             return d.timings.cacheHits > 0
         }
-        XCTAssertTrue(run(nil), "0.2 is under half of 0.5: cached after three checks")
-        XCTAssertFalse(run(0.3), "0.2 is not under 0.3 of 0.5 (0.15): never cached")
+        XCTAssertTrue(run(nil), "0.1 is under a quarter of 0.5: cached after three checks")
+        XCTAssertFalse(run(0.15), "0.1 is not under 0.15 of 0.5 (0.075): never cached")
     }
 }

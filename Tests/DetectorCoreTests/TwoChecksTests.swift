@@ -82,7 +82,7 @@ final class TwoCleanChecksTests: XCTestCase {
     }
 
     func testEveryClearlyCleanJudgementInARowIsNeededBeforeReuse() {
-        let (d, fa, _) = scored(0.1, 0.2)
+        let (d, fa, _) = scored(0.05, 0.1)
         for _ in 1..<VerdictCache.CLEAN_CHECKS {
             XCTAssertEqual(d.judge(img, context: ctx).judgements, 4, "not yet: judged again")
             XCTAssertTrue(d.cache.seenCleanOnce(regionKey(d)), "still waiting for clean checks")
@@ -103,11 +103,11 @@ final class TwoCleanChecksTests: XCTestCase {
     // MARK: A borderline judgement marks it; a failure starts again
 
     func testAScoreAtOrOverTheMarginBetweenMarksItForGood() {
-        // Cut-off 0.5, margin 0.25. Low, then 0.25 (at the margin: clean, but not clearly), then low many times.
+        // Cut-off 0.5, margin 0.125. Low, then 0.125 (at the margin: clean, but not clearly), then low many times.
         let (d, fa, fb) = scored(0.1, 0.1)
         _ = d.judge(img, context: ctx)
         XCTAssertTrue(d.cache.seenCleanOnce(regionKey(d)))
-        fa.score = 0.25
+        fa.score = 0.125
         let between = d.judge(img, context: ctx)
         XCTAssertEqual(over(between)?.display, .clear, "still clean, so shown")
         XCTAssertTrue(d.cache.isStuck(regionKey(d)), "marked: never to be cached clean while held")
@@ -122,15 +122,15 @@ final class TwoCleanChecksTests: XCTestCase {
     func testAScoreOverTheMarginAfterTwoChecksStartsAgainWhereItIsJudged() {
         // A reused clean entry that is judged again where a blur can apply, and lands over the margin there,
         // is marked: it is not reused anywhere again while the cache holds it.
-        // 0.2: clearly clean for the cover cut-off (under 0.25), not settled for a blur (over 0.15).
-        let (d, fa, _) = scored(0.2, 0, table: cutoffs(0.5, clean: 0.3))
+        // 0.1: clearly clean for the cover cut-off (under 0.125), not settled for a blur (over 0.075).
+        let (d, fa, _) = scored(0.1, 0, table: cutoffs(0.5, clean: 0.3))
         for _ in 0..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: ctx) }
         XCTAssertEqual(d.judge(img, context: ctx).judgements, 0)
         d.hot.mark(ctx.windowID, ctx.now)
-        fa.score = 0.26   // over half the cover cut-off: not clearly clean for anything
+        fa.score = 0.13   // over a quarter of the cover cut-off: not clearly clean for anything
         _ = d.judge(img, context: ctx)
         XCTAssertTrue(d.cache.isStuck(regionKey(d)))
-        fa.score = 0.2
+        fa.score = 0.1
         let other = JudgeContext(windowID: 2, startsCovered: false)
         d.resetTimings()
         _ = d.judge(img, context: other)
@@ -176,21 +176,21 @@ final class TwoCleanChecksTests: XCTestCase {
 
     func testWhereABlurCanApplyEveryCheckMustBeSettledForTheBlur() {
         // The 96-pixel region can be blurred in a hot window: its containment cut-off (0.3) is under its cover
-        // cut-off (0.5), so there it needs scores under 0.15 every time; elsewhere under 0.25.
-        let (d, fa, _) = scored(0.1, 0, table: cutoffs(0.5, clean: 0.3))
+        // cut-off (0.5), so there it needs scores under 0.075 every time; elsewhere under 0.125.
+        let (d, fa, _) = scored(0.05, 0, table: cutoffs(0.5, clean: 0.3))
         let hot = JudgeContext(windowID: 3, startsCovered: false)
         d.hot.mark(hot.windowID, hot.now)
-        for _ in 0..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: hot) }   // 0.1: settled for a blur every time
+        for _ in 0..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: hot) }   // 0.05: settled for a blur every time
         XCTAssertEqual(d.cache.checks(regionKey(d))?.blur, VerdictCache.CLEAN_CHECKS)
         XCTAssertEqual(d.judge(img, context: hot).judgements, 0, "settled every time: reused in the hot window too")
         // Another picture: one check not settled for a blur, and it is never settled for one while held.
-        let (e, ea, _) = scored(0.1, 0, table: cutoffs(0.5, clean: 0.3))
+        let (e, ea, _) = scored(0.05, 0, table: cutoffs(0.5, clean: 0.3))
         e.hot.mark(hot.windowID, hot.now)
-        _ = e.judge(img, context: hot)                  // 0.1: settled for a blur, once
-        ea.score = 0.2
-        _ = e.judge(img, context: hot)                  // 0.2: clearly clean for the cover cut-off, not for the blur
-        XCTAssertEqual(e.cache.checks(regionKey(e))?.blur, 0, "the blur count is gone, for good")
+        _ = e.judge(img, context: hot)                  // 0.05: settled for a blur, once
         ea.score = 0.1
+        _ = e.judge(img, context: hot)                  // 0.1: clearly clean for the cover cut-off, not for the blur
+        XCTAssertEqual(e.cache.checks(regionKey(e))?.blur, 0, "the blur count is gone, for good")
+        ea.score = 0.05
         _ = e.judge(img, context: hot)                  // the last clean check for the cover cut-off
         XCTAssertEqual(e.cache.checks(regionKey(e))?.clean, VerdictCache.CLEAN_CHECKS)
         XCTAssertEqual(e.judge(img, context: ctx).judgements, 0, "reused where no blur can apply")
