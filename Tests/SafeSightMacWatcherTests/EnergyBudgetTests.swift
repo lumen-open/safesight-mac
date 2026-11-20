@@ -24,6 +24,8 @@ import Testing
     /// for `seconds`; and after it settles, a "nothing changed" frame every tick anyway (as if the capture sent them).
     func still(_ p: DisplayPipeline, _ judge: CostJudge, _ snap: WindowSnapshot, mode: EnergyMode, seconds: Double) -> Run {
         p.energy = mode
+        // The fake judge's clock times the looks, as in StillScreenSettlesTests: the same on any machine.
+        p.clock = { [unowned judge] in judge.clockNs }
         var plans = [p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)]
         var t = 0.0, lastLook = 0.0, looks = 0, settledAt: Double?, judgedThen = 0
         let counted = { judge.judgedCount.values.reduce(0, +) }
