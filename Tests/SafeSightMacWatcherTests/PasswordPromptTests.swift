@@ -431,9 +431,9 @@ final class CountingJudge: Judging {
             }
             #expect(closed == 0, "the hole never closes for a caret")
             let forCaret = (j.judgements[promptID] ?? 0) - before
-            // A caret holds no picture: the 60 frames cost a handful of judgements in all (the regular re-judges), not some
-            // every frame.
-            #expect(forCaret <= 10, "a caret, no picture: about nothing to judge (\(forCaret) in 60 frames)")
+            // A caret holds no picture: the 60 frames cost a handful of judgements in all (the regular re-judges and the
+            // clean checks of its two states, `VerdictCache.CLEAN_CHECKS` each), not some every frame. (10 with two checks.)
+            #expect(forCaret <= 5 * VerdictCache.CLEAN_CHECKS, "a caret, no picture: about nothing to judge (\(forCaret) in 60 frames)")
             #expect(Double(judgements) <= Register.JUDGEMENT_BURST + 2 * Register.JUDGEMENT_BUDGET + 1, "\(judgements) judgements in 2 s: within the budget")
         }
     }
