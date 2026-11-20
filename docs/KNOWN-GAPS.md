@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Known gaps
 
-What isn't built or proven yet, in plain words. It's kept short on purpose; the details live in [STEP-1-STATUS.md](STEP-1-STATUS.md), [TESTING-EDITION.md](TESTING-EDITION.md) and [ARCHITECTURE.md](../ARCHITECTURE.md). Last updated 19 November 2026.
+What isn't built or proven yet, in plain words. It's kept short on purpose; the details live in [STEP-1-STATUS.md](STEP-1-STATUS.md), [TESTING-EDITION.md](TESTING-EDITION.md) and [ARCHITECTURE.md](../ARCHITECTURE.md). Last updated 20 November 2026.
 
 ## Not proven
 
@@ -19,6 +19,7 @@ What isn't built or proven yet, in plain words. It's kept short on purpose; the 
 - **Assistive windows sit under a whole-screen cover.** When a whole display is covered, windows such as live captions or an on-screen keyboard are under that cover too while it's up.
 - **Busy pages may be covered whole for a while.** A page with many new pictures can take longer to judge than the budget allows, so its pictures are blurred, and the window may be covered whole until judging catches up.
 - **Protected video isn't checked,** because macOS hides it from screen capture.
+- **The macOS password prompt is always left uncovered, on purpose.** So you can always type your password, the dialog macOS shows when something asks for an administrator's name and password stays clear while the screen around it is covered. That dialog shows the name and icon of the app that asked, and an app chooses both: its own icon, or a picture it names when it asks, drawn at about 64 by 64 points, and a line of text of its own. This is the cost we accept. To keep it small, the prompt is recognised only by facts an app can't set for itself (the program behind the window must be Apple's own SecurityAgent, on the sealed system volume), its own content is still checked like any window's before its space is left clear, and a plain cover stays behind it so nothing shows through it. If the screen can't be checked at all, the prompt is covered like everything else until checking works again. While a whole display is covered for a window above the covers, the repair card, which sits in the middle, can be in front of the prompt: drag it aside.
 
 ## Planned for the first full release, not built yet
 

@@ -139,12 +139,15 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     // MARK: Start, stop
 
     #if SAFESIGHTMAC_LAB
+    /// Lab only: the last prompt check logged, so it is logged once per change.
+    private var lastPromptCheck = ""
     /// Lab only: whether the window server's own overlays can be told apart inside the sandbox, and the windows above
     /// the covers (levels and rectangles only).
     func logOverlays(_ when: String) {
         LabEventLog.shared.log(when + " " + WindowList.overlayCheck() + " above=" + WindowList.snapshot().windows
             .filter { $0.layer >= CoverLevel.canvas && $0.ownerPID != ownPID }
-            .map { "L\($0.layer)@\(LabEventLog.rect($0.bounds)) overlay=\($0.systemOverlay)" }.joined(separator: ","))
+            .map { "L\($0.layer)@\(LabEventLog.rect($0.bounds)) overlay=\($0.systemOverlay)" }.joined(separator: ",")
+            + " " + WindowList.promptCheck())
     }
     #endif
 
@@ -340,6 +343,12 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         do {
             let t = p.lastTimings, g = p.diagnostics
             let above = p.lastAbove.map { "L\($0.layer)@\(LabEventLog.rect($0.bounds))" } ?? "-"
+            // A password prompt's hole (rectangles only), and once per change, what its owner checks found.
+            let holes = plan.promptHoles.map { LabEventLog.rect($0) }.joined(separator: ",")
+            if !holes.isEmpty || (f.windows ?? .empty).windows.contains(where: { $0.layer == PasswordPrompt.level }) {
+                let check = WindowList.promptCheck()
+                if check != lastPromptCheck { lastPromptCheck = check; LabEventLog.shared.log("prompt d=\(id) holes=[\(holes)] " + check) }
+            }
             LabEventLog.shared.log("judge d=\(id) st=\(f.status.rawValue) dirty=\(f.dirty.map { String($0.count) } ?? "nil") ms=\(Int((ended - start) * 1000)) lat=\(Int((ended - f.time) * 1000)) items=\(plan.items.count) plain=\(plan.plainCount) whole=\(plan.wholeDisplay?.rawValue ?? "-") above=\(above) calls=\(t.calls) jd=\(t.judgements) ovl=\(t.overloaded) prov=\(t.provisionalMs.count) atOnce=\(t.blurredAtOnce) first=\(t.coveredFirst) fast=\(t.fastFlags) left=\(t.leftForLater) rechk=\(t.rechecks) held=\(g.heldPlain)/\(g.heldBlur)/\(g.heldWhole) pend=\(g.pending) tok=\(Int(g.tokens)) mpj=\(String(format: "%.1f", g.msPerJudgement)) est=\(Int(g.runEstimateMs)) over=\(g.overrunFrames)")
         }
         #endif

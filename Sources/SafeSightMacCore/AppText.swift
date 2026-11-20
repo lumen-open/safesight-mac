@@ -112,6 +112,7 @@ public enum AppText {
     public static let testingTitle = "Testing edition: no lock"
     public static let testingDetail = "This is the Testing edition, for people helping to test \(productName). It has no lock and installs nothing: no keeper, no login item, and it never asks for your administrator password. macOS keeps it in its own sandbox, so it can't write anywhere but its own folder. Pause it or quit it whenever you like."
     public static let testingShortcutTaken = "Another app is using ⌃⌥⌘Q, so this copy can't. Quit from this menu instead."
+    public static let testingShortcutOtherCopy = "Another copy of \(testingName) is using ⌃⌥⌘Q. Quit that copy from its own menu bar icon, and this one takes the shortcut. Until then, quit from this menu."
     /// Shown, and nothing is checked or covered, when the app finds it is not inside the App Sandbox.
     public static let testingNotSandboxed = "Not sandboxed: covering is off"
     public static let testingNotSandboxedDetail = "This copy of the Testing edition is not running inside macOS's App Sandbox, so it checks and covers nothing. Make the app with tools/make-app.sh --testing, or quit it."
@@ -162,7 +163,7 @@ public enum AppText {
     /// Every Testing edition string, for checks.
     public static var testingAll: [String] {
         [testingName, testingLine, testingLineNoShortcut, testingBadge, testingTitle, testingDetail, testingShortcutTaken,
-         testingNotSandboxed, testingNotSandboxedDetail, testingAlreadyRunning, testingQuit, testingRemove,
+         testingShortcutOtherCopy, testingNotSandboxed, testingNotSandboxedDetail, testingAlreadyRunning, testingQuit, testingRemove,
          testingRemovedTitle, testingRemovedDetail, testingRemovedOpenSettings, testingRemovedShowApp, testingRemovedDone,
          testingHowItWorksTitle, testingReportMenu, testingReportTitle, testingReportIntro, testingReportNoteLabel] + testingHowItWorksBody
     }

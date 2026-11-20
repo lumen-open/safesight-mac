@@ -101,6 +101,15 @@ public final class EmergencyQuit {
         return state
     }
 
+    /// Registers again when the shortcut is not this copy's (registration failed, or was refused because something
+    /// held it then: an older copy still ending after an update, say). True when that changed whether it works. Cheap:
+    /// one call, made every few seconds while it does not work.
+    @discardableResult
+    public func retryIfNeeded() -> Bool {
+        guard !state.works else { return false }
+        return register().works
+    }
+
     /// Registers again if the keyboard layout changed since the last registration (the Q key may have moved).
     @discardableResult
     public func followLayout() -> Bool {

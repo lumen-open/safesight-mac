@@ -3,7 +3,8 @@
 //
 // - One copy at a time: a second copy says so and quits.
 // - ⌃⌥⌘Q quits at once from anywhere, covers or not (EmergencyQuit). If another app holds the shortcut, every
-//   line says to quit from the menu bar icon instead.
+//   line says to quit from the menu bar icon instead, the menu says whether another copy of the edition holds it,
+//   and the app asks for it again every two seconds until it has it.
 // - It checks and covers only inside the App Sandbox (Sandbox).
 // - If its main thread stops answering while a cover is up, it quits (StallWatchdog).
 // - Its line is on the menu bar item, the menu, the repair card, whole-window and whole-display covers, any cover
@@ -31,6 +32,14 @@ final class TestingEditionApp {
     private var report: TestingReportWindow?
 
     var shortcutWorks: Bool { emergency?.state.works ?? false }
+    /// What macOS said about ⌃⌥⌘Q, read now (it changes when a retry succeeds), with whether another copy of the
+    /// edition is running when something else holds it.
+    var shortcutStatus: ShortcutStatus {
+        let state = emergency?.state ?? .notRegistered
+        let taken = state == .failed(OSStatus(eventHotKeyExistsErr))
+        return ShortcutStatus.from(state, otherCopyRunning: taken && SingleCopy.anotherTestingCopyRunning(),
+                                   existsError: Int32(eventHotKeyExistsErr))
+    }
 
     /// At launch. False only when another copy is already running: this one has then said so and is ending.
     func launch(watcher: WatcherController) -> Bool {
@@ -38,14 +47,17 @@ final class TestingEditionApp {
             showAlreadyRunning()
             return false
         }
-        #if SAFESIGHTMAC_LAB
-        logReportEvery30s()
-        #endif
         self.watcher = watcher
         // The way out that needs nothing else: registered first, before anything can be covered.
         let e = EmergencyQuit { [weak self] in MainActor.assumeIsolated { self?.quitNow() } }
         e.register()
         emergency = e
+        #if SAFESIGHTMAC_LAB
+        // After the shortcut is registered, and reading it afresh each time: started before, it logged "not registered"
+        // for the whole run.
+        logReportEvery30s()
+        LabEventLog.shared.log("shortcut " + shortcutStatus.reportText)
+        #endif
         // The Q key moves with the keyboard layout (AZERTY, Dvorak): register again when the layout changes. macOS
         // holds back distributed notifications from an app that is not in front, and this one almost never is, so a
         // timer also looks every two seconds (a cheap comparison of the layout's name).
@@ -74,12 +86,30 @@ final class TestingEditionApp {
         return true
     }
 
+    /// The Mac and this build, read once (hashing the app takes a moment); whether ⌃⌥⌘Q is this copy's, read now.
+    private var factsOnce: TestingFacts?
+    func currentFacts() -> TestingFacts {
+        var f = factsOnce ?? TestingReportWindow.facts(shortcut: shortcutStatus)
+        factsOnce = f
+        f.shortcut = shortcutStatus
+        return f
+    }
+
     /// Told when whether ⌃⌥⌘Q is this copy's changed (the menu bar item's words change with it).
     var onShortcutChanged: (() -> Void)?
 
-    /// Registers ⌃⌥⌘Q again if the keyboard layout changed, and keeps the covers' line truthful.
+    /// Registers ⌃⌥⌘Q again if the keyboard layout changed, or if it is not this copy's yet (something held it when
+    /// this copy asked: an older copy still ending after an update, say), and keeps the covers' line truthful. Runs every
+    /// two seconds and whenever the menu opens. The menu's Quit works whatever happens here.
     func followLayout() {
-        guard let e = emergency, e.followLayout() else { return }
+        guard let e = emergency else { return }
+        let before = e.state.works
+        let moved = e.followLayout()
+        let retried = e.retryIfNeeded()
+        guard moved || retried || e.state.works != before else { return }
+        #if SAFESIGHTMAC_LAB
+        LabEventLog.shared.log("shortcut " + shortcutStatus.reportText)
+        #endif
         watcher?.notice = .testing(shortcut: shortcutWorks)
         onShortcutChanged?()
     }
@@ -107,7 +137,9 @@ final class TestingEditionApp {
         if let d {
             items.append(d.label(AppText.testingLine(shortcut: shortcutWorks), bold: true))
             items.append(d.note(AppText.testingDetail))
-            if !shortcutWorks { items.append(d.note(AppText.testingShortcutTaken)) }
+            if !shortcutWorks {
+                items.append(d.note(shortcutStatus == .takenByAnotherCopy ? AppText.testingShortcutOtherCopy : AppText.testingShortcutTaken))
+            }
         }
         return items
     }
@@ -117,11 +149,11 @@ final class TestingEditionApp {
     /// a test can compare it with what was drawn without reading the screen.
     private var reportLogTimer: Timer?
     func logReportEvery30s() {
-        let facts = TestingReportWindow.facts(shortcut: shortcutWorks)
         let t = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if let w = self.watcher { self.stats.setCaptured(w.capturedCounts()) }
+                let facts = self.currentFacts()
                 let text = TestingReport.text(facts: facts, stats: self.stats, running: ProcessInfo.processInfo.systemUptime - self.startedAt,
                                               cpu: TestingFacts.cpuSeconds() - self.cpuAtStart, note: "", power: TestingFacts.power())
                 LabEventLog.shared.log("report " + text.replacingOccurrences(of: "\n", with: " // "))
@@ -134,10 +166,11 @@ final class TestingEditionApp {
 
     /// The Testing report window: numbers to copy by hand, and the helper's note.
     func showReport() {
-        let facts = TestingReportWindow.facts(shortcut: shortcutWorks)
         let w = report ?? TestingReportWindow { [weak self] note in
             guard let self else { return "" }
             if let w = self.watcher { self.stats.setCaptured(w.capturedCounts()) }
+            // Read each time the text is made: whether ⌃⌥⌘Q is this copy's can change while the window is open.
+            let facts = self.currentFacts()
             return TestingReport.text(facts: facts, stats: self.stats, running: ProcessInfo.processInfo.systemUptime - self.startedAt,
                                       cpu: TestingFacts.cpuSeconds() - self.cpuAtStart, note: note,
                                       power: TestingFacts.power())

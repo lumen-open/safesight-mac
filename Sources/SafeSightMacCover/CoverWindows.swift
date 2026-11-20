@@ -19,6 +19,34 @@ public enum CoverLevels {
     public static let canvas = NSWindow.Level(rawValue: CoverLevel.canvas)
     /// The app's own windows, its menu and the repair card sit one level above the canvas (SD-229).
     public static let appAbove = NSWindow.Level(rawValue: CoverLevel.appAbove)
+    /// The plain cover behind a password prompt's hole sits one level below the prompt (`CoverLevel.behindPrompt`).
+    public static let behindPrompt = NSWindow.Level(rawValue: CoverLevel.behindPrompt)
+}
+
+/// The plain covers drawn behind password prompts (`CoverPlan.promptHoles`): one click-through panel per hole, below
+/// the prompt's level, so the prompt shows over it and nothing behind the prompt shows through it. Shared by both forms.
+@MainActor
+final class BehindPrompt {
+    private var pool: [CoverPanel] = []
+
+    func apply(_ plans: [CoverPlan], theme: CoverTheme) {
+        let frames = plans.flatMap { CoverLayout.behindPromptRects($0).map { CoordinateSpace.toCocoa($0, primaryHeight: CoverCanvas.primaryHeight) } }
+        while pool.count < frames.count {
+            let p = CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+            p.level = CoverLevels.behindPrompt
+            pool.append(p)
+        }
+        for (i, panel) in pool.enumerated() {
+            guard i < frames.count else { if panel.isVisible { panel.orderOut(nil) }; continue }
+            if panel.frame != frames[i] { panel.setFrame(frames[i], display: false) }
+            let root = panel.contentView!.layer!
+            root.frame = CGRect(origin: .zero, size: frames[i].size)
+            root.sublayers = [LayerFactory.layer(root.frame, .plain, theme)]
+            if !panel.isVisible { panel.orderFrontRegardless() }
+        }
+    }
+
+    func removeAll() { for p in pool { p.orderOut(nil) } }
 }
 
 public enum CoverForm: String, Sendable {
@@ -192,6 +220,7 @@ public final class CoverCanvas: CoverPresenter {
     private struct Drawn: Equatable { var plan: CoverPlan; var theme: CoverTheme; var notice: CoverNotice?; var menuBar: CGFloat; var scale: CGFloat; var frame: CGRect }
     /// When each canvas was last brought to the front of its level.
     private var frontedAt: [UInt32: TimeInterval] = [:]
+    private let behind = BehindPrompt()
     public var notice: CoverNotice?
     public init(notice: CoverNotice? = nil) { self.notice = notice }
 
@@ -232,6 +261,7 @@ public final class CoverCanvas: CoverPresenter {
                 frontedAt[plan.display.id] = now
             }
         }
+        behind.apply(plans, theme: theme)
         CATransaction.commit()
     }
 
@@ -239,6 +269,7 @@ public final class CoverCanvas: CoverPresenter {
         for p in panels.values { p.orderOut(nil) }
         panels = [:]
         drawn = [:]
+        behind.removeAll()
     }
 }
 
@@ -249,6 +280,7 @@ public final class OverlayCovers: CoverPresenter {
     public var notice: CoverNotice?
     /// When every panel was last brought to the front: at most four times a second, besides each panel newly shown.
     private var frontedAt: TimeInterval = -.infinity
+    private let behind = BehindPrompt()
     public init(notice: CoverNotice? = nil) { self.notice = notice }
 
     public func apply(_ plans: [CoverPlan]) {
@@ -279,11 +311,13 @@ public final class OverlayCovers: CoverPresenter {
             root.sublayers = CoverDrawing.layers(for: [piece], theme: theme, scale: scale, notice: notice, testingLineOn: lined ? [0] : [])
             if refront || !panel.isVisible { panel.orderFrontRegardless() }
         }
+        behind.apply(plans, theme: theme)
         CATransaction.commit()
     }
 
     public func removeAll() {
         for p in pool { p.orderOut(nil) }
+        behind.removeAll()
     }
 }
 
@@ -333,7 +367,7 @@ public final class WatchedPresenter: CoverPresenter {
     }
 
     public func apply(_ plans: [CoverPlan]) {
-        let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty }
+        let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty || !$0.promptHoles.isEmpty }
         if now || showing { onCoversShown?(true) }
         inner.apply(plans)
         showing = now

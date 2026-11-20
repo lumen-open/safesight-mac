@@ -109,6 +109,42 @@ public struct TestingStats: Sendable {
     }
 }
 
+/// Whether ⌃⌥⌘Q is this copy's, and if not, what macOS said.
+public enum ShortcutStatus: Equatable, Sendable {
+    case registered
+    /// Not asked for yet.
+    case notYet
+    /// macOS said another registration holds it, and another build of the Testing edition is running.
+    case takenByAnotherCopy
+    /// macOS said another registration holds it (`eventHotKeyExistsErr`), and no other copy is running.
+    case takenByAnotherApp
+    /// macOS refused it for another reason (its status code).
+    case failed(Int32)
+
+    /// `existsError`: the status macOS gives when another registration holds the shortcut.
+    public static func from(_ state: EmergencyQuit.State, otherCopyRunning: Bool, existsError: Int32 = -9878) -> ShortcutStatus {
+        switch state {
+        case .registered: return .registered
+        case .notRegistered: return .notYet
+        case let .failed(s) where s == existsError: return otherCopyRunning ? .takenByAnotherCopy : .takenByAnotherApp
+        case let .failed(s): return .failed(s)
+        }
+    }
+
+    public var works: Bool { self == .registered }
+
+    /// The report's words.
+    public var reportText: String {
+        switch self {
+        case .registered: return "registered"
+        case .notYet: return "not registered yet"
+        case .takenByAnotherCopy: return "not registered (another copy of the Testing edition holds it; trying again every 2 s)"
+        case .takenByAnotherApp: return "not registered (another app holds it; trying again every 2 s)"
+        case let .failed(s): return "not registered (macOS said \(s); trying again every 2 s)"
+        }
+    }
+}
+
 /// Facts about the Mac and this build, read once.
 public struct TestingFacts: Sendable {
     public struct Display: Sendable {
@@ -119,12 +155,14 @@ public struct TestingFacts: Sendable {
     }
     public var macModel: String, macOS: String, edition: String, version: String, executableSHA: String, modelsStamp: String
     public var displays: [Display]
-    public var shortcutRegistered: Bool
+    /// Read when the report is made, not when the facts were first read: it can change (a retry that succeeds).
+    public var shortcut: ShortcutStatus
+    public var shortcutRegistered: Bool { shortcut.works }
     public init(macModel: String, macOS: String, edition: String, version: String, executableSHA: String, modelsStamp: String,
-                displays: [Display], shortcutRegistered: Bool) {
+                displays: [Display], shortcut: ShortcutStatus) {
         self.macModel = macModel; self.macOS = macOS; self.edition = edition; self.version = version
         self.executableSHA = executableSHA; self.modelsStamp = modelsStamp; self.displays = displays
-        self.shortcutRegistered = shortcutRegistered
+        self.shortcut = shortcut
     }
 
     /// The Mac's model identifier (such as "Mac14,2"), from sysctl.
@@ -173,7 +211,7 @@ public enum TestingReport {
         }
         lines.append("Displays: \(f.displays.count)" + (shown.isEmpty ? "" : " (" + shown.joined(separator: "; ") + ")"))
         lines.append("Build: \(f.edition) \(f.version), app \(String(f.executableSHA.prefix(12))), models \(String(f.modelsStamp.prefix(12)))")
-        lines.append("⌃⌥⌘Q: " + (f.shortcutRegistered ? "registered" : "not registered (another app holds it)"))
+        lines.append("⌃⌥⌘Q: " + f.shortcut.reportText)
         lines.append("")
         let minutes = running / 60
         lines.append(String(format: "Covering for %.1f min; frames judged %d (%.1f a second)", minutes, s.judged,

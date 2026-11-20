@@ -69,7 +69,7 @@ final class TestingReportWindow: NSObject, NSTextFieldDelegate {
     }
 
     /// The Mac and this build, read once.
-    static func facts(shortcut: Bool) -> TestingFacts {
+    static func facts(shortcut: ShortcutStatus) -> TestingFacts {
         let displays: [TestingFacts.Display] = NSScreen.screens.map { s in
             let id = (s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
             return .init(width: Int(s.frame.width), height: Int(s.frame.height), scale: Double(s.backingScaleFactor),
@@ -81,7 +81,7 @@ final class TestingReportWindow: NSObject, NSTextFieldDelegate {
         let stamp = list?.split(separator: "\n").first.map { String($0.dropFirst("# from ".count)) } ?? "not compiled"
         return TestingFacts(macModel: TestingFacts.macModel(), macOS: ProcessInfo.processInfo.operatingSystemVersionString,
                             edition: BuildInfo.edition.rawValue, version: BuildInfo.version, executableSHA: exeSHA,
-                            modelsStamp: stamp, displays: displays, shortcutRegistered: shortcut)
+                            modelsStamp: stamp, displays: displays, shortcut: shortcut)
     }
 }
 #endif
