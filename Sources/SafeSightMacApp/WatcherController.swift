@@ -411,7 +411,9 @@ final class WatchedPresenter: CoverPresenter {
 
     func apply(_ plans: [CoverPlan]) {
         #if SAFESIGHTMAC_LAB
-        LabEventLog.shared.log("draw " + plans.map { "d=\($0.display.id) items=\($0.items.count) whole=\($0.wholeDisplay?.rawValue ?? "-")" }.joined(separator: " | "))
+        LabEventLog.shared.log("draw " + plans.map { p in
+            "d=\(p.display.id) items=\(p.items.count) plain=\(p.plainCount) whole=\(p.wholeDisplay?.rawValue ?? "-") covered=\(String(format: "%.3f", LabEventLog.coveredShare(p))) rects=\(p.items.prefix(12).map { LabEventLog.rect($0.rect) }.joined(separator: ";"))"
+        }.joined(separator: " | "))
         #endif
         let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty }
         if now || showing { onCoversShown?(true) }
@@ -425,5 +427,10 @@ final class WatchedPresenter: CoverPresenter {
         inner.removeAll()
         showing = false
         onCoversShown?(false)
+        #if SAFESIGHTMAC_LAB
+        LabEventLog.shared.log("draw removed")
+        #endif
+        // Every canvas is off the screen (the lock screen, a pause): the report says nothing is drawn, not the last plan.
+        onDrawn?([])
     }
 }
