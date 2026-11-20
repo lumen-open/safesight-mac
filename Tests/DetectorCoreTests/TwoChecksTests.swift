@@ -212,19 +212,55 @@ final class TwoCleanChecksTests: XCTestCase {
 
     // MARK: Shown as it is meanwhile, and nothing cleared on one check
 
-    func testAPictureSeenCleanOnceIsNeverClearedWithoutAJudgement() {
-        // With no budget left, a picture seen clean once is unjudged (blurred or covered), never clear from the cache.
+    // MARK: With "judged earlier" (`seenClear`): a display rule, never a cached verdict
+
+    func testOneCleanCheckThenReuseWithNoBudgetIsShownAsJudgedEarlierNeverFromTheCache() {
         let (d, _, _) = scored(0.1, 0.1)
         _ = d.judge(img, context: ctx)
+        XCTAssertNotNil(d.seenClear.get(regionKey(d)), "seen clean once is also seen clear on these pixels")
+        d.resetTimings()
         let starved = d.judge(img, context: ctx, budget: 0)
-        XCTAssertEqual(over(starved)?.reason, .overload)
-        XCTAssertNotEqual(over(starved)?.display, .clear)
-        XCTAssertTrue(starved.regions.allSatisfy { $0.reason == .overload })
-        // After two clean checks the same call is served from the cache.
-        _ = d.judge(img, context: ctx)
+        XCTAssertEqual(over(starved)?.display, .clear)
+        XCTAssertEqual(over(starved)?.reason, .judgedEarlier, "shown as judged earlier: the display rule, not the cache")
+        XCTAssertEqual(d.timings.cacheHits, 0, "nothing came from the cache")
+        XCTAssertNil(d.cache.get(regionKey(d)))
+        XCTAssertTrue(d.cache.seenCleanOnce(regionKey(d)), "still waiting for its second check")
+        // Where the display rule does not apply (a covered-start window), it is unjudged.
+        let covered = d.judge(img, context: JudgeContext(windowID: 9, startsCovered: true), budget: 0)
+        XCTAssertEqual(covered.regions.first { $0.pass == .region }?.reason, .overload)
+        // With budget it gets a real second check, before nothing else, and only then comes from the cache.
+        let second = d.judge(img, context: ctx)
+        XCTAssertEqual(second.judgements, 4)
+        XCTAssertEqual(over(second)?.reason, .judgedClean)
+        XCTAssertNil(d.seenClear.get(regionKey(d)), "reusable now: no longer kept as only seen clear")
         let served = d.judge(img, context: ctx, budget: 0)
         XCTAssertEqual(over(served)?.display, .clear)
+        XCTAssertNotEqual(over(served)?.reason, .judgedEarlier)
         XCTAssertEqual(served.overloaded, 0)
+    }
+
+    func testAModelFailureAfterOneCleanCheckIsNeitherShownAsJudgedEarlierNorCounted() {
+        let (d, fa, fb) = scored(0.1, 0.1)
+        _ = d.judge(img, context: ctx)
+        fa.failCalls = 1; fb.failCalls = 1
+        let failed = d.judge(img, context: ctx)
+        XCTAssertEqual(over(failed)?.reason, .overload)
+        XCTAssertNil(d.seenClear.get(regionKey(d)), "what was seen clear is forgotten")
+        XCTAssertNil(d.cache.checks(regionKey(d)), "and so is the clean count")
+        let starved = d.judge(img, context: ctx, budget: 0)
+        XCTAssertEqual(over(starved)?.reason, .overload, "after a failure, nothing is shown as judged earlier")
+        XCTAssertNotEqual(over(starved)?.display, .clear)
+    }
+
+    func testAPictureSeenCleanOnceAndDueIsJudgedBeforeNothingNew() {
+        // Entries never judged come first; a picture seen clean once waits behind them, as main's judged-earlier entries do.
+        let (d, _, _) = scored(0.1, 0.1)
+        _ = d.judge(img, context: ctx)
+        var two = img
+        paint(&two, PixelRect(x: 220, y: 60, w: 96, h: 96), channel: nil, seed: 8)
+        let v = d.judge(two, context: ctx, budget: 2)   // one entry's worth
+        XCTAssertTrue(v.regions.contains { $0.rect == PixelRect(x: 220, y: 60, w: 96, h: 96) && $0.reason == .judgedClean }, "the new picture first")
+        XCTAssertEqual(over(v)?.reason, .judgedEarlier, "the one seen clean once waits, shown as judged earlier")
     }
 
     // MARK: Second checks in the background

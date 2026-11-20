@@ -25,6 +25,9 @@ public struct DetectorConfig: Sendable {
     public var blurAllAbove = 200
     /// The detector rule. Balanced is the default (founder decision S-01).
     public var rule: DetectorRule = .balanced
+    /// Pixels judged clear but too near a cut-off for the verdict cache (`Reason.judgedEarlier`) are due to be judged
+    /// again after this long (seconds), as a full re-judge would (`FULL_REJUDGE` for show-first).
+    public var rejudgeAfter: TimeInterval = 30
     public init() {}
 }
 
@@ -42,6 +45,11 @@ public final class Detector {
     let finder: RegionFinder
     let cache = VerdictCache()
     let finderCache = FinderCache()
+    /// Exact pixels last judged clear but kept out of the verdict cache by the margin rule, with when they were last
+    /// judged. Never reused as a judgement (see `Reason.judgedEarlier`). It orders the work: entries never judged come
+    /// before entries judged earlier, and those go oldest first, so a budget too small for every borderline picture
+    /// re-judges them in turn instead of spending itself on the same ones for ever while the rest stay unjudged.
+    let seenClear = SeenClear()
     let voter = VideoVoter()
     let hot = HotContexts()
     /// Referee judgements made so far (for budgets and benchmarks).
@@ -102,11 +110,12 @@ public final class Detector {
         guard rule != config.rule else { return }
         config.rule = rule
         cache.removeAll()
+        seenClear.removeAll()
     }
 
     /// Empties the verdict cache (lab benches measure from scratch with it; pausing may use it). Emptying
     /// only ever means judging again.
-    public func removeCachedVerdicts() { cache.removeAll(); finderCache.removeAll() }
+    public func removeCachedVerdicts() { cache.removeAll(); finderCache.removeAll(); seenClear.removeAll() }
 
     /// Runs every model once on a blank tensor, so that the first real judgement does not pay for loading
     /// (the tie-breaker on the GPU costs about 0.2 s the first time). Used by the lab bench.
@@ -200,7 +209,9 @@ public final class Detector {
 
     /// Judges one captured frame (or a still image) and returns classes only.
     /// `budget` is the caller's share of model judgements for this call; `DetectorConfig.maxJudgementsPerCall`
-    /// (`DETECTOR_CALL_CAP`) stays as the backstop. A budget of 0 returns every uncached entry as `overload`.
+    /// (`DETECTOR_CALL_CAP`) stays as the backstop. A budget of 0 returns every uncached entry as `overload`, except
+    /// entries judged clear earlier on exactly the same pixels, which come back as `judgedEarlier` (or `rejudgeDue`)
+    /// where they may be shown.
     ///
     /// `progress`, when given, hears twice before the call returns, in classes only: once after the finder and
     /// the caches (`JudgeProgress.found`), and once per picture the fastest model flags (`fastFlag`). Then the
@@ -290,9 +301,15 @@ public final class Detector {
         // clean only once is not in the cache for this (`VerdictCache.CLEAN_CHECKS`): it is judged again, with
         // fresh jitter. Where a blur can apply, a cached clean outcome is used only if it was settled for the
         // blur too (the margin rule, `TileOutcome.settledForBlur`); otherwise the picture is judged again.
+        //
+        // Entries never judged go first, in task order; entries judged clear earlier on exactly these pixels but not yet
+        // reusable from the cache (`seenClear`: too near a cut-off, or clearly clean only once) after them, the longest ago
+        // first. Every entry is judged in turn whatever the budget: a budget smaller than the borderline pictures on
+        // screen never stops the rest being judged.
         var budget = min(config.maxJudgementsPerCall, max(0, callerBudget ?? config.maxJudgementsPerCall))
         var judgements = 0
         var chosen: [Int] = [], sameAs: [Int: Int] = [:], firstWithKey: [ExactKey: Int] = [:]
+        var fresh: [Int] = [], again: [(Int, UInt64)] = []
         var pendingCost = 0
         for i in tasks.indices {
             if secondChecksOnly {
@@ -303,20 +320,39 @@ public final class Detector {
             }
             timings.cacheMisses += 1
             if let j = firstWithKey[tasks[i].key] { sameAs[i] = j; continue }
+            firstWithKey[tasks[i].key] = i
+            if let seen = seenClear.get(tasks[i].key) { again.append((i, seen.serial)) } else { fresh.append(i) }
+        }
+        // The whole pass, never judged, comes right after the first picture (the one nearest the pointer, or the smallest):
+        // it costs little, and left unjudged it covers the whole call area plainly, where an unjudged picture is only
+        // blurred where it is.
+        if let w = fresh.firstIndex(where: { tasks[$0].pass == .whole }), w > 1 {
+            let whole = fresh.remove(at: w)
+            fresh.insert(whole, at: 1)
+        }
+        var nextCost = 0
+        for i in fresh + again.sorted(by: { $0.1 < $1.1 }).map(\.0) {
             let cost = tasks[i].pieces.count * (models.models.count + (tasks[i].rect.shortSide < config.containBelow ? models.students.count : 0))
-            if cost > budget { continue }
+            if cost > budget { if nextCost == 0 { nextCost = cost }; continue }
             budget -= cost
             judgements += cost
             pendingCost += cost
             if cache.seenCleanOnce(tasks[i].key) { timings.secondCheckJudgements += cost }
             chosen.append(i)
-            firstWithKey[tasks[i].key] = i
+        }
+        chosen.sort()
+        // What an entry the budget did not reach shows: as judged earlier on these pixels, where that may be shown (a
+        // show-first window, no blur rule, not video); otherwise unjudged (`overload`).
+        func earlier(_ t: Task) -> SeenClear.Entry? {
+            guard !ctx.startsCovered, !ctx.isVideo, !blurCanApply(t) else { return nil }
+            return seenClear.get(t.key)
         }
         timings.cacheMs += msSince(t0)
 
         if let progress {
             let coveredByCache = tasks.filter { t in t.pass == .region && t.outcome.map { covers($0) } ?? false }
-            progress(.found(pending: tasks.filter { $0.pass == .region && !$0.judged }.map(\.rect),
+            // Pictures judged clear earlier on exactly these pixels are not new: they are not blurred first.
+            progress(.found(pending: tasks.filter { $0.pass == .region && !$0.judged && earlier($0) == nil }.map(\.rect),
                             coveredByCache: coveredByCache.map(\.rect), estimatedMs: Double(pendingCost) * msPerJudgement))
         }
 
@@ -326,7 +362,7 @@ public final class Detector {
         var fastFailed: Set<Int> = []
         if progress != nil, let fm = fastestModel {
             for i in chosen where tasks[i].pass == .region {
-                guard let top = topScore(frame, tasks[i], fm) else { fastFailed.insert(i); cache.forget(tasks[i].key); continue }
+                guard let top = topScore(frame, tasks[i], fm) else { fastFailed.insert(i); continue }
                 fast[i] = [fm.id: top]
                 var flagged = top >= table.cutoffs(model: fm.id, band: Band(shortSide: tasks[i].rect.shortSide)).cover
                 #if KESTREL_LAB
@@ -342,17 +378,22 @@ public final class Detector {
 
         // Then every model the full rule needs (the fast model's score is not judged twice). A task a model
         // failed on stays unjudged: it is covered or blurred as overload and judged again in a later call.
+        // Every task a model failed on in this call, the fastest model's failures included. A failure is never shown as
+        // judged earlier: it is unjudged, covered or blurred and counted, and what was seen of it before is forgotten.
+        var failed = fastFailed
         for i in chosen where !fastFailed.contains(i) {
-            if let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) {
-                tasks[i].outcome = o; tasks[i].judged = true
-                // A cover is kept; a clearly clean judgement adds to the entry's clean count (two in a row make it
-                // reusable); anything else starts the count again (the margin rule and `CLEAN_CHECKS`).
-                cache.put(tasks[i].key, o)
-            } else {
-                // A model failed: the entry is left unjudged (covered or blurred) and its clean count starts again.
-                cache.forget(tasks[i].key)
-            }
+            guard let o = judgeTask(frame, tasks[i], precomputed: fast[i] ?? [:]) else { failed.insert(i); continue }
+            tasks[i].outcome = o; tasks[i].judged = true
+            // A cover is kept; a clearly clean judgement adds to the entry's clean count (two in a row make it
+            // reusable); anything else starts the count again (the margin rule and `CLEAN_CHECKS`).
+            cache.put(tasks[i].key, o)
+            // Judged clear but not reusable from the cache yet (too near a cut-off, or clearly clean only once): these exact
+            // pixels may be shown as judged earlier when a later call's budget does not reach them (`Reason.judgedEarlier`,
+            // a display rule with its own limits, never a cached verdict). A cover, or a verdict now reusable, ends that.
+            if !covers(o) && !o.forced && !cache.isReusable(tasks[i].key) { seenClear.put(tasks[i].key, at: ctx.now) } else { seenClear.remove(tasks[i].key) }
         }
+        // A model failure forgets both what was seen clear and any clean count: the next clean judgement starts again.
+        for i in failed { seenClear.remove(tasks[i].key); cache.forget(tasks[i].key) }
         for (i, j) in sameAs where tasks[j].judged { tasks[i].outcome = tasks[j].outcome; tasks[i].judged = true }
 
         // A window turns hot only after a both-family hit (SD-125, C06-3 d). The lab's grid trigger
@@ -368,12 +409,21 @@ public final class Detector {
 
         var out: [RegionVerdict] = []
         var coverWindow = false, strike = false, overloaded = 0
-        // Second checks: the entries asked about in this call. One a model failed on is reported unjudged, as any fault.
-        let asked = Set(chosen).union(sameAs.keys)
-        for (ti, t) in tasks.enumerated() {
+        // Background second checks report only the entries asked about; one a model failed on is reported unjudged.
+        let asked = Set(chosen)
+        for (k, t) in tasks.enumerated() {
             guard t.judged, let o = t.outcome else {
-                // A second check not reached is simply left for later: the entry was not asked about.
-                if secondChecksOnly && !asked.contains(ti) { continue }
+                let r = sameAs[k] ?? k, rep = tasks[r]
+                if secondChecksOnly && !asked.contains(r) { continue }
+                // Shown as judged earlier only if no model failed on it in this call, and not a small picture in a window
+                // that turned hot in this call (judged earlier under the rule for a window that was not hot).
+                let hotNow = becameHot && rep.pass == .region && rep.rect.shortSide < config.hotBelow
+                if !failed.contains(r), !hotNow, let e = earlier(rep) {
+                    let due = ctx.now.timeIntervalSince(e.at) >= config.rejudgeAfter
+                    out.append(RegionVerdict(rect: t.rect, display: .clear, reason: due ? .rejudgeDue : .judgedEarlier, pass: t.pass))
+                    timings.judgedEarlier += 1
+                    continue
+                }
                 overloaded += 1
                 // Never show a picture unjudged: cover in covered-start contexts and for the whole/slice
                 // passes; blur regions in show-first windows (the judged copy takes over there).
@@ -430,7 +480,7 @@ public final class Detector {
         var waiting = Set<ExactKey>()
         for t in tasks where cache.seenCleanOnce(t.key) { waiting.insert(t.key) }
         return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded,
-                            modelFaults: faultTotal - faultsBefore, secondChecksLeft: waiting.count)
+                            modelFaults: faultTotal - faultsBefore, nextCost: nextCost, secondChecksLeft: waiting.count)
     }
 
     #if KESTREL_LAB

@@ -244,6 +244,9 @@ final class VerdictCache {
         return !e.outcome.covering && Int(e.cleanChecks) < Self.CLEAN_CHECKS
     }
 
+    /// Whether `k` would be handed back by `get` (a cover, or `CLEAN_CHECKS` clean judgements in a row). Not counted.
+    func isReusable(_ k: ExactKey) -> Bool { store.peek(k).flatMap(Self.reusable) != nil }
+
     /// The counts held for `k` (tests).
     func checks(_ k: ExactKey) -> (clean: Int, blur: Int)? { store.peek(k).map { (Int($0.cleanChecks), Int($0.blurChecks)) } }
 
@@ -268,4 +271,29 @@ final class VerdictCache {
     func forget(_ k: ExactKey) {
         if let e = store.peek(k), !e.outcome.covering { store.remove(k) }
     }
+}
+
+/// Exact pixels last judged clear but kept out of the verdict cache by the margin rule (`Detector.seenClear`): the key
+/// and when it was judged, nothing else (no outcome, no score). Bounded; the oldest go first when it is full.
+final class SeenClear {
+    struct Entry: Sendable { var serial: UInt64; var at: Date }
+    static let capacity = 20_000
+    private var store: [ExactKey: Entry] = [:]
+    private var next: UInt64 = 0
+
+    func get(_ k: ExactKey) -> Entry? { store[k] }
+
+    func put(_ k: ExactKey, at: Date) {
+        next += 1
+        store[k] = Entry(serial: next, at: at)
+        if store.count > Self.capacity {
+            // Drop the older half: rare, and an entry dropped is only judged again sooner.
+            let cut = store.values.map(\.serial).sorted()[store.count / 2]
+            store = store.filter { $0.value.serial >= cut }
+        }
+    }
+
+    func remove(_ k: ExactKey) { store[k] = nil }
+    func removeAll() { store.removeAll() }
+    var count: Int { store.count }
 }

@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard testing.launch(watcher: watcher) else { return }
         #endif
 
+        #if SAFESIGHTMAC_LAB
+        watcher.logOverlays("launch")
+        #endif
         statusItem = NSStatusBar.system.statusItem(withLength: BuildInfo.edition == .testing ? NSStatusItem.variableLength : NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: AppText.productName)
         let menu = NSMenu()
@@ -49,6 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         refreshPractice()
         watcher.onChange = { [weak self] in self?.updateIcon() }
+        #if SAFESIGHTMAC_TESTING
+        testing.onShortcutChanged = { [weak self] in self?.shownIcon = nil; self?.updateIcon() }
+        #endif
 
         // Display changes (SD-112). The reconfiguration callback is the earliest word: its begin call comes before
         // macOS applies a change, and every display is covered before it returns. The notifications are later
@@ -175,6 +181,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                               detectorFailed: watcher.detectorFailed, plans: watcher.plans, running: watcher.running)
     }
 
+    /// What the menu bar item shows now (its symbol and status), so it is drawn again only when that changes.
+    private var shownIcon: (symbol: String, title: String)?
+
+    /// The menu bar item. It is redrawn only when its symbol or status changes: on macOS 26 the item is drawn by the
+    /// system's menu bar, not inside this app, so the capture sees it, and redrawing it on every cover update made the
+    /// screen "change" by itself many times a second, each change judged again.
     private func updateIcon() {
         let symbol: String
         switch status {
@@ -182,9 +194,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .paused: symbol = "pause.rectangle"
         case .needsScreenRecording, .detectorUnavailable, .displayCovered: symbol = "exclamationmark.triangle"
         }
-        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: AppText.productName + ": " + status.title)
+        let title = status.title
+        guard let button = statusItem?.button, shownIcon.map({ $0 != (symbol, title) }) ?? true else { return }
+        shownIcon = (symbol, title)
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: AppText.productName + ": " + title)
         #if SAFESIGHTMAC_TESTING
-        if let b = statusItem?.button { testing.label(b, status: mayRun ? status.title : AppText.testingNotSandboxed) }
+        testing.label(button, status: mayRun ? title : AppText.testingNotSandboxed)
         #endif
     }
 
@@ -224,7 +239,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             switch status {
             case .needsScreenRecording:
                 menu.addItem(note(AppText.needsPermissionDetail))
-                menu.addItem(item(AppText.grantPermission) { ScreenRecordingPermission.request(); Self.openScreenRecordingSettings() })
+                menu.addItem(item(AppText.grantPermission) { Self.askForScreenRecording() })
+                menu.addItem(note(AppText.permissionSteps))
             case let .displayCovered(cause):
                 menu.addItem(note(cause.plainWords))
             case .paused(let until):
@@ -293,6 +309,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         testing.removeEverything(watcher: watcher)
     }
     #endif
+
+    /// The first time, only macOS's own question is asked: it has its own Open System Settings button. Opening System
+    /// Settings at the same moment put Settings in front of that question, where it stayed unanswered behind the window
+    /// (and later under the covers). After that, macOS asks no more, so System Settings is opened directly.
+    static func askForScreenRecording() {
+        let key = "askedForScreenRecording"
+        if UserDefaults.standard.bool(forKey: key) {
+            openScreenRecordingSettings()
+        } else {
+            UserDefaults.standard.set(true, forKey: key)
+            ScreenRecordingPermission.request()
+        }
+    }
 
     static func openScreenRecordingSettings() {
         if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(u) }

@@ -117,24 +117,33 @@ public enum CoverDrawing {
         return covers + lines
     }
 
-    /// Which of a display's cover pieces carry the Testing line (see `CoverNotice`): those with the way out, those
-    /// hiding `CoverNotice.bigShare` of the display, and, when none of those has room for it but the pieces
-    /// together hide that much, the largest piece that has room. None without a notice.
+    /// Which of a display's cover pieces carries the Testing line (see `CoverNotice`): one piece per display at most, so
+    /// lines never stack (several overlapping covers each hiding half a display drew two to four pills on top of one
+    /// another on a real screen). The whole-display cover when there is one; otherwise the largest piece with the way out
+    /// or hiding `CoverNotice.bigShare` of the display that has room for the line; otherwise, when the pieces together
+    /// hide that much, the largest piece that has room. None without a notice.
     public static func testingLineHosts(_ pieces: [CoverPiece], notice: CoverNotice?, displayArea: CGFloat?,
                                         theme: CoverTheme, scale: CGFloat) -> Set<Int> {
         guard case let .testing(shortcut)? = notice else { return [] }
+        if let whole = pieces.indices.first(where: { pieces[$0].wayOut == .belowCard }) { return [whole] }
         let areas = pieces.map { $0.frame.width * $0.frame.height }
         let big = displayArea.map { $0 > 0 ? CoverNotice.bigShare * $0 : .infinity } ?? .infinity
-        var hosts = Set(pieces.indices.filter { pieces[$0].wayOut != nil || areas[$0] >= big })
         let compact = WayOutArt.pillSize(.compact, theme, .testing(shortcut: shortcut))
         func roomy(_ i: Int) -> Bool {
             WayOutArt.testingPillFrame(in: pieces[i].frame, placement: .centre, under: nil, size: compact, scale: scale) != nil
         }
-        if !hosts.contains(where: roomy), areas.reduce(0, +) >= big,
-           let largest = pieces.indices.filter(roomy).max(by: { areas[$0] < areas[$1] }) {
-            hosts.insert(largest)
+        // Pieces with the way out are tried with their way-out line in place (the Testing line goes under it).
+        func fits(_ i: Int) -> Bool {
+            guard let place = pieces[i].wayOut else { return roomy(i) }
+            let way = WayOutArt.layer(on: pieces[i].frame, placement: place, theme: theme, scale: scale)
+            return WayOutArt.testingLayer(on: pieces[i].frame, placement: place, under: way, shortcut: shortcut, theme: theme, scale: scale) != nil
         }
-        return hosts
+        let wanted = pieces.indices.filter { pieces[$0].wayOut != nil || areas[$0] >= big }
+        if let best = wanted.filter(fits).max(by: { areas[$0] < areas[$1] }) { return [best] }
+        if areas.reduce(0, +) >= big, let largest = pieces.indices.filter(roomy).max(by: { areas[$0] < areas[$1] }) {
+            return [largest]
+        }
+        return []
     }
 
     /// Replaces a root layer's covers with this plan's, in one transaction with no animation.
@@ -177,6 +186,12 @@ enum LayerFactory {
 @MainActor
 public final class CoverCanvas: CoverPresenter {
     private var panels: [UInt32: CoverPanel] = [:]
+    /// What each canvas holds now, so an update that draws exactly the same is not drawn again (each drawing is work for
+    /// the window server, and the covers' own drawing must never be what keeps the screen busy).
+    private var drawn: [UInt32: Drawn] = [:]
+    private struct Drawn: Equatable { var plan: CoverPlan; var theme: CoverTheme; var notice: CoverNotice?; var menuBar: CGFloat; var scale: CGFloat; var frame: CGRect }
+    /// When each canvas was last brought to the front of its level.
+    private var frontedAt: [UInt32: TimeInterval] = [:]
     public var notice: CoverNotice?
     public init(notice: CoverNotice? = nil) { self.notice = notice }
 
@@ -189,7 +204,8 @@ public final class CoverCanvas: CoverPresenter {
 
     public func apply(_ plans: [CoverPlan]) {
         let ids = Set(plans.map(\.display.id))
-        for (id, p) in panels where !ids.contains(id) { p.orderOut(nil); panels[id] = nil }
+        for (id, p) in panels where !ids.contains(id) { p.orderOut(nil); panels[id] = nil; drawn[id] = nil }
+        let now = ProcessInfo.processInfo.systemUptime
         let theme = CoverTheme.current
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -203,10 +219,18 @@ public final class CoverCanvas: CoverPresenter {
             let screen = Self.screen(plan.display.id)
             let scale = screen?.backingScaleFactor ?? 2
             let menuBar = plan.wholeDisplay == nil ? 0 : MenuBarProbe.height(plan.display, screen: screen)
-            root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar, notice: notice)
-            // Ordered to the front of its level on every plan, not only when first shown: a window that came up at the
-            // same level since never stays over the covers.
-            panel.orderFrontRegardless()
+            let now_ = Drawn(plan: plan, theme: theme, notice: notice, menuBar: menuBar, scale: scale, frame: frame)
+            let same = drawn[plan.display.id] == now_ && panel.isVisible
+            if !same {
+                root.sublayers = CoverDrawing.layers(for: plan, theme: theme, scale: scale, menuBar: menuBar, notice: notice)
+                drawn[plan.display.id] = now_
+            }
+            // Ordered to the front of its level whenever its covers change, and at least four times a second while they
+            // stay the same: a window that came up at the same level since never stays over the covers for long.
+            if !same || now - (frontedAt[plan.display.id] ?? -.infinity) >= 0.25 {
+                panel.orderFrontRegardless()
+                frontedAt[plan.display.id] = now
+            }
         }
         CATransaction.commit()
     }
@@ -214,6 +238,7 @@ public final class CoverCanvas: CoverPresenter {
     public func removeAll() {
         for p in panels.values { p.orderOut(nil) }
         panels = [:]
+        drawn = [:]
     }
 }
 

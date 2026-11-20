@@ -13,9 +13,28 @@ public struct WindowInfo: Equatable, Hashable, Sendable {
     public let bounds: CGRect
     /// The window's opacity (kCGWindowAlpha). A window at 0 shows nothing: it hides nothing behind it.
     public let alpha: Double
-    public init(number: UInt32, ownerPID: Int32, layer: Int, bounds: CGRect, alpha: Double = 1) {
+    /// One of the window server's own small overlays at the cursor's level: the pointer, the screen-recording
+    /// indicator in the menu bar. They sit above every cover, show nothing of any app's, and are never "another app's
+    /// window in front of the covers". Set only when the window list proves it (`isSystemOverlay`).
+    public let systemOverlay: Bool
+    public init(number: UInt32, ownerPID: Int32, layer: Int, bounds: CGRect, alpha: Double = 1, systemOverlay: Bool = false) {
         self.number = number; self.ownerPID = ownerPID; self.layer = layer; self.bounds = bounds
         self.alpha = alpha.isFinite ? alpha : 1
+        self.systemOverlay = systemOverlay
+    }
+
+    /// The cursor's window level (`CGWindowLevelForKey(.cursorWindow)`), where the window server puts the pointer and the
+    /// screen-recording indicator.
+    public static let cursorLevel = 2_147_483_630
+    /// The largest such overlay, in points on each side (the indicator is about 29 by 28, a pointer about 23 by 22).
+    public static let overlayMaxSide: CGFloat = 64
+
+    /// Whether a window is one of the window server's own overlays: at exactly the cursor's level, no larger than
+    /// `overlayMaxSide` on either side, and owned by the window server itself, told by the account its process runs
+    /// as (`ownerIsWindowServer`, read from the system, never from a name). Anything else, an app's window raised to
+    /// that level included, is not.
+    public static func isSystemOverlay(layer: Int, bounds: CGRect, ownerIsWindowServer: Bool) -> Bool {
+        ownerIsWindowServer && layer == cursorLevel && bounds.width <= overlayMaxSide && bounds.height <= overlayMaxSide
     }
 
     /// True when the window can be seen at all. A fully transparent window is no judging target and hides nothing.

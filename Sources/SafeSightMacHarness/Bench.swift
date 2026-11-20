@@ -690,6 +690,50 @@ final class Bench {
         return out
     }
 
+    // MARK: Case 7: a busy page judged within the per-call cap
+
+    /// Each busy page judged at the detector in calls of `DETECTOR_CALL_CAP`, as the cover layer calls it, until nothing is
+    /// left (at most 40 calls), with what the first entry not reached would cost (`nextCost`). A page that does not finish
+    /// that way is then run through the cover layer, with the register's budget and a look at the still screen every
+    /// quarter second (simulated time), until nothing is left to look at or 300 s: there the budget is saved up for an
+    /// entry dearer than one call (`DisplayPipeline.saving`).
+    func capped() -> [String: Any] {
+        var rows: [[String: Any]] = []
+        let whole = PixelRect(x: 0, y: 0, w: W, h: H)
+        for page in busyPages() {
+            detector.removeCachedVerdicts()
+            let ctx = JudgeContext(windowID: 1, startsCovered: false)
+            var calls = 0, judgements = 0, left = 0, dearest = 0
+            for _ in 0..<40 {
+                let v = detector.judge(page.img, context: ctx, within: whole, budget: Register.DETECTOR_CALL_CAP)
+                calls += 1; judgements += v.judgements; left = v.overloaded; dearest = max(dearest, v.nextCost)
+                if v.overloaded == 0 { break }
+            }
+            var row: [String: Any] = ["page": page.name, "calls": calls, "judgements": judgements, "leftUnjudged": left, "dearestNotReached": dearest]
+            if left > 0 {
+                detector.removeCachedVerdicts()
+                let p = DisplayPipeline(display: display, judger: detector, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+                p.backgroundSecondChecks = o.backgroundChecks
+                var t = 0.0
+                var plan = p.process(frame(page.img, dirty: nil, t: t), snapshot: snapshot, now: t)
+                var looks = 0, judged = 0, restAt: Double?
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                while t < 300 {
+                    if !p.needsAnotherLook { restAt = t; break }
+                    t += 0.25; looks += 1
+                    plan = p.process(frame(nil, dirty: [], status: .idle, t: t), snapshot: snapshot, now: t)
+                    judged += p.lastTimings.judgements + p.lastTimings.secondCheckJudgements
+                }
+                row["coverLayer"] = ["looks": looks, "judgements": judged, "restAtS": restAt.map { r1($0) } as Any? ?? NSNull(),
+                                     "coversAtEnd": plan.wholeDisplay != nil ? -1 : plan.items.count,
+                                     "realS": r1(Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e9)]
+            }
+            print("capped \(page.name): \(calls) calls, \(judgements) judgements, \(left) left, dearest not reached \(dearest)\(row["coverLayer"].map { "; cover layer \($0)" } ?? "")")
+            rows.append(row)
+        }
+        return ["pages": rows]
+    }
+
     // MARK: Run
 
     func run() {
@@ -720,6 +764,7 @@ final class Bench {
         }
         if o.cases.contains("reappear") { doc["reappear"] = reappear() }
         if o.cases.contains("reuse") { doc["reuse"] = reuse() }
+        if o.cases.contains("capped") { doc["capped"] = capped() }
         if let j = o.json {
             let data = try! JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys])
             try! data.write(to: URL(fileURLWithPath: j))

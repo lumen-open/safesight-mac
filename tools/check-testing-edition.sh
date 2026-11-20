@@ -149,7 +149,7 @@ methods="$methods"'|writeToFile|writeToURL|enableRelaunchOnLogin|addGlobalMonito
 methods="$methods"'|openApplicationAtURL|withApplicationAtURL|recycleURLs|duplicateURLs|setDefaultApplicationAtURL'
 methods="$methods"'|classNamed:|loadAndReturnError:|principalClass'
 if grep -nE "$methods" "$tmp/strings.txt"; then bad "it names a method that changes things outside the app or saves files"; fi
-if grep -ciE 'standin|labforced|checkerstandin|labtilescores|LabTile' "$tmp/strings.txt" >/dev/null; then bad "it holds the lab stand-in"; fi
+if grep -ciE 'standin|labforced|checkerstandin|labtilescores|LabTile|LabEventLog|lab-events' "$tmp/strings.txt" >/dev/null; then bad "it holds the lab stand-in or the lab event log"; fi
 paths='(^|[^~A-Za-z0-9_])/(Library|System|usr|bin|sbin|etc|private|var|opt|Applications)/'
 if grep -nE "$paths" "$tmp/strings.txt"; then bad "it names a system path (it may write only inside its own sandbox container)"; fi
 grep -q 'Testing edition: no lock. Quit any time with' "$tmp/strings.txt" || bad "the Testing line is missing: is this the Testing build?"

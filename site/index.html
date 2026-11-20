@@ -804,7 +804,7 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
         </div>
       </li>
     </ol>
-    <p class="sec-foot"><strong>Going all in?</strong> We’re working on a Hardcore lock, where even wiping your Mac won’t get you out early. The only way around it is Apple’s own proof-of-purchase check, which takes weeks. Its first trial worked: a Mac locked its own recovery with no outside server, and leaving at the end of the wait still worked with that server deleted.</p>
+    <p class="sec-foot"><strong>Going all in?</strong> We’re working on a Hardcore lock, where even wiping your Mac won’t get you out early. The only way around it is Apple’s own proof-of-purchase check, which takes weeks. It comes after the first release. Its first trial worked: a Mac locked its own recovery with no outside server, and leaving at the end of the wait still worked with that server deleted.</p>
     <p class="sec-foot">The lock is being built now. <a href="#status">See where things stand</a>.</p>
   </div>
 </section>
@@ -1046,10 +1046,10 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
       <ul class="status" role="list">
         <li><span class="st st-done" aria-hidden="true"></span><span><strong>The screen cover is built.</strong><span class="st-text">So far it has only run in the lab.</span></span></li>
         <li><span class="st st-now" aria-hidden="true"></span><span><strong>The lock is being built now.</strong><span class="st-text">The wait you choose, Stay, and the optional friend who can shorten it.</span></span></li>
-        <li><span class="st st-now" aria-hidden="true"></span><span><strong>The Hardcore lock is in trials.</strong><span class="st-text">Its first trial, on a virtual Mac, worked. Real Macs are next.</span></span></li>
+        <li><span class="st st-now" aria-hidden="true"></span><span><strong>The Hardcore lock is in trials.</strong><span class="st-text">Its first trial, on a virtual Mac, worked. It comes after the first release.</span></span></li>
         <li><span class="st st-later" aria-hidden="true"></span><span><strong>A download comes later.</strong><span class="st-text">Follow on GitHub to hear when it’s ready.</span></span></li>
       </ul>
-      <p class="st-next">Site blocking, protected streaming and downloaded files come next. <a href="#building">See everything we’re building</a>.</p>
+      <p class="st-next">The first full release adds site blocking, switches for sending files and safe admin tasks. Cinema mode and checking downloaded files come after it. <a href="#building">See everything we’re building</a>.</p>
       <a class="more" href="https://github.com/lumen-open/safesight-mac/blob/main/docs/STEP-1-STATUS.md">Read the details<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
     </div>
   </div>
@@ -1091,7 +1091,7 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
       <li class="bpart">
         <h3>The lock</h3>
         <p class="chip chip-now"><span class="st st-now" aria-hidden="true"></span><span class="sr-only">Status: </span>In progress</p>
-        <p>Your wait, <strong>Stay</strong> and the optional friend. Its core is built and passes its checks on GitHub’s build machines, but hasn’t run on a Mac yet.</p>
+        <p>Your wait, <strong>Stay</strong> and the optional friend. Make your wait longer and a friend’s shortcut waits again too. Its core is built and passes its checks on GitHub’s build machines, but hasn’t run on a Mac yet.</p>
       </li>
       <li class="bpart">
         <h3>The keyholder page</h3>
@@ -1105,23 +1105,38 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
       </li>
       <li class="bpart">
         <h3>The Hardcore lock</h3>
-        <p class="chip chip-now"><span class="st st-now" aria-hidden="true"></span><span class="sr-only">Status: </span>In trials</p>
+        <p class="chip"><span class="st st-later" aria-hidden="true"></span><span class="sr-only">Status: </span>After the first release</p>
         <p>The plan: even wiping your Mac won’t get you out early. Its first trial, on a virtual Mac, worked. Real Macs are next.</p>
       </li>
       <li class="bpart">
         <h3>Site blocking</h3>
         <p class="chip"><span class="st st-later" aria-hidden="true"></span><span class="sr-only">Status: </span>Planned</p>
-        <p>The plan: block sites made for sexual content across your Mac, while YouTube, Reddit and Google stay open. Stricter settings stay your choice.</p>
+        <p>Sites made for sexual content are blocked through our browser extension and your Mac’s hosts file, while YouTube, Reddit and Google stay open. Stricter settings stay your choice.</p>
       </li>
       <li class="bpart">
-        <h3>Protected streaming</h3>
+        <h3>Sending files</h3>
         <p class="chip"><span class="st st-later" aria-hidden="true"></span><span class="sr-only">Status: </span>Planned</p>
-        <p>Films on Netflix and the like can’t be checked on screen. In browsers, the plan is to hold a film until its title’s own advisory clears it. For now, apps like Apple TV show them dark.</p>
+        <p>Optional switches that turn off ways of sending files, like AirDrop.</p>
+      </li>
+      <li class="bpart">
+        <h3>Admin tasks</h3>
+        <p class="chip"><span class="st st-later" aria-hidden="true"></span><span class="sr-only">Status: </span>Planned</p>
+        <p>The safe ones, like installing and updating apps from known developers, done through Apple’s own routes, quickly. Anything that could undo the lock takes your full wait.</p>
+      </li>
+      <li class="bpart">
+        <h3>Cinema mode</h3>
+        <p class="chip"><span class="st st-later" aria-hidden="true"></span><span class="sr-only">Status: </span>After the first release</p>
+        <p>Films on Netflix and the like can’t be checked on screen. Cinema mode will play a film in your browser once its title’s own advisory clears it. Until then, protected films in browsers stay held or black, and apps like Apple TV show them dark.</p>
       </li>
       <li class="bpart">
         <h3>Downloaded files</h3>
-        <p class="chip"><span class="st st-later" aria-hidden="true"></span><span class="sr-only">Status: </span>Planned</p>
-        <p>Explicit downloads are covered once they show on screen. We’re working out how to check them as they arrive, quickly and without getting in your way.</p>
+        <p class="chip"><span class="st st-later" aria-hidden="true"></span><span class="sr-only">Status: </span>After the first release</p>
+        <p>Checking new files as they arrive, and locking explicit ones where they are. Until then, an explicit download is covered on screen, but could still be sent to a phone, so protect your phone too.</p>
+      </li>
+      <li class="bpart">
+        <h3>Network filter and quick installs</h3>
+        <p class="chip"><span class="st st-later" aria-hidden="true"></span><span class="sr-only">Status: </span>After the first release</p>
+        <p>A filter for your whole Mac’s network, on top of site blocking, and instant installs of parts from known vendors.</p>
       </li>
       <li class="bpart bpart-free">
         <h3>Free and open source</h3>
@@ -1146,23 +1161,23 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
           <summary>But what about streaming, like Netflix?<svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></summary>
           <div class="qa-a">
             <p>This is the hard one, so here’s the straight answer. Films on Netflix, Disney+, Max, Prime Video and the Apple TV app are protected video: macOS hides them from every screen check, SafeSight Mac’s included, so it can’t tell what’s playing.</p>
-            <p>For now, protected films in apps like Apple TV go dark while SafeSight Mac checks the screen. In browsers, the plan is to decide by title: our browser extension holds a protected film until the title’s own content advisory clears it. A drama rated for violence or language plays; a title whose advisory mentions nudity or sex waits, and so does anything we can’t check. If you’d rather, you’ll be able to hold every protected film.</p>
-            <p>Ordinary video, like most of YouTube, isn’t protected, so it’s covered like anything else, and sites made for sexual content will be blocked outright. A browser you download yourself won’t carry our extension, so it gets the strictest cover: nothing in it shows until it’s been checked, and protected films in it stay black. The honest gap: an advisory can leave a scene out.</p>
+            <p>For now, protected films in apps like Apple TV go dark while SafeSight Mac checks the screen, and in browsers they stay held or black. After the first release, cinema mode will decide by title: our browser extension holds a protected film until the title’s own content advisory clears it. A drama rated for violence or language plays; a title whose advisory mentions nudity or sex waits, and so does anything we can’t check. If you’d rather, you’ll be able to hold every protected film.</p>
+            <p>Ordinary video, like most of YouTube, isn’t protected, so it’s covered like anything else, and sites made for sexual content will be blocked outright. A browser you download yourself won’t carry our extension, so it gets the strictest cover: nothing in it shows until it’s been checked, and protected films in it stay black. The honest gap, once cinema mode arrives: an advisory can leave a scene out.</p>
           </div>
         </details>
         <details class="qa" id="q-downloads">
           <summary>What about things I download, or send to my phone?<svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></summary>
           <div class="qa-a">
             <p>If you open an explicit picture or video on this Mac, it’s covered on screen wherever it came from: a download, an attachment, a USB stick. What the cover can’t do is stop a file being saved, or passed to your phone or another computer, where this Mac’s screen never shows it.</p>
-            <p>Here’s the fix we’re building. New pictures and videos are checked as they arrive, on your Mac, designed to take a fraction of a second for a photo and a few seconds for a film. A file that’s clearly explicit stays where it is but gets locked, so nothing can open, copy, sync, upload or AirDrop it until your wait is over. You can still delete it, and if a second check clears it, it’s released straight away. The honest gap: a file that’s encrypted, split up or kept inside a virtual machine can’t be checked until it’s opened here.</p>
-            <p>In the meantime, and for whatever the phone downloads itself, protect the phone too: we recommend <a href="https://shiftyourphone.com/content-filter/">SHIFT’s free Content Filter</a>, which is set up from your computer so it can’t simply be deleted from the phone.</p>
+            <p>The first full release lets you turn off ways of sending files, like AirDrop, if you choose. Checking files themselves comes after it, and here’s how it’s designed. New pictures and videos are checked as they arrive, on your Mac, in a fraction of a second for a photo and a few seconds for a film. A file that’s clearly explicit stays where it is but gets locked, so nothing can open, copy, sync, upload or AirDrop it until your wait is over. You can still delete it, and if a second check clears it, it’s released straight away. The honest gap: a file that’s encrypted, split up or kept inside a virtual machine can’t be checked until it’s opened here.</p>
+            <p>Until then, an explicit download is covered on this Mac’s screen but could still reach your phone. So, and for whatever the phone downloads itself, protect the phone too: we recommend <a href="https://shiftyourphone.com/content-filter/">SHIFT’s free Content Filter</a>, which is set up from your computer so it can’t simply be deleted from the phone.</p>
           </div>
         </details>
         <details class="qa" id="q-browsers">
           <summary>What about private windows, other browsers, Tor or a VPN?<svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></summary>
           <div class="qa-a">
             <p>None of them change what reaches your screen, and the screen is where SafeSight Mac works. An explicit picture is covered the same way in a private window, in a browser you just downloaded, in Tor Browser or behind a VPN.</p>
-            <p>Here’s what’s coming on top of that. Site blocking will work across your whole Mac, downloaded browsers included, and our optional browser settings will turn private windows off. A browser you download yourself, Tor Browser included, won’t carry our extension, so it automatically gets the strictest cover: nothing in it shows until it’s been checked, and protected films in it stay black. A browser inside a virtual machine or on a remote desktop gets the same strict cover. In the Hardcore lock, browsers that can’t carry our extension won’t open at all.</p>
+            <p>Here’s what the first full release adds on top of that. Site blocking works through our browser extension and your Mac’s hosts file, so downloaded browsers are included, and our optional browser settings turn private windows off. A browser you download yourself, Tor Browser included, won’t carry our extension, so it automatically gets the strictest cover: nothing in it shows until it’s been checked, and protected films in it stay black. A browser inside a virtual machine or on a remote desktop gets the same strict cover. After the first release, a filter for your whole Mac’s network adds another layer, and in the Hardcore lock, browsers that can’t carry our extension won’t open at all.</p>
           </div>
         </details>
         <details class="qa" id="q-delete">
@@ -1243,7 +1258,7 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
         <details class="qa" id="q-privacy">
           <summary>Does it record my screen, or send anything anywhere?<svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></summary>
           <div class="qa-a">
-            <p>It checks your screen in your Mac’s memory and keeps nothing: no recordings, no screenshots and no list of what was covered. Nothing you see ever leaves your Mac, and new downloads will be checked the same way, on your Mac. The part that checks your screen is designed to have no way onto the internet, and today’s preview has no networking code at all.</p>
+            <p>It checks your screen in your Mac’s memory and keeps nothing: no recordings, no screenshots and no list of what was covered. Nothing you see ever leaves your Mac, and when checks of new downloads arrive after the first release, they’ll work the same way, on your Mac. The part that checks your screen is designed to have no way onto the internet, and today’s preview has no networking code at all.</p>
             <p>When the lock ships, the only things designed to go online are a check of the public time signal, for your wait, and a check for updates. Neither says who you are or what’s on your screen. There’s no account, no analytics and nothing to sell.</p>
           </div>
         </details>
@@ -1257,7 +1272,7 @@ h3 { margin: 0; font-size: 1.25rem; line-height: 1.3; letter-spacing: -.006em; f
           <summary>What does the purple screen-recording icon mean?<svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></summary>
           <div class="qa-a">
             <p>SafeSight Mac checks your screen continuously, so macOS shows its screen-recording icon in the menu bar while you’re using your Mac. Apple shows it for every app that reads the screen and gives no way to hide it, and it carries SafeSight Mac’s name, so you can always see what it is.</p>
-            <p>Nothing is saved or sent: pictures are checked in memory, on your Mac, and then forgotten. We’re also building ways for the icon to go away when there’s nothing to check: while your Mac is locked or asleep, and, with cinema mode, while a cleared film plays in your browser.</p>
+            <p>Nothing is saved or sent: pictures are checked in memory, on your Mac, and then forgotten. We’re also building ways for the icon to go away when there’s nothing to check, such as while your Mac is locked or asleep. Cinema mode, which comes after the first release, will also let it go while a cleared film plays in your browser.</p>
           </div>
         </details>
         <details class="qa" id="q-free">

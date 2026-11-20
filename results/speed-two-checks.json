@@ -1,7 +1,7 @@
 {
  "bench": "safesightmac-bench/1",
- "label": "two clean checks before a clean verdict is reused: main, check on reuse only, and background checks",
- "note": "Real models checked against the sealed hash list, sealed cut-off table, the six busy pages of harmless photos. 'main' is main at 73b6568 (one clean judgement cached). 'on-reuse' is this build with --no-background-checks: a picture seen clean once is judged again only when it comes back. 'background' is this build as shipped: also judged again while the display is still. The reuse case judges each page or view in full at the detector in one uncapped call, so its judgement counts are exact; background judgements are counted apart. The reappear case runs the cover layer with its per-call cap and per-frame time limit, so its per-step counts are capped and not exact. The 'on-reuse-reappear' run was made before the background checks existed (same rule otherwise). Runs on one M1 Max shared with other work (load average about 9), partly on battery: times vary between runs, counts do not.",
+ "label": "two clean checks before a clean verdict is reused: main, check on reuse only, and background checks; before and after merging main at 74c0462",
+ "note": "Real models checked against the sealed hash list, sealed cut-off table, the six busy pages of harmless photos. 'main' is main at 73b6568 (one clean judgement cached). 'on-reuse' is this build with --no-background-checks: a picture seen clean once is judged again only when it comes back. 'background' is this build as shipped: also judged again while the display is still. The reuse case judges each page or view in full at the detector in one uncapped call, so its judgement counts are exact; background judgements are counted apart. The reappear case runs the cover layer with its per-call cap and per-frame time limit, so its per-step counts are capped and not exact. The 'on-reuse-reappear' run was made before the background checks existed (same rule otherwise). Runs on one M1 Max shared with other work (load average about 9), partly on battery: times vary between runs, counts do not. Runs named '*74c0462*' and 'merged-*' are main at 74c0462 (#25) and this branch merged with it; the 'capped' case judges each page in calls of DETECTOR_CALL_CAP.",
  "runs": {
   "background-reappear": {
    "backgroundSecondChecks": true,
@@ -2750,6 +2750,437 @@
     }
    }
   },
+  "main74c0462-reuse-capped": {
+   "bench": "safesightmac-bench/1",
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1168,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1162,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1130,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 3.7,
+     "n": 10,
+     "worst": 5.3
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "main74c0462-reuse-capped",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 0,
+     "n": 6,
+     "total": 0,
+     "worst": 0
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 6961.6,
+     "n": 6,
+     "total": 40463.9,
+     "worst": 7759.3
+    },
+    "moveBackgroundJudgements": {
+     "median": 0,
+     "n": 6,
+     "total": 0,
+     "worst": 0
+    },
+    "moveJudgements": {
+     "median": 162,
+     "n": 6,
+     "total": 1188,
+     "worst": 392
+    },
+    "moveMs": {
+     "median": 1085.9,
+     "n": 6,
+     "total": 7759.5,
+     "worst": 2306.9
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 214,
+     "n": 6,
+     "total": 1608,
+     "worst": 540
+    },
+    "reloadMs": {
+     "median": 1367,
+     "n": 6,
+     "total": 9756.7,
+     "worst": 3006.6
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 234,
+     "backMsTotal": 3779,
+     "backgroundJudgementsTotal": 0
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 4,
+     "backMsTotal": 291.9,
+     "backgroundJudgementsTotal": 0
+    },
+    "thirdShowJudgements": {
+     "median": 208,
+     "n": 6,
+     "total": 1548,
+     "worst": 534
+    },
+    "thirdShowMs": {
+     "median": 1274.1,
+     "n": 6,
+     "total": 9242,
+     "worst": 2954.5
+    }
+   },
+   "rule": "balanced"
+  },
+  "merged-background-reuse-capped": {
+   "backgroundSecondChecks": true,
+   "bench": "safesightmac-bench/1",
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 3.7,
+     "n": 10,
+     "worst": 4.9
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "merged-background-reuse-capped",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 776,
+     "n": 6,
+     "total": 4666,
+     "worst": 912
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 6998.1,
+     "n": 6,
+     "total": 40478,
+     "worst": 7742.7
+    },
+    "moveBackgroundJudgements": {
+     "median": 560,
+     "n": 6,
+     "total": 3404,
+     "worst": 680
+    },
+    "moveJudgements": {
+     "median": 166,
+     "n": 6,
+     "total": 1244,
+     "worst": 406
+    },
+    "moveMs": {
+     "median": 1109.3,
+     "n": 6,
+     "total": 8091.8,
+     "worst": 2383.7
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 234,
+     "n": 6,
+     "total": 1682,
+     "worst": 546
+    },
+    "reloadMs": {
+     "median": 1446.3,
+     "n": 6,
+     "total": 10108.3,
+     "worst": 3054.9
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 232,
+     "backMsTotal": 3807.2,
+     "backgroundJudgementsTotal": 550
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 12,
+     "backMsTotal": 378.3,
+     "backgroundJudgementsTotal": 368
+    },
+    "thirdShowJudgements": {
+     "median": 234,
+     "n": 6,
+     "total": 1682,
+     "worst": 546
+    },
+    "thirdShowMs": {
+     "median": 1475.9,
+     "n": 6,
+     "total": 10117.8,
+     "worst": 3027.4
+    }
+   },
+   "rule": "balanced"
+  },
+  "merged-on-reuse-reuse-capped": {
+   "backgroundSecondChecks": false,
+   "bench": "safesightmac-bench/1",
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "chip": "Apple M1 Max",
+   "display": "1440 x 900 points at 2x (2880 x 1800 pixels), one window filling it",
+   "frameCopy": {
+    "frame": "2880x1800",
+    "ms": {
+     "median": 3.9,
+     "n": 10,
+     "worst": 5.3
+    },
+    "note": "RGBAImage.fromBGRA in the capture callback, on a synthetic buffer; runs on the capture queue before the frame reaches the judging queue"
+   },
+   "label": "merged-on-reuse-reuse-capped",
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "notIncluded": "ScreenCaptureKit capture latency and real display time are not included: they need ST-031 on a test Mac. Times run from the frame handed to the cover layer to the cover layer's layers built on a detached layer (no window).",
+   "os": "Version 26.3 (Build 25D125)",
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 0,
+     "n": 6,
+     "total": 0,
+     "worst": 0
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 6956.4,
+     "n": 6,
+     "total": 40212.4,
+     "worst": 7713
+    },
+    "moveBackgroundJudgements": {
+     "median": 0,
+     "n": 6,
+     "total": 0,
+     "worst": 0
+    },
+    "moveJudgements": {
+     "median": 818,
+     "n": 6,
+     "total": 4584,
+     "worst": 902
+    },
+    "moveMs": {
+     "median": 5053.7,
+     "n": 6,
+     "total": 28744,
+     "worst": 5680
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "reloadMs": {
+     "median": 6692.8,
+     "n": 6,
+     "total": 39266.6,
+     "worst": 7492.9
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 326,
+     "backMsTotal": 4968.3,
+     "backgroundJudgementsTotal": 0
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 224,
+     "backMsTotal": 2881.5,
+     "backgroundJudgementsTotal": 0
+    },
+    "thirdShowJudgements": {
+     "median": 236,
+     "n": 6,
+     "total": 1692,
+     "worst": 554
+    },
+    "thirdShowMs": {
+     "median": 1424.4,
+     "n": 6,
+     "total": 10116.3,
+     "worst": 3114.9
+    }
+   },
+   "rule": "balanced"
+  },
   "on-reuse-reappear": {
    "bench": "safesightmac-bench/1",
    "chip": "Apple M1 Max",
@@ -3032,5 +3463,36 @@
    },
    "rule": "balanced"
   }
+ },
+ "staticScreen": {
+  "command": "safesightmac-harness static <the virtual Mac's harmless desktop screenshot> --models <converted> --slow-ms 10 --seconds 360 --windows <its window list without the indicator>",
+  "runs": [
+   {
+    "build": "main 74c0462",
+    "coversAtEnd": 8,
+    "note": "8 covers from t=140 s to the end (3 plain, 3 blur, 2 whole-window)",
+    "settled": false
+   },
+   {
+    "build": "main 74c0462",
+    "coversAtEnd": 8,
+    "note": "8 covers from t=140 s to the end",
+    "settled": false
+   },
+   {
+    "build": "merged",
+    "lastLookWantedAtS": 273.3,
+    "note": "no cover from 271.1 s; the looks stopped at 273.3 s and nothing was judged after; second checks could run only from about 240 s, when the bucket first had a spare half (their exact count in this run was not recorded correctly by the harness, fixed since)",
+    "settled": true,
+    "settledAtS": 271.1
+   },
+   {
+    "build": "merged",
+    "coversAtEnd": 8,
+    "note": "the same 8 covers as main from t=220 s; the looks never stopped because covers were held; no second check ran (no spare half of the bucket)",
+    "secondCheckJudgements": 0,
+    "settled": false
+   }
+  ]
  }
 }

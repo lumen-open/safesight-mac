@@ -81,6 +81,8 @@ public struct PipelineTimings: Sendable, Equatable {
     public var overloaded = 0
     /// Judgements spent on second clean checks in the background (`DisplayPipeline`, step 3c); not in `judgements`.
     public var secondCheckJudgements = 0
+    /// Whether this call stopped waiting for second clean checks because their bound passed (0 or 1).
+    public var secondChecksGivenUp = 0
     /// Model failures reported by the judge calls (counts only; their entries are covered or blurred).
     public var modelFaults = 0
     /// Plans handed out before the final one (moved covers, cover-first blurs, fast-model blurs), with the
@@ -92,6 +94,8 @@ public struct PipelineTimings: Sendable, Equatable {
     public var fastFlags = 0
     /// Changed parts blurred at once, before judging, because recent frames took longer than `COVER_GOAL` to judge.
     public var blurredAtOnce = 0
+    /// Whether this call blurred large changed parts at once (0 or 1; for counting frames).
+    public var blurAtOnceFirings = 0
     /// Parts of the frame left for the next call because this one reached `JUDGE_CALL_WALL` (blurred meanwhile).
     public var leftForLater = 0
     /// Covers judged on their own, over their whole rectangle (not all on show as their window's).

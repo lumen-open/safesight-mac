@@ -12,27 +12,89 @@ import SafeSightMacCore
 /// Counts and timings, gathered on the main thread as plans arrive. Bounded: the last `keep` timings.
 public struct TestingStats: Sendable {
     public static let keep = 5000
+    /// Frames judged: with new pixels, and "nothing changed" frames on which covers waiting to lift were judged again.
     public private(set) var judged = 0
-    /// Judged frames whose plan covered or blurred at least one picture.
+    public private(set) var judgedNew = 0
+    public private(set) var judgedIdle = 0
+    /// Frames captured, by the status the capture gave them (complete, idle, started, blank, suspended, stopped).
+    public private(set) var captured: [String: Int] = [:]
+    /// Updates actually drawn on screen (every plan, early or final, after the display rule), and how many of them had a
+    /// cover or a blur on some display. These count what was on screen, not only the final plan of each frame.
+    public private(set) var drawn = 0
     public private(set) var framesWithCovers = 0
-    /// Whole-display covers, by why, counted each time a display becomes covered whole.
+    /// Picture covers and blurs drawn, summed over the updates drawn.
+    public private(set) var coversDrawn = 0
+    public private(set) var blursDrawn = 0
+    /// Whole-display covers drawn, by why, counted each time a display becomes covered whole on screen.
     public private(set) var wholeDisplay: [String: Int] = [:]
+    /// What is on screen now: per display, covered whole (why), or how many covers and blurs.
+    public private(set) var now: [UInt32: String] = [:]
+    /// How often the slow paths fired: frames whose large changed parts were blurred at once, pictures blurred first
+    /// because judging them would take too long, parts left for the next frame, entries left unjudged, covers judged on
+    /// their own, and changes covered because they waited too long to be judged (on how many timer ticks).
+    public private(set) var blurAtOnce = 0
+    public private(set) var coveredFirst = 0
+    public private(set) var leftForLater = 0
+    public private(set) var unjudgedEntries = 0
+    public private(set) var rechecks = 0
+    public private(set) var waitingCovers = 0
     private(set) var judgeMs: [Double] = []
     private(set) var latencyMs: [Double] = []
     private var wholeNow: [UInt32: String] = [:]
 
     public init() {}
 
-    /// One judged frame: how long judging took, how long from capture to the plan, and what the plan showed.
-    public mutating func record(display: UInt32, judgeMs j: Double, latencyMs l: Double, covers: Int, whole: String?) {
+    /// What one judged frame cost and what the slow paths did (counts only).
+    public struct Pass: Sendable {
+        public var idle = false, blurAtOnce = false
+        public var coveredFirst = 0, leftForLater = 0, unjudged = 0, rechecks = 0
+        public init(idle: Bool = false, blurAtOnce: Bool = false, coveredFirst: Int = 0, leftForLater: Int = 0, unjudged: Int = 0, rechecks: Int = 0) {
+            self.idle = idle; self.blurAtOnce = blurAtOnce; self.coveredFirst = coveredFirst; self.leftForLater = leftForLater
+            self.unjudged = unjudged; self.rechecks = rechecks
+        }
+    }
+
+    /// One judged frame: how long judging took, how long from capture to the plan, and what its slow paths did.
+    public mutating func record(display: UInt32, judgeMs j: Double, latencyMs l: Double, pass: Pass = Pass()) {
         judged += 1
-        if covers > 0 { framesWithCovers += 1 }
-        if let w = whole, wholeNow[display] != w { wholeDisplay[w, default: 0] += 1 }
-        wholeNow[display] = whole
+        if pass.idle { judgedIdle += 1 } else { judgedNew += 1 }
+        if pass.blurAtOnce { blurAtOnce += 1 }
+        coveredFirst += pass.coveredFirst; leftForLater += pass.leftForLater; unjudgedEntries += pass.unjudged; rechecks += pass.rechecks
         judgeMs.append(j); latencyMs.append(l)
         if judgeMs.count > Self.keep { judgeMs.removeFirst(judgeMs.count - Self.keep) }
         if latencyMs.count > Self.keep { latencyMs.removeFirst(latencyMs.count - Self.keep) }
     }
+
+    /// One frame captured, with the status the capture gave it.
+    public mutating func recordCaptured(_ status: String) { captured[status, default: 0] += 1 }
+    /// Frames captured so far, by status, as the watcher counted them.
+    public mutating func setCaptured(_ counts: [String: Int]) { captured = counts }
+
+    /// One display as drawn: covered whole (why), or how many covers and blurs.
+    public struct Shown: Sendable {
+        public var display: UInt32, whole: String?, covers: Int, blurs: Int
+        public init(display: UInt32, whole: String?, covers: Int, blurs: Int) {
+            self.display = display; self.whole = whole; self.covers = covers; self.blurs = blurs
+        }
+    }
+
+    /// One update drawn on screen, every display in it.
+    public mutating func recordDrawn(_ shown: [Shown]) {
+        drawn += 1
+        if shown.contains(where: { $0.whole != nil || $0.covers + $0.blurs > 0 }) { framesWithCovers += 1 }
+        var seen: Set<UInt32> = []
+        for d in shown {
+            seen.insert(d.display)
+            coversDrawn += d.covers; blursDrawn += d.blurs
+            if let w = d.whole, wholeNow[d.display] != w { wholeDisplay[w, default: 0] += 1 }
+            wholeNow[d.display] = d.whole
+            now[d.display] = d.whole.map { "covered whole (\($0))" } ?? (d.covers + d.blurs == 0 ? "nothing covered" : "\(d.covers) covers, \(d.blurs) blurs")
+        }
+        for id in wholeNow.keys where !seen.contains(id) { wholeNow[id] = nil; now[id] = nil }
+    }
+
+    /// A timer tick on which changes that waited too long to be judged were covered (or a display covered whole for it).
+    public mutating func recordWaitingCover() { waitingCovers += 1 }
 
     /// The value below which `p` (0 to 1) of the values fall, or nil with no values.
     public static func percentile(_ values: [Double], _ p: Double) -> Double? {
@@ -120,9 +182,18 @@ public enum TestingReport {
         if let power { lines.append("Power: " + power) }
         lines.append("Capture to cover plan: " + s.summary(s.latencyMs))
         lines.append("Judging a frame: " + s.summary(s.judgeMs))
+        let order = ["complete", "idle", "started", "blank", "suspended", "stopped"]
+        let caps = s.captured.sorted { (order.firstIndex(of: $0.key) ?? 9, $0.key) < (order.firstIndex(of: $1.key) ?? 9, $1.key) }.map { "\($0.key) \($0.value)" }
+        lines.append("Frames captured: " + (caps.isEmpty ? "none" : caps.joined(separator: ", ")))
+        lines.append("Frames judged: \(s.judgedNew) with new pixels, \(s.judgedIdle) judged again with nothing new")
+        lines.append("Updates drawn: \(s.drawn)")
         lines.append("Frames with a cover or blur: \(s.framesWithCovers)")
+        lines.append("Covers and blurs drawn (summed over updates): \(s.coversDrawn) covers, \(s.blursDrawn) blurs")
+        let now = s.now.sorted { $0.key < $1.key }.map { $0.value }
+        lines.append("On screen now: " + (now.isEmpty ? "nothing drawn" : now.joined(separator: "; ")))
         let whole = s.wholeDisplay.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }
         lines.append("Whole-display covers: " + (whole.isEmpty ? "none" : whole.joined(separator: ", ")))
+        lines.append("Slow paths: blurred at once \(s.blurAtOnce) frames, blurred first \(s.coveredFirst) pictures, left for later \(s.leftForLater) parts, unjudged \(s.unjudgedEntries) entries, covers judged on their own \(s.rechecks), waiting covers \(s.waitingCovers) ticks")
         return lines.joined(separator: "\n")
     }
 }
