@@ -125,6 +125,7 @@ enum JitterSpread {
 
         // Pass 2: the sample, `draws` judgements each, fresh jitter every time.
         var spreads: [Spread] = []
+        var gridEntries: [CleanGrid.Entry] = []
         let byScreen = Dictionary(grouping: chosen.sorted(), by: { seen[$0].screen })
         var done = 0
         for (n, (screen, idx)) in byScreen.sorted(by: { $0.key < $1.key }).enumerated() {
@@ -132,6 +133,15 @@ enum JitterSpread {
             for (k, s) in zip(idx, d.labJitterDraws(img, rects: idx.map { seen[$0].entry.rect }, draws: o.draws)) {
                 let e = seen[k].entry
                 if s.count < ids.count { failed += 1; continue }
+                var ge = CleanGrid.Entry(band: Band(shortSide: e.rect.shortSide).rawValue, pass: e.pass.rawValue, containable: e.containable,
+                                         selected: selected.contains(k), background: background.contains(k), action: [:], cover: [:])
+                for m in ids {
+                    let c0 = d.labCutoffs(model: m, shortSide: e.rect.shortSide)
+                    let act0 = e.containable ? min(c0.cover, c0.clean) : c0.cover
+                    ge.action[m] = s[m]!.map { $0 / act0 }
+                    ge.cover[m] = s[m]!.map { $0 / c0.cover }
+                }
+                gridEntries.append(ge)
                 for m in ids {
                     let inOrder = s[m]!
                     let v = inOrder.sorted()
@@ -229,6 +239,14 @@ enum JitterSpread {
         out["batchParity"] = ["entries": parityEntries, "draws": 8, "largestDifference": parity.mapValues { r4($0) }] as [String: Any]
         out["method"] = "Harmless held-out screens only. Every entry of the detector's first call over each screen (finder regions, the whole pass, the slices; no anchor) judged once per scoring model with fresh jitter. Sampled: per model and band, up to perBand entries whose first score reached \(SELECT) of the entry's lowest action cut-off (containment for picture regions under 128 detail pixels, else cover), plus backgroundPerBand at random; each judged `draws` more times with fresh jitter on every piece (spec section 5), top score over the pieces per draw, as topScore. Range: highest minus lowest draw of an entry. deviationFromMedian: the largest distance of a draw from the entry's median. Borderline: entries whose highest draw reached half the entry's lowest action cut-off; the gap is twice the 99.9th percentile of their range (the largest range on fewer than 1,000 entries). Crossings: borderline entries with one draw below the level and another at or above the action cut-off."
         out["byModel"] = table
+        // The clean-cache rule against these draws, for a grid of settings (CleanGrid.swift).
+        let firstShares = seen.map { sn -> (band: String, containable: Bool, cover: [Float], action: [Float]) in
+            let cs = ids.map { d.labCutoffs(model: $0, shortSide: sn.entry.rect.shortSide) }
+            return (Band(shortSide: sn.entry.rect.shortSide).rawValue, sn.entry.containable,
+                    zip(ids, cs).map { sn.first[$0.0]! / $0.1.cover },
+                    zip(ids, cs).map { sn.first[$0.0]! / (sn.entry.containable ? min($0.1.cover, $0.1.clean) : $0.1.cover) })
+        }
+        out["cleanGrid"] = CleanGrid.analyse(sampled: gridEntries, first: firstShares, ids: ids, draws: o.draws)
         if let j = json, let data = try? JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: URL(fileURLWithPath: j))
             print("wrote \(j)")

@@ -1,8 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
 # Builds release products and the normal Testing edition WITHOUT the lab flag, and fails if any stand-in code, symbol or
-# string, or the lab event log, is present in them (register SD-139, test ST-043). Only a lab build (SAFESIGHTMAC_LAB=1,
-# or `tools/make-app.sh --testing --lab`) has them.
+# string, the lab event log, or the lab switch for a stricter clean-cache rule (`labSetCleanRule`) is present in them
+# (register SD-139, test ST-043). Only a lab build (SAFESIGHTMAC_LAB=1, or `tools/make-app.sh --testing --lab`) has them.
 # Usage: tools/check-no-standin.sh                 builds the release products and the Testing app, and checks them
 #        tools/check-no-standin.sh FILE...         checks these binaries only (tools/make-app.sh checks what it built)
 #        tools/check-no-standin.sh --lab FILE      the explicit lab path, for `make-app.sh --testing --lab` only: FILE
@@ -11,7 +11,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 unset SAFESIGHTMAC_LAB KESTREL_LAB SAFESIGHTMAC_TESTING
-pattern='standin|labforced|checkerstandin|labtilescores|LabTile|LabEventLog|lab-events'
+pattern='standin|labforced|checkerstandin|labtilescores|LabTile|LabEventLog|lab-events|labSetCleanRule|labCleanRule'
 fail=0
 count() {
   [ -f "$1" ] || { echo "FAIL: no binary at $1"; exit 2; }

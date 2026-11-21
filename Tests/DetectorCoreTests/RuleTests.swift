@@ -236,7 +236,7 @@ final class RuleTests: XCTestCase {
         paint(&img, PixelRect(x: 40, y: 40, w: 96, h: 96), channel: nil, seed: 4)
         let (d, a, _) = detector()
         let first = d.judge(img, context: ctxShow)
-        _ = d.judge(img, context: ctxShow)   // the second clean check
+        for _ in 1..<VerdictCache.CLEAN_CHECKS { _ = d.judge(img, context: ctxShow) }   // the other clean checks
         let callsAfterFirst = a.calls
         let second = d.judge(img, context: ctxShow)
         XCTAssertGreaterThan(first.judgements, 0)

@@ -1,0 +1,2631 @@
+{
+ "bench": "safesightmac-clean-margin-grid/1",
+ "date": "2026-11-20",
+ "method": "safesightmac-harness bench --cases reuse,pending,capped, real models (converted, sealed hash list), the six busy pages of harmless photos (finder-bench-heldout), one run per setting, with --clean-margin/--clean-checks/--clean-sticky. Judgement counts are exact; times are noisy: another session's CPU load (load average up to 73) ran from about 05:00 to 05:58, during the margin-0.5, 0.4 and 0.3 three-check runs, whose pending case then failed to finish; it was re-run at load about 9 (pendingRerun) and finished as for the others.",
+ "settings": {
+  "m0.1-c2-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 2,
+   "design": "restart",
+   "label": "m0.1-c2-s0",
+   "margin": 0.1,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 26.8,
+      "backgroundJudgementsBefore": 64,
+      "firstCallJudgements": 6,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 392
+     },
+     {
+      "allJudgedAfterS": 28,
+      "backgroundJudgementsBefore": 98,
+      "firstCallJudgements": 6,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 360
+     },
+     {
+      "allJudgedAfterS": 27.8,
+      "backgroundJudgementsBefore": 130,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 320
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 194,
+     "n": 6,
+     "total": 1138,
+     "worst": 258
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 9230,
+     "n": 6,
+     "total": 50771.9,
+     "worst": 9868.5
+    },
+    "moveBackgroundJudgements": {
+     "median": 134,
+     "n": 6,
+     "total": 766,
+     "worst": 158
+    },
+    "moveJudgements": {
+     "median": 676,
+     "n": 6,
+     "total": 3878,
+     "worst": 778
+    },
+    "moveMs": {
+     "median": 4825.8,
+     "n": 6,
+     "total": 29234.6,
+     "worst": 6926
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 872,
+     "n": 6,
+     "total": 5214,
+     "worst": 1028
+    },
+    "reloadMs": {
+     "median": 6446.7,
+     "n": 6,
+     "total": 40212.7,
+     "worst": 8015.8
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 814,
+     "backMsTotal": 12858.7,
+     "backgroundJudgementsTotal": 50
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 564,
+     "backMsTotal": 8769.1,
+     "backgroundJudgementsTotal": 42
+    },
+    "thirdShowJudgements": {
+     "median": 872,
+     "n": 6,
+     "total": 5214,
+     "worst": 1028
+    },
+    "thirdShowMs": {
+     "median": 6472.6,
+     "n": 6,
+     "total": 38444.8,
+     "worst": 7102.3
+    }
+   }
+  },
+  "m0.1-c3-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "restart",
+   "label": "m0.1-c3-s0",
+   "margin": 0.1,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 22,
+      "backgroundJudgementsBefore": 104,
+      "firstCallJudgements": 4,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 394
+     },
+     {
+      "allJudgedAfterS": 22.3,
+      "backgroundJudgementsBefore": 144,
+      "firstCallJudgements": 12,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 248
+     },
+     {
+      "allJudgedAfterS": 27.8,
+      "backgroundJudgementsBefore": 120,
+      "firstCallJudgements": 12,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 2
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 360,
+     "n": 6,
+     "total": 2194,
+     "worst": 502
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8238.1,
+     "n": 6,
+     "total": 52779.9,
+     "worst": 14411.3
+    },
+    "moveBackgroundJudgements": {
+     "median": 270,
+     "n": 6,
+     "total": 1494,
+     "worst": 294
+    },
+    "moveJudgements": {
+     "median": 684,
+     "n": 6,
+     "total": 3900,
+     "worst": 776
+    },
+    "moveMs": {
+     "median": 4484.7,
+     "n": 6,
+     "total": 26797.8,
+     "worst": 5819
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 876,
+     "n": 6,
+     "total": 5246,
+     "worst": 1042
+    },
+    "reloadMs": {
+     "median": 6367.5,
+     "n": 6,
+     "total": 36679.7,
+     "worst": 7121.5
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 834,
+     "backMsTotal": 11391.7,
+     "backgroundJudgementsTotal": 76
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 578,
+     "backMsTotal": 7655.1,
+     "backgroundJudgementsTotal": 58
+    },
+    "thirdShowJudgements": {
+     "median": 876,
+     "n": 6,
+     "total": 5246,
+     "worst": 1042
+    },
+    "thirdShowMs": {
+     "median": 6373.2,
+     "n": 6,
+     "total": 37812.8,
+     "worst": 8164.2
+    }
+   }
+  },
+  "m0.2-c2-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 2,
+   "design": "restart",
+   "label": "m0.2-c2-s0",
+   "margin": 0.2,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 114,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 116,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 126,
+      "firstCallJudgements": 10,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 426,
+     "n": 6,
+     "total": 2688,
+     "worst": 566
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 9323,
+     "n": 6,
+     "total": 54255.8,
+     "worst": 11318.5
+    },
+    "moveBackgroundJudgements": {
+     "median": 338,
+     "n": 6,
+     "total": 1910,
+     "worst": 374
+    },
+    "moveJudgements": {
+     "median": 460,
+     "n": 6,
+     "total": 2780,
+     "worst": 640
+    },
+    "moveMs": {
+     "median": 3690.1,
+     "n": 6,
+     "total": 24200.5,
+     "worst": 6803.6
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 590,
+     "n": 6,
+     "total": 3680,
+     "worst": 818
+    },
+    "reloadMs": {
+     "median": 4659.1,
+     "n": 6,
+     "total": 28085.5,
+     "worst": 5548
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 306,
+     "backMsTotal": 6220.3,
+     "backgroundJudgementsTotal": 428
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 144,
+     "backMsTotal": 2725.6,
+     "backgroundJudgementsTotal": 302
+    },
+    "thirdShowJudgements": {
+     "median": 590,
+     "n": 6,
+     "total": 3680,
+     "worst": 818
+    },
+    "thirdShowMs": {
+     "median": 5058.7,
+     "n": 6,
+     "total": 29586.9,
+     "worst": 5533.2
+    }
+   }
+  },
+  "m0.2-c3-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "restart",
+   "label": "m0.2-c3-s0",
+   "margin": 0.2,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 108,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 98,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 104,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 864,
+     "n": 6,
+     "total": 5308,
+     "worst": 1138
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8629.8,
+     "n": 6,
+     "total": 48122,
+     "worst": 9421.6
+    },
+    "moveBackgroundJudgements": {
+     "median": 682,
+     "n": 6,
+     "total": 3770,
+     "worst": 742
+    },
+    "moveJudgements": {
+     "median": 462,
+     "n": 6,
+     "total": 2782,
+     "worst": 628
+    },
+    "moveMs": {
+     "median": 3122.7,
+     "n": 6,
+     "total": 19973.5,
+     "worst": 4693.7
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 590,
+     "n": 6,
+     "total": 3702,
+     "worst": 824
+    },
+    "reloadMs": {
+     "median": 4379.1,
+     "n": 6,
+     "total": 26578.7,
+     "worst": 5996.4
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 342,
+     "backMsTotal": 8078.5,
+     "backgroundJudgementsTotal": 810
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 158,
+     "backMsTotal": 3335.8,
+     "backgroundJudgementsTotal": 604
+    },
+    "thirdShowJudgements": {
+     "median": 590,
+     "n": 6,
+     "total": 3702,
+     "worst": 824
+    },
+    "thirdShowMs": {
+     "median": 4661.5,
+     "n": 6,
+     "total": 26473.4,
+     "worst": 5202.8
+    }
+   }
+  },
+  "m0.25-c2-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 2,
+   "design": "restart",
+   "label": "m0.25-c2-s0",
+   "margin": 0.25,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 96,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 96,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 26.8,
+      "backgroundJudgementsBefore": 192,
+      "firstCallJudgements": 14,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 6
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 496,
+     "n": 6,
+     "total": 3182,
+     "worst": 668
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 7753.1,
+     "n": 6,
+     "total": 45079.9,
+     "worst": 8672.6
+    },
+    "moveBackgroundJudgements": {
+     "median": 398,
+     "n": 6,
+     "total": 2254,
+     "worst": 448
+    },
+    "moveJudgements": {
+     "median": 376,
+     "n": 6,
+     "total": 2384,
+     "worst": 590
+    },
+    "moveMs": {
+     "median": 2412,
+     "n": 6,
+     "total": 15466.2,
+     "worst": 3617.6
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 500,
+     "n": 6,
+     "total": 3154,
+     "worst": 764
+    },
+    "reloadMs": {
+     "median": 3414.6,
+     "n": 6,
+     "total": 20989,
+     "worst": 4619.9
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 262,
+     "backMsTotal": 4642.3,
+     "backgroundJudgementsTotal": 474
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 68,
+     "backMsTotal": 1059.9,
+     "backgroundJudgementsTotal": 314
+    },
+    "thirdShowJudgements": {
+     "median": 500,
+     "n": 6,
+     "total": 3154,
+     "worst": 764
+    },
+    "thirdShowMs": {
+     "median": 3324.3,
+     "n": 6,
+     "total": 20402.2,
+     "worst": 4482.5
+    }
+   }
+  },
+  "m0.25-c2-s1": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 2,
+   "design": "sticky",
+   "label": "m0.25-c2-s1",
+   "margin": 0.25,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.5,
+      "backgroundJudgementsBefore": 102,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 116,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.3,
+      "backgroundJudgementsBefore": 122,
+      "firstCallJudgements": 6,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 518,
+     "n": 6,
+     "total": 3204,
+     "worst": 666
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8740.2,
+     "n": 6,
+     "total": 51239.6,
+     "worst": 11389.9
+    },
+    "moveBackgroundJudgements": {
+     "median": 396,
+     "n": 6,
+     "total": 2264,
+     "worst": 464
+    },
+    "moveJudgements": {
+     "median": 368,
+     "n": 6,
+     "total": 2384,
+     "worst": 596
+    },
+    "moveMs": {
+     "median": 2556.7,
+     "n": 6,
+     "total": 16785.1,
+     "worst": 3932.2
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 494,
+     "n": 6,
+     "total": 3140,
+     "worst": 766
+    },
+    "reloadMs": {
+     "median": 3310,
+     "n": 6,
+     "total": 21283.1,
+     "worst": 5006.5
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 316,
+     "backMsTotal": 5875.1,
+     "backgroundJudgementsTotal": 460
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 134,
+     "backMsTotal": 2173.8,
+     "backgroundJudgementsTotal": 292
+    },
+    "thirdShowJudgements": {
+     "median": 494,
+     "n": 6,
+     "total": 3140,
+     "worst": 766
+    },
+    "thirdShowMs": {
+     "median": 3326.1,
+     "n": 6,
+     "total": 21090,
+     "worst": 4788.3
+    }
+   }
+  },
+  "m0.25-c3-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "restart",
+   "label": "m0.25-c3-s0",
+   "margin": 0.25,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 128,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 25.8,
+      "backgroundJudgementsBefore": 188,
+      "firstCallJudgements": 20,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 72
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 108,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 1024,
+     "n": 6,
+     "total": 6330,
+     "worst": 1308
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8281.4,
+     "n": 6,
+     "total": 47564.7,
+     "worst": 9639.6
+    },
+    "moveBackgroundJudgements": {
+     "median": 788,
+     "n": 6,
+     "total": 4478,
+     "worst": 916
+    },
+    "moveJudgements": {
+     "median": 374,
+     "n": 6,
+     "total": 2410,
+     "worst": 600
+    },
+    "moveMs": {
+     "median": 2454.6,
+     "n": 6,
+     "total": 16835.8,
+     "worst": 4263.1
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 500,
+     "n": 6,
+     "total": 3184,
+     "worst": 772
+    },
+    "reloadMs": {
+     "median": 3538,
+     "n": 6,
+     "total": 21728.8,
+     "worst": 4748.3
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 276,
+     "backMsTotal": 6787.6,
+     "backgroundJudgementsTotal": 966
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 78,
+     "backMsTotal": 1193.4,
+     "backgroundJudgementsTotal": 626
+    },
+    "thirdShowJudgements": {
+     "median": 500,
+     "n": 6,
+     "total": 3184,
+     "worst": 772
+    },
+    "thirdShowMs": {
+     "median": 3764.6,
+     "n": 6,
+     "total": 22491.8,
+     "worst": 5206.1
+    }
+   }
+  },
+  "m0.25-c3-s1": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "sticky",
+   "label": "m0.25-c3-s1",
+   "margin": 0.25,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 98,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.8,
+      "backgroundJudgementsBefore": 102,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 39.3,
+      "backgroundJudgementsBefore": 296,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 286
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 1006,
+     "n": 6,
+     "total": 6304,
+     "worst": 1306
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 7893.9,
+     "n": 6,
+     "total": 45408.2,
+     "worst": 8431.8
+    },
+    "moveBackgroundJudgements": {
+     "median": 778,
+     "n": 6,
+     "total": 4494,
+     "worst": 906
+    },
+    "moveJudgements": {
+     "median": 372,
+     "n": 6,
+     "total": 2398,
+     "worst": 596
+    },
+    "moveMs": {
+     "median": 2408.2,
+     "n": 6,
+     "total": 16139,
+     "worst": 3650
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 500,
+     "n": 6,
+     "total": 3192,
+     "worst": 772
+    },
+    "reloadMs": {
+     "median": 3289.1,
+     "n": 6,
+     "total": 21617.7,
+     "worst": 4640.2
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 308,
+     "backMsTotal": 5199.5,
+     "backgroundJudgementsTotal": 912
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 112,
+     "backMsTotal": 1670.3,
+     "backgroundJudgementsTotal": 580
+    },
+    "thirdShowJudgements": {
+     "median": 500,
+     "n": 6,
+     "total": 3192,
+     "worst": 772
+    },
+    "thirdShowMs": {
+     "median": 3278.1,
+     "n": 6,
+     "total": 24172.3,
+     "worst": 7015.4
+    }
+   }
+  },
+  "m0.3-c2-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 2,
+   "design": "restart",
+   "label": "m0.3-c2-s0",
+   "margin": 0.3,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.5,
+      "backgroundJudgementsBefore": 98,
+      "firstCallJudgements": 6,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 98,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 96,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 582,
+     "n": 6,
+     "total": 3538,
+     "worst": 718
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 7133.1,
+     "n": 6,
+     "total": 42158,
+     "worst": 8080.4
+    },
+    "moveBackgroundJudgements": {
+     "median": 424,
+     "n": 6,
+     "total": 2514,
+     "worst": 506
+    },
+    "moveJudgements": {
+     "median": 322,
+     "n": 6,
+     "total": 2138,
+     "worst": 564
+    },
+    "moveMs": {
+     "median": 2066.3,
+     "n": 6,
+     "total": 13700.8,
+     "worst": 3343.8
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 428,
+     "n": 6,
+     "total": 2798,
+     "worst": 726
+    },
+    "reloadMs": {
+     "median": 2716,
+     "n": 6,
+     "total": 17368.2,
+     "worst": 4270.1
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 258,
+     "backMsTotal": 4278.5,
+     "backgroundJudgementsTotal": 532
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 56,
+     "backMsTotal": 729.1,
+     "backgroundJudgementsTotal": 338
+    },
+    "thirdShowJudgements": {
+     "median": 428,
+     "n": 6,
+     "total": 2798,
+     "worst": 726
+    },
+    "thirdShowMs": {
+     "median": 2715.1,
+     "n": 6,
+     "total": 17367,
+     "worst": 4218.5
+    }
+   }
+  },
+  "m0.3-c3-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "restart",
+   "label": "m0.3-c3-s0",
+   "margin": 0.3,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 18.3,
+      "backgroundJudgementsBefore": 148,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 306
+     },
+     {
+      "allJudgedAfterS": 118.5,
+      "backgroundJudgementsBefore": 130,
+      "firstCallJudgements": 12,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 2
+     },
+     {
+      "allJudgedAfterS": 104.3,
+      "backgroundJudgementsBefore": 2,
+      "firstCallJudgements": 0,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 400
+     }
+    ]
+   },
+   "pendingRerun": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 104,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 112,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 124,
+      "firstCallJudgements": 6,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 1142,
+     "n": 6,
+     "total": 7018,
+     "worst": 1398
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8951.6,
+     "n": 6,
+     "total": 54470.8,
+     "worst": 12682.3
+    },
+    "moveBackgroundJudgements": {
+     "median": 842,
+     "n": 6,
+     "total": 4960,
+     "worst": 1000
+    },
+    "moveJudgements": {
+     "median": 328,
+     "n": 6,
+     "total": 2170,
+     "worst": 562
+    },
+    "moveMs": {
+     "median": 2735,
+     "n": 6,
+     "total": 17521.4,
+     "worst": 4210.8
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 434,
+     "n": 6,
+     "total": 2846,
+     "worst": 736
+    },
+    "reloadMs": {
+     "median": 3797.4,
+     "n": 6,
+     "total": 23333.7,
+     "worst": 5806.1
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 254,
+     "backMsTotal": 8438.7,
+     "backgroundJudgementsTotal": 996
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 64,
+     "backMsTotal": 1157.7,
+     "backgroundJudgementsTotal": 640
+    },
+    "thirdShowJudgements": {
+     "median": 434,
+     "n": 6,
+     "total": 2846,
+     "worst": 736
+    },
+    "thirdShowMs": {
+     "median": 3949.9,
+     "n": 6,
+     "total": 21964.3,
+     "worst": 4713.3
+    }
+   }
+  },
+  "m0.3-c3-s1": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "sticky",
+   "label": "m0.3-c3-s1",
+   "margin": 0.3,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 94,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.8,
+      "backgroundJudgementsBefore": 102,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 37.3,
+      "backgroundJudgementsBefore": 296,
+      "firstCallJudgements": 6,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 202
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 1142,
+     "n": 6,
+     "total": 7024,
+     "worst": 1416
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 8826.6,
+     "n": 6,
+     "total": 53569,
+     "worst": 11510.1
+    },
+    "moveBackgroundJudgements": {
+     "median": 852,
+     "n": 6,
+     "total": 4994,
+     "worst": 992
+    },
+    "moveJudgements": {
+     "median": 334,
+     "n": 6,
+     "total": 2172,
+     "worst": 566
+    },
+    "moveMs": {
+     "median": 2166.4,
+     "n": 6,
+     "total": 14598.8,
+     "worst": 3509
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 432,
+     "n": 6,
+     "total": 2842,
+     "worst": 738
+    },
+    "reloadMs": {
+     "median": 3727.1,
+     "n": 6,
+     "total": 23817.7,
+     "worst": 7539.7
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 268,
+     "backMsTotal": 4487.6,
+     "backgroundJudgementsTotal": 978
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 88,
+     "backMsTotal": 1240.1,
+     "backgroundJudgementsTotal": 592
+    },
+    "thirdShowJudgements": {
+     "median": 432,
+     "n": 6,
+     "total": 2842,
+     "worst": 738
+    },
+    "thirdShowMs": {
+     "median": 3662.2,
+     "n": 6,
+     "total": 20863.2,
+     "worst": 5005.5
+    }
+   }
+  },
+  "m0.4-c2-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 2,
+   "design": "restart",
+   "label": "m0.4-c2-s0",
+   "margin": 0.4,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 86,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 82,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 82,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 678,
+     "n": 6,
+     "total": 4136,
+     "worst": 826
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 7361.2,
+     "n": 6,
+     "total": 42627,
+     "worst": 8183.8
+    },
+    "moveBackgroundJudgements": {
+     "median": 504,
+     "n": 6,
+     "total": 2986,
+     "worst": 598
+    },
+    "moveJudgements": {
+     "median": 228,
+     "n": 6,
+     "total": 1650,
+     "worst": 490
+    },
+    "moveMs": {
+     "median": 1597.3,
+     "n": 6,
+     "total": 10962.3,
+     "worst": 2956.9
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 322,
+     "n": 6,
+     "total": 2194,
+     "worst": 650
+    },
+    "reloadMs": {
+     "median": 2069.8,
+     "n": 6,
+     "total": 13772,
+     "worst": 3800.6
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 248,
+     "backMsTotal": 4197.7,
+     "backgroundJudgementsTotal": 538
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 18,
+     "backMsTotal": 441,
+     "backgroundJudgementsTotal": 356
+    },
+    "thirdShowJudgements": {
+     "median": 322,
+     "n": 6,
+     "total": 2194,
+     "worst": 650
+    },
+    "thirdShowMs": {
+     "median": 1987.1,
+     "n": 6,
+     "total": 13489.8,
+     "worst": 3701.5
+    }
+   }
+  },
+  "m0.4-c3-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "restart",
+   "label": "m0.4-c3-s0",
+   "margin": 0.4,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": null,
+      "backgroundJudgementsBefore": 0,
+      "firstCallJudgements": 0,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 400
+     },
+     {
+      "allJudgedAfterS": null,
+      "backgroundJudgementsBefore": 12,
+      "firstCallJudgements": 0,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 398
+     },
+     {
+      "allJudgedAfterS": null,
+      "backgroundJudgementsBefore": 0,
+      "firstCallJudgements": 0,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 400
+     }
+    ]
+   },
+   "pendingRerun": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 116,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 114,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 126,
+      "firstCallJudgements": 6,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 1348,
+     "n": 6,
+     "total": 8222,
+     "worst": 1658
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 17562.3,
+     "n": 6,
+     "total": 101390.3,
+     "worst": 20158
+    },
+    "moveBackgroundJudgements": {
+     "median": 1004,
+     "n": 6,
+     "total": 5926,
+     "worst": 1188
+    },
+    "moveJudgements": {
+     "median": 236,
+     "n": 6,
+     "total": 1692,
+     "worst": 500
+    },
+    "moveMs": {
+     "median": 5596.3,
+     "n": 6,
+     "total": 29683.3,
+     "worst": 7321.7
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 324,
+     "n": 6,
+     "total": 2216,
+     "worst": 650
+    },
+    "reloadMs": {
+     "median": 5056.9,
+     "n": 6,
+     "total": 30741.8,
+     "worst": 7169.9
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 246,
+     "backMsTotal": 10897.6,
+     "backgroundJudgementsTotal": 1056
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 20,
+     "backMsTotal": 1084.3,
+     "backgroundJudgementsTotal": 698
+    },
+    "thirdShowJudgements": {
+     "median": 324,
+     "n": 6,
+     "total": 2216,
+     "worst": 650
+    },
+    "thirdShowMs": {
+     "median": 4927.1,
+     "n": 6,
+     "total": 33339.3,
+     "worst": 10940.6
+    }
+   }
+  },
+  "m0.5-c2-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 2,
+   "design": "restart",
+   "label": "m0.5-c2-s0",
+   "margin": 0.5,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 80,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 82,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 84,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 766,
+     "n": 6,
+     "total": 4648,
+     "worst": 906
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 6920.5,
+     "n": 6,
+     "total": 40111.5,
+     "worst": 7610.6
+    },
+    "moveBackgroundJudgements": {
+     "median": 558,
+     "n": 6,
+     "total": 3384,
+     "worst": 676
+    },
+    "moveJudgements": {
+     "median": 172,
+     "n": 6,
+     "total": 1250,
+     "worst": 396
+    },
+    "moveMs": {
+     "median": 1126.8,
+     "n": 6,
+     "total": 8142.5,
+     "worst": 2341.9
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 238,
+     "n": 6,
+     "total": 1692,
+     "worst": 552
+    },
+    "reloadMs": {
+     "median": 1420.5,
+     "n": 6,
+     "total": 10087.1,
+     "worst": 3020.9
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 236,
+     "backMsTotal": 3704.9,
+     "backgroundJudgementsTotal": 550
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 8,
+     "backMsTotal": 319.3,
+     "backgroundJudgementsTotal": 360
+    },
+    "thirdShowJudgements": {
+     "median": 238,
+     "n": 6,
+     "total": 1692,
+     "worst": 552
+    },
+    "thirdShowMs": {
+     "median": 1444.2,
+     "n": 6,
+     "total": 10076.8,
+     "worst": 3001.5
+    }
+   }
+  },
+  "m0.5-c3-s0": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "restart",
+   "label": "m0.5-c3-s0",
+   "margin": 0.5,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": null,
+      "backgroundJudgementsBefore": 50,
+      "firstCallJudgements": 0,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 398
+     },
+     {
+      "allJudgedAfterS": null,
+      "backgroundJudgementsBefore": 6,
+      "firstCallJudgements": 0,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 400
+     },
+     {
+      "allJudgedAfterS": null,
+      "backgroundJudgementsBefore": 0,
+      "firstCallJudgements": 0,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 400
+     }
+    ]
+   },
+   "pendingRerun": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 98,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 116,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 26.8,
+      "backgroundJudgementsBefore": 120,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 1.5
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 1508,
+     "n": 6,
+     "total": 9180,
+     "worst": 1806
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 9169.8,
+     "n": 6,
+     "total": 54950.9,
+     "worst": 11022.5
+    },
+    "moveBackgroundJudgements": {
+     "median": 1122,
+     "n": 6,
+     "total": 6734,
+     "worst": 1350
+    },
+    "moveJudgements": {
+     "median": 180,
+     "n": 6,
+     "total": 1284,
+     "worst": 406
+    },
+    "moveMs": {
+     "median": 2464.4,
+     "n": 6,
+     "total": 16194,
+     "worst": 4181
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 244,
+     "n": 6,
+     "total": 1740,
+     "worst": 554
+    },
+    "reloadMs": {
+     "median": 2188,
+     "n": 6,
+     "total": 13906.6,
+     "worst": 4117.2
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 236,
+     "backMsTotal": 11437.7,
+     "backgroundJudgementsTotal": 1098
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 8,
+     "backMsTotal": 762.8,
+     "backgroundJudgementsTotal": 716
+    },
+    "thirdShowJudgements": {
+     "median": 244,
+     "n": 6,
+     "total": 1740,
+     "worst": 554
+    },
+    "thirdShowMs": {
+     "median": 2131.8,
+     "n": 6,
+     "total": 16363.7,
+     "worst": 6053.4
+    }
+   }
+  },
+  "m0.5-c3-s1": {
+   "capped": {
+    "pages": [
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0058.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0048.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 2,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0057.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0040.png"
+     },
+     {
+      "calls": 4,
+      "dearestNotReached": 6,
+      "judgements": 1600,
+      "leftUnjudged": 0,
+      "page": "synthetic-0025.png"
+     },
+     {
+      "calls": 3,
+      "dearestNotReached": 4,
+      "judgements": 1200,
+      "leftUnjudged": 0,
+      "page": "synthetic-0013.png"
+     }
+    ]
+   },
+   "checks": 3,
+   "design": "sticky",
+   "label": "m0.5-c3-s1",
+   "margin": 0.5,
+   "models": "real models (converted), checked against the sealed hash list; sealed cut-off table",
+   "pending": {
+    "runs": [
+     {
+      "allJudgedAfterS": 23.3,
+      "backgroundJudgementsBefore": 122,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0058.png then synthetic-0048.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27.5,
+      "backgroundJudgementsBefore": 114,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0048.png then synthetic-0057.png",
+      "tokensWhenOpened": 0
+     },
+     {
+      "allJudgedAfterS": 27,
+      "backgroundJudgementsBefore": 132,
+      "firstCallJudgements": 8,
+      "pages": "synthetic-0057.png then synthetic-0040.png",
+      "tokensWhenOpened": 0
+     }
+    ]
+   },
+   "reuse": {
+    "backgroundJudgements": {
+     "median": 1524,
+     "n": 6,
+     "total": 9262,
+     "worst": 1824
+    },
+    "firstJudgements": {
+     "median": 1082,
+     "n": 6,
+     "total": 6264,
+     "worst": 1238
+    },
+    "firstMs": {
+     "median": 10505.8,
+     "n": 6,
+     "total": 56587,
+     "worst": 11186.3
+    },
+    "moveBackgroundJudgements": {
+     "median": 1112,
+     "n": 6,
+     "total": 6694,
+     "worst": 1338
+    },
+    "moveJudgements": {
+     "median": 172,
+     "n": 6,
+     "total": 1290,
+     "worst": 404
+    },
+    "moveMs": {
+     "median": 1305.3,
+     "n": 6,
+     "total": 9647.3,
+     "worst": 2679.5
+    },
+    "reloadCalls": {
+     "median": 1,
+     "n": 6,
+     "total": 6,
+     "worst": 1
+    },
+    "reloadJudgements": {
+     "median": 238,
+     "n": 6,
+     "total": 1714,
+     "worst": 554
+    },
+    "reloadMs": {
+     "median": 2270.7,
+     "n": 6,
+     "total": 13770.4,
+     "worst": 3444.8
+    },
+    "scrollBack-otherOffsets": {
+     "backJudgementsTotal": 242,
+     "backMsTotal": 4777.3,
+     "backgroundJudgementsTotal": 1074
+    },
+    "scrollBack-sameOffsets": {
+     "backJudgementsTotal": 24,
+     "backMsTotal": 586.8,
+     "backgroundJudgementsTotal": 698
+    },
+    "thirdShowJudgements": {
+     "median": 238,
+     "n": 6,
+     "total": 1714,
+     "worst": 554
+    },
+    "thirdShowMs": {
+     "median": 2060.8,
+     "n": 6,
+     "total": 13367.6,
+     "worst": 3429.2
+    }
+   }
+  }
+ },
+ "static": {
+  "method": "safesightmac-harness static impl/v3-testing-edition-vm/run2/shots/04-lab-start.png --windows run2/logs/static-windows-noind.txt, real models, --slow-ms 10, --seconds 360, register budget, defaults otherwise; 2 runs per setting, run one after another at load average about 6 to 12 (other work on the Mac). The margin-0.5 two-check restart runs are today's rule, run alongside for comparison.",
+  "runs": {
+   "m0.2-c2-s0-run1": {
+    "cameBack": 0,
+    "judgementsTotal": 10860,
+    "looksLastWantedAtS": 266.3,
+    "settledAtS": 261.4
+   },
+   "m0.2-c2-s0-run2": {
+    "cameBack": 0,
+    "judgementsTotal": 11006,
+    "looksLastWantedAtS": 269.8,
+    "settledAtS": 264.9
+   },
+   "m0.25-c3-s1-run1": {
+    "cameBack": 0,
+    "judgementsTotal": 11590,
+    "looksLastWantedAtS": 279.6,
+    "settledAtS": 279.7
+   },
+   "m0.25-c3-s1-run2": {
+    "cameBack": 0,
+    "judgementsTotal": 11194,
+    "looksLastWantedAtS": 269.7,
+    "settledAtS": 269.8
+   },
+   "m0.3-c3-s1-run1": {
+    "cameBack": 0,
+    "judgementsTotal": 10954,
+    "looksLastWantedAtS": 263.7,
+    "settledAtS": 263.8
+   },
+   "m0.3-c3-s1-run2": {
+    "cameBack": 0,
+    "judgementsTotal": 11024,
+    "looksLastWantedAtS": 265.4,
+    "settledAtS": 265.5
+   },
+   "m0.5-c2-s0-run1": {
+    "cameBack": 0,
+    "judgementsTotal": 8210,
+    "looksLastWantedAtS": 200.0,
+    "settledAtS": 195.2
+   },
+   "m0.5-c2-s0-run2": {
+    "cameBack": 0,
+    "judgementsTotal": 8864,
+    "looksLastWantedAtS": 213.5,
+    "settledAtS": 212.3
+   }
+  }
+ }
+}

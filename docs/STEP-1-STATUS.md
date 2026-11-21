@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Step 1 status: the cover-only app
 
-14 November 2026, updated 18 November (speed work, ST-040 re-run), 19 November (the way out; every display, one rule; the Testing edition; its first live run) and 20 November (two clean checks before a clean verdict is reused). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness. **It has run live once, as the Testing edition in a disposable virtual Mac, and was unusable there** (see "The first live run"); the fixes are tested off the screen and still have to be seen live. It has not run on a physical Mac. Running it needs the Screen Recording permission, which only the owner can grant.
+14 November 2026, updated 18 November (speed work, ST-040 re-run), 19 November (the way out; every display, one rule; the Testing edition; its first live run) and 20 November (a stricter clean cache: sticky, a quarter of the cut-off, three checks). Built and tested on a developer Mac (Apple M1 Max, macOS 26.3, Swift 6.3.3) through tests and the lab harness. **It has run live once, as the Testing edition in a disposable virtual Mac, and was unusable there** (see "The first live run"); the fixes are tested off the screen and still have to be seen live. It has not run on a physical Mac. Running it needs the Screen Recording permission, which only the owner can grant.
 
 Step 1 is the practice state of the watcher shipped alone (register SD-223 (f)). It has no lock: no keeper, no root part, no plain shield, no installer, no updater, no login item. It can be paused or quit at any time, and it protects nothing against its own owner.
 
@@ -49,7 +49,7 @@ These parts are built, and each is exercised by tests or the harness:
     - A tie-breaker that fails has not answered, so its dispute is covered (SD-125).
     - Each failure is counted per model: `Detector.modelFaults`, `FrameVerdict.modelFaults`, and the bench and false-cover records. Nothing trips on the count yet: this build has no run-time model self-check. SD-244's self-check pack and model ladder are not built, and SD-223 (d) leaves the fault ladder out of the practice state.
   - **Covers follow scrolling.** When content moves by a translation, its covers move with it at once, before the moved area is judged again; a cover moves only onto exactly the pixels it covered.
-  - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte, and only when they were clearly clean (the margin rule, 19 November): every model scored the picture below half its cover cut-off, and, where a blur can apply (a small picture in a hot window or a covered-start context), below half its containment cut-off too. A borderline-clean picture is judged again, with fresh jitter, each time it comes back there. Measured since: half is needed for every model and band, and in some it is not enough (see "How far jitter moves real scores").
+  - **Exact-match caches.** A picture already judged is not judged again when the same pixels come back (reload, scrolling back, a moved window); the finder's proposals are reused the same way. Clean verdicts are reused only on a full SHA-256 match of every byte, and only when they were clearly clean three times in a row (the margin rule, 19 November, made stricter on 20 November): every model scored the picture below a quarter of its cover cut-off, and, where a blur can apply (a small picture in a hot window or a covered-start context), below a quarter of its containment cut-off too. A picture judged borderline even once is never remembered as clean while the cache holds it, and is judged again, with fresh jitter, each time it comes back. This narrows the gap measured in "How far jitter moves real scores" but does not close it for certain (see "The default since 20 November 2026").
 - **The practice state** (SD-223).
   - The watcher is in the practice state only while no root-owned `<rd>.safesightmac.keeper.plist` (or the lab form) exists in `/Library/LaunchDaemons`. It is read with `lstat`, so a symbolic link is judged by its own owner.
   - If the check cannot be completed, the app does not claim the practice state: covering carries on and pause is turned off.
@@ -433,6 +433,91 @@ SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-h
 - **On the first showings.** Summed over the 25, the chance of being cached clean on the first judgement was 4.7 with one check. On the first two judgements with two checks it is 1.5. That is about a third as many.
 - **What it means.** Two checks cut the chance a borderline picture is cached clean by about three at each showing. They do not close the gap: a picture shown many times can still get two low scores in a row. Closing it would need a stricter share where crossings were found, which is still open.
 - **Limits:** the same as the first measurement: harmless pictures only, 20 draws, half the screens and only the bands named.
+
+### Narrowing the clean-cache gap: a measurement of margin, checks and a sticky rule (20 November 2026)
+
+The measurement ran with the defaults of the time (share 0.5, two checks, restarting); the stricter margins it measures stay lab switches. The founder chose the strictest rule measured, sticky at a quarter of the cut-off with three checks, as the default: see the next section. Two clean checks narrowed the gap but did not close it: a borderline picture shown often enough can still get two low draws in a row and be remembered as clean for as long as it stays unchanged. This measures what it would take to close it, for margins 0.5, 0.4, 0.3, 0.25, 0.2 and 0.1 (the share of the cut-off a clean score must be under; verified: it is the share of the cut-off that acts there, the cover cut-off, or the containment cut-off where a blur can apply) by 2 and 3 clean checks, and for one alternative design.
+
+**The alternative: sticky.** Today a borderline judgement (at or over the margin) only starts the count again, so a picture shown many times gets many chances. Under the sticky rule a borderline judgement, or a cover, marks the picture as never to be remembered clean while the cache holds it: only its first `checks` judgements can cache it. Ordinary pictures that are clearly clean from the start are cached as before. Other variants suggested (the highest draw so far under the margin, a small spread between draws) are what today's consecutive checks already do, or a lower margin.
+
+**Switches** (lab builds only; refused in release builds, and a rule looser than the default is refused everywhere; since the default is now sticky at 0.25 with three checks, only margins of 0.25 or less, three checks or more, and sticky can be set): `safesightmac-harness bench|static ... --clean-margin M --clean-checks N [--clean-sticky]` (`Detector.labSetCleanRule`, `VerdictCache.CleanRule`). Tests: `CleanRuleTests`. The jitter tool now also scores every setting against its draws (`CleanGrid.swift`).
+
+```
+SAFESIGHTMAC_LAB=1 swift run -c release --scratch-path .build-lab safesightmac-harness jitter --models ../v3-detector/models/converted \
+    --list ../v3-detector/results/private/tiles-heldout.txt --root ../v3-detector --draws 40 --per-band 1500 --background 500 \
+    --every 2 --bands 32-63,64-127,128+ --json results/jitter-clean-margin.json
+```
+
+Results: `results/jitter-clean-margin.json` (protection and harmless-picture cost, `cleanGrid`) and `results/speed-clean-margin-grid.json` (benches and the still screen). Same screens, bands and sample as the fresh-four run, with 40 draws an entry instead of 20, so more crossings show up: **48** (Marqo 32-63: 4, 64-127: 27, 128+: 10; NSFWJS 64-127: 6, 128+: 1), against 27 in 20 draws. Counted per entry instead (every model under the margin in the same draw, as the product decides), 30.
+
+| Setting | Crossings with a draw under the margin / cached in their 40 draws | Expected cached (largest chance for one) | Harmless entries not cacheable on one draw | Harmless entries never cached | Reload (judgements) | Window move | Still screen settled (s) |
+|---|---|---|---|---|---|---|---|
+| **until now: restart 0.5 x 2** | 48 / 22 | 14.8 (99.9%) | 30% | 25% | 238 | 172 | 195, 212 |
+| restart 0.4 x 2 | 19 / 6 | 4.7 (96%) | 39% | 32% | 322 (1.4x) | 228 (1.3x) | |
+| restart 0.3 x 2 | 5 / 3 | 1.2 (49%) | 49% | 39% | 428 (1.8x) | 322 (1.9x) | |
+| restart 0.25 x 2 | 3 / 0 | 0.25 (16%) | 56% | 44% | 500 (2.1x) | 376 (2.2x) | |
+| restart 0.2 x 2 | 0 / 0 | 0 | 64% | 50% | 590 (2.5x) | 460 (2.7x) | 261, 265 |
+| restart 0.1 x 2 | 0 / 0 | 0 | 90% | 75% | 872 (3.7x) | 676 (3.9x) | |
+| restart 0.5 x 3 | 48 / 10 | 6.5 (95%) | 30% | 27% | 244 (1.0x) | 180 (1.0x) | |
+| restart 0.4 x 3 | 19 / 2 | 1.9 (68%) | 39% | 34% | 324 (1.4x) | 236 (1.4x) | |
+| restart 0.3 x 3 | 5 / 2 | 0.20 (11%) | 49% | 41% | 434 (1.8x) | 328 (1.9x) | |
+| restart 0.25 x 3 | 3 / 0 | 0.02 (1.6%) | 56% | 46% | 500 (2.1x) | 374 (2.2x) | |
+| restart 0.2 x 3 | 0 / 0 | 0 | 64% | 52% | 590 (2.5x) | 462 (2.7x) | |
+| restart 0.1 x 3 | 0 / 0 | 0 | 90% | 77% | 876 (3.7x) | 684 (4.0x) | |
+| sticky 0.5 x 3 | 48 / 0 | 0.87 (24%) | 30% | 32% | 238 (1.0x) | 172 (1.0x) | |
+| sticky 0.3 x 3 | 5 / 0 | 0.014 (0.8%) | 49% | 46% | 432 (1.8x) | 334 (1.9x) | 264, 266 |
+| sticky 0.25 x 2 | 3 / 0 | 0.015 (1.0%) | 56% | 50% | 494 (2.1x) | 368 (2.1x) | |
+| **sticky 0.25 x 3 (now the default)** | 3 / 0 | 0.0013 (0.1%) | 56% | 51% | 500 (2.1x) | 372 (2.2x) | 280, 270 |
+
+How to read it:
+
+- **Crossings, per model**, as before: a harmless sampled entry with one draw under half its action cut-off and another at or over it. "With a draw under the margin" can ever be cached under today's restart rule, given enough showings; "cached in their 40 draws" took the draws in the order made as 40 showings. "Expected cached" sums each crossing's chance, with its draws taken as independent at its observed share under the margin: within 20 showings for restart, for good for sticky (share to the power of the checks). The other sticky settings are in the JSON.
+- **Cost on harmless pictures.** "Not cacheable on one draw": of all 54,727 entries of the first calls (pass 1), any model at or over the margin of its cover cut-off. "Never cached": the random background sample (1,500 entries, bands 32 px and up, 40 draws), the chance it is never cached (within 20 showings, or for good), weighted by band. Today already re-judges about a quarter to a third of entries every time (slices and whole passes included).
+- **Benches** (`--cases reuse,pending,capped`, real models, the six busy pages): judgements are exact; the reload and window-move medians are in the table. First showings are 1,082 judgements in every setting. Scrolling back to the same places: 8 today, 144 at restart 0.2 x 2, 78 to 112 at the 0.25 settings, 564 at 0.1. Background second checks grow with the checks (766 today, about 1,000 to 1,500 with three). `capped`: every page finishes in 3 or 4 calls, 1,200 to 1,600 judgements, in every setting. `pending`: the new page is all judged after 22.0 to 28.0 s in every setting, except one run each of sticky 0.3 x 3 (37.3 s) and sticky 0.25 x 3 (39.3 s), against 23.3, 27.5 and 27.0 s today. Three three-check runs first showed "never judged"; they ran while another job held the Mac at a load average up to 73, and re-run at about 9 they finished in 23.3 to 27.5 s (both are kept in the JSON).
+- **Still screen** (`static`, the virtual Mac's desktop, 10 ms a judgement, 360 s, two runs each, run one after another): today settled at 195 and 212 s with about 8,200 to 8,900 judgements; the three strict settings at 261 to 280 s with about 10,900 to 11,600. All eight settled and nothing came back. About a minute later, for the extra re-judging of borderline entries.
+
+What it shows:
+
+- **Only lowering the margin far enough closes the gap.** Every crossing's lowest draw was at 0.206 of its action cut-off or above (median 0.42), so in this sample nothing is cacheable at 0.2 or below. But 0.206 is just over the line; another sample will likely find a crossing under 0.2, so 0.2 under today's restart rule closes the gap here by a hair, and only on these draws.
+- **Sticky turns "eventually" into "once".** Under restart, any crossing with any draw under the margin is cached in the end if it is shown often enough (the 99.9% at today's setting). Under sticky its chance is fixed at its first showings. At a margin of 0.25 with three checks, the three crossings left with a draw under 0.25 have chances of 0.1%, 0.01% and 0.01%, 0.13 in 100 over all 48, for about the cost of restart 0.25 (2.1x a reload, 2.2x a window move), cheaper than restart 0.2 (2.5x, 2.7x), with more room under the lowest crossing.
+- **Sticky costs almost nothing extra over the same margin**: the pictures it stops caching are the ones that already went over the margin once, and most of those are judged again anyway.
+
+**Limits.** Harmless pictures standing in for borderline explicit ones; nothing says a real explicit picture's draws spread the same way. Half the screens, bands 32 px and up only, 40 draws an entry: shares near 0 or 1 are rough (one draw in 40 is 2.5%), and "never cached" for good can only be estimated. Draws are taken as independent (they are, jitter is drawn fresh each time), but each crossing's share under the margin comes from those 40 draws. Crossings are counted against the action cut-off (containment where a blur can apply); where no blur applies only the cover cut-off counts, which is the looser case. The sticky mark lives in the bounded cache: if the cache drops it (65,536 entries, oldest first), the picture gets fresh first chances. The benches ran once per setting, the still screen twice for three settings; times are noisy, judgement counts are exact.
+
+### The default since 20 November 2026: sticky, a quarter of the cut-off, three checks
+
+The founder's decision, after the measurement above: the strictest rule measured that still caches. In every build:
+
+- **Margin 0.25** (`CLEAN_CACHE_MARGIN`). A clean judgement counts only when every model's score is under a quarter of the cut-off that acts where the verdict is reused (it was half).
+- **Three checks** (`CLEAN_CHECKS`). A picture is reused as clean only after three clearly clean judgements in a row, each with fresh jitter (it was two).
+- **Sticky** (`CLEAN_STICKY`). A judgement at or over the margin, or a flag, marks the picture as never to be cached clean while the cache holds it. Before, it only started the count again.
+
+The lab switches can now set only rules at least this strict.
+
+**At a still screen.** The background checks (`DisplayPipeline`, step 3c) give a waiting picture one check a look until it has all three. They are still bounded by 30 s of still screen; a picture that doesn't get them all by then is checked when it comes back. A picture marked borderline leaves the queue at once and is never queued again. Tests: `theLooksGiveEveryCheckAndNeverQueueAPictureOnceBorderline`, `CleanRuleTests`, `TwoCleanChecksTests`.
+
+**When a mark is lost.** The marks are kept in their own bounded set, apart from the counts and verdicts (65,536 keys, about 4 MB at most, oldest first). Switching Balanced and Either empties the counts and verdicts but keeps the marks: a mark comes from a score against a cut-off, which neither rule changes, so a switch never gives a borderline picture a fresh first chance (`testAMarkSurvivesARuleSwitch`). A pause keeps the detector and everything it holds; nothing in the app empties the cache. Only the lab benches (`Detector.removeCachedVerdicts`) and a lab rule change empty the marks, and quitting the app loses them, since nothing is kept on disk. A mark is lost only when the set drops it as the oldest. Nothing is then left for those pixels: they are judged again as if never seen and need three fresh clearly clean judgements in a row, and the first borderline one marks them again. Losing a mark can only give a picture fresh first chances, never a clean verdict (`testADroppedMarkGivesOnlyFreshFirstChances`, `testTheMarksAreBounded`).
+
+**What it costs**, with the default as shipped (no switch), against the old rule. Real models (only the sealed files, checked against the hash list), the six busy pages of harmless photos, and the virtual Mac's desktop for the still screen. Results: `results/speed-clean-default.json`.
+
+| | Old rule (restart, 0.5, two checks) | Default now (sticky, 0.25, three checks) |
+|---|---|---|
+| First showing of a busy page | 1,082 judgements | 1,082 |
+| Reload | 238 judgements, 1.4 s | **496 (2.1x)**, 3.0 s |
+| Window moved | 172 judgements, 1.1 s | **376 (2.2x)**, 2.3 s |
+| Background checks after a page is shown | 766 | 1,024 |
+| Scrolling back to the same places / to other places | 8 / 236 | 112 / 324 |
+| `capped`: calls and judgements per page | 3 or 4; 1,200 to 1,600 | the same |
+| `pending`: new page all judged after | 23.3, 27.5, 27.0 s | 23.3, 27.5, 27.0 s |
+| Still screen settled (two runs, 360 s, 10 ms a judgement) | 195, 212 s; about 8,200 to 8,900 judgements | **252, 287 s**; about 10,500 to 11,900 |
+
+In plain words:
+- It takes about 2.1 times the judging work on a reload, and about 2.2 times on a window move.
+- A still screen takes about a minute longer to settle. Both runs settled and nothing came back. (The 280 and 270 s in the measurement table above are other runs of the same setting through the switch, before the merge with main; 252 and 287 s here are the default as shipped.)
+- Under load, pictures waiting to be judged again wait longer, because about half of ordinary harmless pictures (56% of entries on one draw, against 30% before) can no longer be cached and are judged again each time they come back.
+- No setting closes the gap for certain, this one included. In the measurement, 3 of 48 harmless crossings still had a draw under a quarter of their cut-off. The expected number cached clean falls from 14.8 (within 20 showings, under the old rule) to about 0.001 (for good). A borderline picture whose first three judgements all land under a quarter is still remembered as clean for as long as it stays unchanged.
+
+**Limits of the comparison.** The old-rule figures were measured earlier the same day, before this branch was merged with main at df457a6 (#28, #30, #31). A same-code re-run of main was started; its `capped` case had not finished after almost four hours of wall time, during which the Mac appears to have slept, and it was stopped, so it gave no figures. Judgement counts are exact. Times are noisy: other work kept the load average at about 23 to 27 during the runs.
 
 ## False covers through the whole pipeline: ST-040 re-run (18 November 2026)
 

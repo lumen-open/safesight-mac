@@ -128,8 +128,9 @@ public final class DisplayPipeline {
     static let saverShare = 0.25
     /// Held covers (by index) already judged in this run by their window's own call.
     var talliedThisRun: Set<Int> = []
-    /// Pictures seen clean once are waiting for their second clean check (`VerdictCache.CLEAN_CHECKS`), which the looks
-    /// at a still screen give them in the background (step 3c), until `secondChecksUntil` at the latest.
+    /// Pictures clearly clean so far are waiting for their remaining clean checks (`VerdictCache.CLEAN_CHECKS`, three), which
+    /// the looks at a still screen give them in the background (step 3c), one a look, until they have them all or until
+    /// `secondChecksUntil` at the latest. A picture that was ever borderline is marked (`CLEAN_STICKY`) and never waits.
     public private(set) var secondChecksDue = false
     /// When the looks stop waiting for second checks: `secondChecksFor` after the first look at a still screen. Any run on a
     /// frame with new pixels clears it, so only still time counts; looks (a full re-judge on a still screen included)
@@ -139,7 +140,7 @@ public final class DisplayPipeline {
     /// them all, and a still screen must still come to rest. One not given its check by then gets it when it comes back.
     /// A working value, tied to `FULL_REJUDGE_SHOW_FIRST`.
     static let secondChecksFor: TimeInterval = Register.FULL_REJUDGE_SHOW_FIRST
-    /// Whether step 3c runs. Off, a picture seen clean once gets its second check only when it comes back (the lab
+    /// Whether step 3c runs. Off, a picture waiting for clean checks gets them only when it comes back (the lab
     /// bench measures both).
     public var backgroundSecondChecks = true
     /// True once a frame of this display has been judged and drawn since it was last covered whole.
@@ -207,14 +208,14 @@ public final class DisplayPipeline {
     /// True while something is still to be judged with nothing new on screen: covers waiting to lift, or entries left for
     /// a later call. The capture sends no frame while the screen is still, so the watcher then asks for a look at the last
     /// frame itself (an idle frame); without one a still screen would never settle.
-    /// Pictures seen clean once waiting for their second clean check count as something left (step 3c), until they have
-    /// had it or until `secondChecksFor` has passed.
+    /// Pictures waiting for clean checks count as something left (step 3c), until they have had them all or until
+    /// `secondChecksFor` has passed.
     public var needsAnotherLook: Bool {
         judged && (!(held.isEmpty && pending.isEmpty && dueAgain.isEmpty) || secondChecksWanted || promptLookDue)
     }
     var secondChecksWanted: Bool { secondChecksDue && backgroundSecondChecks }
 
-    /// A judge call left pictures seen clean once: the looks at a still screen give them their second check, for at most
+    /// A judge call left pictures waiting for clean checks: the looks at a still screen give them the rest, for at most
     /// `secondChecksFor` of still screen (`secondChecksUntil`).
     func noteSecondChecks(_ v: FrameVerdict, now: TimeInterval) {
         guard v.secondChecksLeft > 0 else { return }
@@ -290,7 +291,7 @@ public final class DisplayPipeline {
             return judged ? refreshHoles(snapshot) : cover(because: .notYetJudged)
         case .idle:
             // Nothing changed. Keep judging regions waiting to lift, on the last frame's pixels (of this stream only).
-            // Pictures seen clean once get their second clean check meanwhile (step 3c).
+            // Pictures waiting for clean checks get them meanwhile (step 3c).
             guard judged, judgedGeneration == f.generation, let img = lastImage, let map = lastMap,
                   !(held.isEmpty && pending.isEmpty && dueAgain.isEmpty && !secondChecksWanted && !promptLookDue) else {
                 return judged ? refreshHoles(snapshot) : lastPlan
@@ -868,8 +869,9 @@ public final class DisplayPipeline {
         if !waiting.isEmpty { recheckTurn = (recheckTurn + (movedFirst == nil ? max(1, checked) : inTurn)) % max(1, waiting.count) }
 
         // 3c. Second clean checks, as part of the looks at a still screen (`needsAnotherLook`; `VerdictCache.CLEAN_CHECKS`).
-        //     On a look where nothing changed, after everything above, the pictures on show that were seen clean once are
-        //     judged once more, with fresh jitter, so that when they come back they are served from the cache. Low
+        //     On a look where nothing changed, after everything above, the pictures on show still waiting for clean checks
+        //     are judged once more, with fresh jitter; a picture needs one look for each check it still lacks, so that
+        //     when it comes back it is served from the cache. One that comes out borderline is marked and leaves the queue. Low
         //     priority: only from judgements beyond half the bucket, and within the time left. Nothing is lifted or cleared
         //     here, and no clean judgement here is counted towards lifting a cover (nothing is shared into a cover's round;
         //     once an entry is reusable, a cover's own next check gets it from the cache, as any cache hit): a

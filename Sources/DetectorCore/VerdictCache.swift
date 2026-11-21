@@ -19,12 +19,12 @@
 // again, with new jitter, every time its pixels come back there, as before the cache. An outcome that covers
 // is always kept: reusing it only ever covers.
 //
-// TWO CHECKS. One clearly clean judgement is not enough: jitter can give a borderline picture one lucky low
-// score. The first is kept only as "seen clean once", which is never reused: the next time the pixels come back
-// they are judged again, with fresh jitter, as if they were not in the cache. Only a second clearly clean
-// judgement in a row (`CLEAN_CHECKS`) makes the entry a cached clean verdict. A judgement at or over the margin,
-// a model failure or a flag in between starts it again. Where a blur can apply, both must also be clearly clean
-// for the containment cut-off (`settledForBlur`).
+// CLEAN CHECKS. One clearly clean judgement is not enough: jitter can give a borderline picture one lucky low
+// score. Until `CLEAN_CHECKS` (3) clearly clean judgements in a row, an entry is only "waiting for clean checks", which
+// is never reused: the next time the pixels come back they are judged again, with fresh jitter, as if they were not in
+// the cache. A model failure starts the count again. Sticky (`CLEAN_STICKY`): a judgement at or over the margin, or a
+// flag, marks the entry as never to be cached clean while it is held, so only a picture's first judgements can cache it.
+// Where a blur can apply, all of them must also be clearly clean for the containment cut-off (`settledForBlur`).
 import CryptoKit
 import Foundation
 import Preprocess
@@ -36,11 +36,11 @@ struct TileOutcome: Sendable, Equatable {
     /// The referee was asked (only for disputes) and confirmed.
     var refereeRan = false, refereeFlag = false
     /// Whether this judgement counts for the verdict cache, decided where it was judged (`Detector.judgeTask`):
-    /// it covers, or every model's score was below half its cover cut-off (the margin rule). A flag, not a
+    /// it covers, or every model's score was below `CLEAN_CACHE_MARGIN` (a quarter) of its cover cut-off (the margin rule). A flag, not a
     /// score. False unless set, so an outcome nobody marked is judged again.
     var cacheable = false
     /// Whether this judgement was also clearly clean where a blur can apply (a small picture in a hot window
-    /// or a covered-start context): every model's score was also below half the entry's containment cut-off
+    /// or a covered-start context): every model's score was also below that share of the entry's containment cut-off
     /// (`VerdictCache.cleanLevel`). An outcome that covers is settled. False unless set: where a blur can
     /// apply, an outcome nobody marked is judged again. On an outcome the cache hands back, it says whether
     /// `CLEAN_CHECKS` judgements in a row were settled.
@@ -178,21 +178,63 @@ final class VerdictCache {
     /// and up, 20 draws each): of 25 crossings, 10 had two draws in a row under half, so they could still be cached
     /// clean within 20 showings. The chance of a crossing being cached clean on its first showing(s) fell from 4.7
     /// to 1.5 in 25. (docs/STEP-1-STATUS.md, "Two clean checks".)
-    static let CLEAN_CACHE_MARGIN: Float = 0.5
+    ///
+    /// The founder's decision of 20 November 2026, after the grid measurement (results/jitter-clean-margin.json, 40 draws
+    /// an entry; docs/STEP-1-STATUS.md, "Narrowing the clean-cache gap"): the strictest rule measured that still caches,
+    /// a quarter of the cut-off, with three checks and sticky (`CLEAN_CHECKS`, `CLEAN_STICKY`). Of 48 harmless crossings,
+    /// 3 had any draw under a quarter, and the expected number cached clean falls from 14.8 (within 20 showings, under
+    /// the old rule) to about 0.001 (for good). It costs
+    /// about 2.1 times the judging on a reload and about a minute more for a still screen to settle. It does not close
+    /// the gap for certain: the lowest draw of a crossing was 0.206 of its cut-off, and a picture whose first three
+    /// judgements all land under a quarter is still cached clean.
+    static let CLEAN_CACHE_MARGIN: Float = 0.25
 
     /// The lowest cut-off at which a model's score changes an entry's outcome: the cover cut-off, or the
     /// containment cut-off when a blur can apply to the entry (`containable`) and it is lower.
     static func actionCutoff(_ c: Cutoffs, containable: Bool) -> Float { containable ? min(c.cover, c.clean) : c.cover }
 
-    /// The level a model's top score must be strictly below for a clean outcome to be cached.
-    static func cleanLevel(_ c: Cutoffs, containable: Bool) -> Float { CLEAN_CACHE_MARGIN * actionCutoff(c, containable: containable) }
+    /// The level a model's top score must be strictly below for a clean outcome to be cached (`margin`: this cache's
+    /// `rule.margin`; by default `CLEAN_CACHE_MARGIN`).
+    static func cleanLevel(_ c: Cutoffs, containable: Bool, margin: Float = CLEAN_CACHE_MARGIN) -> Float { margin * actionCutoff(c, containable: containable) }
 
     /// `CLEAN_CHECKS`: how many clearly clean judgements in a row, each with fresh jitter, a picture needs before
-    /// its clean verdict is reused (founder decision, 20 November 2026). The first is kept as "seen clean once"
-    /// and never reused; the next time the pixels come back they are judged again. Any judgement at or over the
-    /// margin, any model failure, or a flag starts the count again. Where a blur can apply, a reused clean
-    /// verdict also needs that many in a row clearly clean for the containment cut-off (`settledForBlur`).
-    static let CLEAN_CHECKS = 2
+    /// its clean verdict is reused. Two was the founder's decision of 20 November 2026; three with `CLEAN_STICKY` is
+    /// stricter (docs/STEP-1-STATUS.md, "Narrowing the clean-cache gap"). Until the last, an entry is "waiting for clean checks" and never reused; the
+    /// next time the pixels come back they are judged again, and the looks at a still screen give it its checks in the
+    /// background (`DisplayPipeline`, step 3c). Where a blur can apply, a reused clean verdict also needs that many in
+    /// a row clearly clean for the containment cut-off (`settledForBlur`).
+    static let CLEAN_CHECKS = 3
+
+    /// `CLEAN_STICKY`: a judgement at or over the margin (borderline clean), or a cover, marks the entry as never to be
+    /// cached clean while the cache holds it, instead of only starting its count again. So a picture is cached clean
+    /// only if its first `CLEAN_CHECKS` judgements were all clearly clean; one that has ever been borderline is judged
+    /// afresh, with fresh jitter, every time it comes back, and gets no more background checks. A model failure keeps
+    /// the mark. Measured (results/jitter-clean-margin.json): of 48 harmless crossings, the expected number cached
+    /// clean, at half the cut-off, falls from 14.8 (two checks, restarting, within 20 showings) to 0.87, for good; at a
+    /// quarter (the default) to about 0.001.
+    ///
+    /// The marks are held in their own bounded set (`marks`), which a detector rule change does not empty. When the set
+    /// drops a mark (oldest first), or the lab empties it (`removeEverything`), nothing at all is left for those pixels:
+    /// they are judged again as if never seen, and need `CLEAN_CHECKS` fresh clearly clean judgements in a row, the
+    /// first of them borderline marking them again. Losing a mark can only give a picture fresh first chances, never a
+    /// clean verdict.
+    static let CLEAN_STICKY = true
+
+    /// The clean-cache rule a cache applies. Every build uses `standard` (`CLEAN_CACHE_MARGIN`, `CLEAN_CHECKS`,
+    /// `CLEAN_STICKY`); only a lab build can set another, for measurement (`Detector.labSetCleanRule`), and only a stricter
+    /// one: a margin no higher than `CLEAN_CACHE_MARGIN`, no fewer checks than `CLEAN_CHECKS`, and sticky if it is.
+    ///
+    /// `sticky`: see `CLEAN_STICKY`.
+    struct CleanRule: Sendable, Equatable {
+        var margin: Float
+        var checks: Int
+        var sticky: Bool
+        static let standard = CleanRule(margin: CLEAN_CACHE_MARGIN, checks: CLEAN_CHECKS, sticky: CLEAN_STICKY)
+        /// Whether this rule is at least as strict as `standard` (the only rules a lab build may set).
+        var isAtLeastStandard: Bool {
+            margin.isFinite && margin >= 0 && margin <= CLEAN_CACHE_MARGIN && checks >= CLEAN_CHECKS && checks <= 8 && (sticky || !CLEAN_STICKY)
+        }
+    }
 
     /// One kept entry: the latest outcome, and how many clearly clean judgements in a row it has had, for the
     /// cover cut-off (`cleanChecks`) and for the containment cut-off too (`blurChecks`). Counts, never scores.
@@ -202,18 +244,49 @@ final class VerdictCache {
         var blurChecks: UInt8
     }
 
+    /// The sticky marks (`CLEAN_STICKY`), kept apart from the counts and verdicts: a mark comes from a score against a
+    /// cut-off, which neither detector rule (Balanced, Either) changes, so a rule change (`Detector.setRule`, which empties
+    /// the cache) keeps them. Bits per key: `coverMark` (never cached clean), `blurMark` (never settled for a blur).
+    /// Bounded like the cache (`Generations`, oldest first). Losing a mark, by eviction or by `removeEverything` (lab
+    /// benches and lab rule changes only), only gives a picture fresh first chances: nothing is held for its pixels, so it
+    /// needs `CLEAN_CHECKS` fresh clearly clean judgements in a row, and the first borderline one marks it again.
+    static let coverMark: UInt8 = 1, blurMark: UInt8 = 2
+    /// About 64 bytes a key with the dictionaries' spare room (a 32-byte key and a byte): 65,536 marks, about 4 MB at most.
+    static let defaultMarkCapacity = 65_536
+    private var marks: Generations<UInt8>
+    let markCapacity: Int
+
     /// About 64 bytes an entry with the dictionaries' spare room: 65,536 entries stay under about 4 MB.
     static let bytesPerEntry = 64
     static let defaultCapacity = 65_536
     private var store: Generations<Kept>
     let capacity: Int
     private(set) var hits = 0, misses = 0
-    init(capacity: Int = VerdictCache.defaultCapacity) { self.capacity = capacity; store = Generations(capacity: capacity) }
+    /// The clean-cache rule in force: `CleanRule.standard` except in a lab measurement.
+    private(set) var rule = CleanRule.standard
+    init(capacity: Int = VerdictCache.defaultCapacity, markCapacity: Int = VerdictCache.defaultMarkCapacity) {
+        self.capacity = capacity; store = Generations(capacity: capacity)
+        self.markCapacity = markCapacity; marks = Generations(capacity: markCapacity)
+    }
 
-    /// The most memory the cache can hold, roughly.
-    var maxBytes: Int { capacity * Self.bytesPerEntry }
-    /// Entries held, whether reusable or seen clean once; never more than `capacity`.
+    #if KESTREL_LAB
+    /// LAB ONLY: sets a stricter clean-cache rule (measurement) and empties the cache and its marks, since what they hold
+    /// was counted under the other rule. Refuses (returns false, changes nothing) a rule looser than `standard`.
+    @discardableResult
+    func setRule(_ r: CleanRule) -> Bool {
+        guard r.isAtLeastStandard else { return false }
+        rule = r
+        removeEverything()
+        return true
+    }
+    #endif
+
+    /// The most memory the cache can hold, roughly (its marks included).
+    var maxBytes: Int { (capacity + markCapacity) * Self.bytesPerEntry }
+    /// Entries held, whether reusable or waiting for clean checks; never more than `capacity`.
     var count: Int { store.count }
+    /// Marks held; never more than `markCapacity`.
+    var markCount: Int { marks.count }
 
     static func passCode(_ pass: String) -> UInt64 { pass == "region" ? 1 : pass == "whole" ? 2 : pass == "slice" ? 3 : 4 }
 
@@ -221,53 +294,74 @@ final class VerdictCache {
         ExactKey.of(img, r, header: [passCode(pass), UInt64(r.w), UInt64(r.h)], tag: version)
     }
 
+    private func mark(_ k: ExactKey) -> UInt8 { rule.sticky ? (marks.peek(k) ?? 0) : 0 }
+    private func addMark(_ k: ExactKey, _ bits: UInt8) {
+        guard rule.sticky else { return }
+        marks.put(k, (marks.peek(k) ?? 0) | bits)   // set again, so a mark seen again counts as recent use
+    }
+
     /// The outcome to reuse for `k`, or nil when it must be judged: a covering outcome, or a clean one judged
-    /// clearly clean `CLEAN_CHECKS` times in a row. Its `settledForBlur` says whether that many in a row were
-    /// also clearly clean for the containment cut-off. An entry seen clean once is never handed back.
+    /// clearly clean `CLEAN_CHECKS` times in a row and not marked. Its `settledForBlur` says whether that many in a row
+    /// were also clearly clean for the containment cut-off. An entry still waiting for clean checks is never handed back.
     func get(_ k: ExactKey) -> TileOutcome? {
-        if let e = store.get(k), let o = Self.reusable(e) { hits += 1; return o }
+        if let e = store.get(k), let o = reusable(k, e) { hits += 1; return o }
         misses += 1
         return nil
     }
 
-    static func reusable(_ e: Kept) -> TileOutcome? {
+    private func reusable(_ k: ExactKey, _ e: Kept) -> TileOutcome? {
         if e.outcome.covering { return e.outcome }
-        guard Int(e.cleanChecks) >= CLEAN_CHECKS else { return nil }
+        let m = mark(k)
+        guard m & Self.coverMark == 0, Int(e.cleanChecks) >= rule.checks else { return nil }
         var o = e.outcome
-        o.settledForBlur = Int(e.blurChecks) >= CLEAN_CHECKS
+        o.settledForBlur = m & Self.blurMark == 0 && Int(e.blurChecks) >= rule.checks
         return o
     }
 
-    /// Whether `k` is held as seen clean once (clearly clean, not yet reusable). Not counted as a hit or a miss.
+    /// Whether `k` is waiting for clean checks: clearly clean so far, not yet `CLEAN_CHECKS` in a row, not marked (a
+    /// marked picture is never queued for more checks). Not counted as a hit or a miss.
     func seenCleanOnce(_ k: ExactKey) -> Bool {
         guard let e = store.peek(k) else { return false }
-        return !e.outcome.covering && Int(e.cleanChecks) < Self.CLEAN_CHECKS
+        return !e.outcome.covering && mark(k) & Self.coverMark == 0 && Int(e.cleanChecks) < rule.checks
     }
 
+    /// Whether `k` is marked as never to be cached clean (sticky rule). Not counted.
+    func isStuck(_ k: ExactKey) -> Bool { mark(k) & Self.coverMark != 0 }
+
     /// Whether `k` would be handed back by `get` (a cover, or `CLEAN_CHECKS` clean judgements in a row). Not counted.
-    func isReusable(_ k: ExactKey) -> Bool { store.peek(k).flatMap(Self.reusable) != nil }
+    func isReusable(_ k: ExactKey) -> Bool { store.peek(k).flatMap { reusable(k, $0) } != nil }
 
     /// The counts held for `k` (tests).
     func checks(_ k: ExactKey) -> (clean: Int, blur: Int)? { store.peek(k).map { (Int($0.cleanChecks), Int($0.blurChecks)) } }
 
+    /// Empties the counts and verdicts (a detector rule change). The sticky marks stay.
     func removeAll() { store.removeAll() }
 
+    /// Empties the counts, verdicts and marks: lab benches starting from scratch, and a lab rule change, only.
+    func removeEverything() { store.removeAll(); marks.removeAll() }
+
     /// Records one judgement of `k`. A covering outcome is kept as it is (reusing it only covers). A clearly clean
-    /// one (`cacheable`) adds one to the count of clean judgements in a row: the first is "seen clean once", the
-    /// second makes it reusable. Anything else (borderline clean, a dispute the tie-breaker declined) forgets
-    /// what was held, so the count starts again.
+    /// one (`cacheable`) adds one to the count of clean judgements in a row; `rule.checks` of them make it reusable.
+    /// Anything else (borderline clean, a dispute the tie-breaker declined) forgets what was held. Under the sticky rule
+    /// (the default) a cover or a borderline judgement also marks `k` as never to be cached clean, and a judgement not
+    /// clearly clean for the containment cut-off marks it as never settled for a blur.
     func put(_ k: ExactKey, _ v: TileOutcome) {
-        if v.covering { store.put(k, Kept(outcome: v, cleanChecks: 0, blurChecks: 0)); return }
-        guard v.cacheable else { store.remove(k); return }
+        if v.covering {
+            addMark(k, Self.coverMark | Self.blurMark)
+            store.put(k, Kept(outcome: v, cleanChecks: 0, blurChecks: 0)); return
+        }
+        guard v.cacheable else { addMark(k, Self.coverMark | Self.blurMark); store.remove(k); return }
+        if mark(k) & Self.coverMark != 0 { store.remove(k); return }
+        if !v.settledForBlur { addMark(k, Self.blurMark) }
         let prev = store.peek(k).flatMap { $0.outcome.covering ? nil : $0 }
-        let cap = UInt8(Self.CLEAN_CHECKS)
+        let cap = UInt8(rule.checks)
         let clean = min(cap, (prev?.cleanChecks ?? 0) + 1)
-        let blur = v.settledForBlur ? min(cap, (prev?.blurChecks ?? 0) + 1) : 0
+        let blur = v.settledForBlur && mark(k) & Self.blurMark == 0 ? min(cap, (prev?.blurChecks ?? 0) + 1) : 0
         store.put(k, Kept(outcome: v, cleanChecks: clean, blurChecks: blur))
     }
 
-    /// A model failed on `k`: a clean count held for it is forgotten, so it starts again. A covering outcome
-    /// stays (it is reused without judging, so a failure never reaches it; keeping it only covers).
+    /// A model failed on `k`: a clean count held for it is forgotten, so it starts again; a mark stays. A covering
+    /// outcome stays (it is reused without judging, so a failure never reaches it; keeping it only covers).
     func forget(_ k: ExactKey) {
         if let e = store.peek(k), !e.outcome.covering { store.remove(k) }
     }
