@@ -729,4 +729,26 @@ struct ScreenSim {
         #expect(moveWindow(changeUnderCover: true) == 0, "changed while moving: the count starts again")
         #expect(moveWindow(changeUnderCover: false) == 3, "only moved: the count stands")
     }
+
+    // MARK: Early plans and the password prompt's hole
+
+    /// An early plan holds everything the last plan drew, but never a hole the prompt no longer has: when the prompt moves,
+    /// every early plan of that look, and the final plan, cover where it is now and leave no hole open.
+    @Test func earlyPlansNeverKeepAPromptsHoleOpen() {
+        let t = PasswordPromptTests()
+        let p = t.pipeline()
+        let first = t.coveredBehind(p, [t.prompt(), t.app])
+        #expect(first.promptHoles == [t.promptRect], "the hole is open before the move")
+        let moved = CGRect(x: 260, y: 160, width: 200, height: 160)
+        let snap = WindowSnapshot(windows: [t.prompt(bounds: moved), t.app], time: 0.2)
+        var early: [CoverPlan] = []
+        let plan = p.process(t.touched(2, t: 0.2), snapshot: snap, now: 0.2) { early.append($0) }
+        #expect(!early.isEmpty, "the move hands out an early plan")
+        for e in early {
+            #expect(e.promptHoles.isEmpty, "no hole in an early plan, before the prompt is judged again where it is: \(e.promptHoles)")
+            #expect(t.fullyCovered(e, moved), "the prompt's new place is covered")
+        }
+        // The look judges it again where it is (the judge here finds it clean): the final plan may open its hole there.
+        #expect(plan.promptHoles.allSatisfy { moved.contains($0) }, "a hole only where the prompt is now: \(plan.promptHoles)")
+    }
 }
