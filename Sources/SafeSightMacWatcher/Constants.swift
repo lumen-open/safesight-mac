@@ -8,7 +8,8 @@ public enum Register {
     /// region, video or still (SD-230). As built.
     public static let VIDEO_VOTE = 4
     /// `TIME_TO_COVER`: 0.5 s, the mark for one new picture on an otherwise still screen. Proposal (ST-031).
-    /// It also stays the step-2 rule: a window left with unjudged entries this long is covered whole.
+    /// It also stays the step-2 rule: in a window left with unjudged entries this long, what is still unjudged is covered
+    /// plainly (no longer only blurred) until it is judged.
     public static let TIME_TO_COVER: TimeInterval = 0.5
     /// The owner's goal (18 November 2026), tighter than `TIME_TO_COVER`: about 0.1 s from a new picture to
     /// its cover. Not a register value. When judging a window's new pictures would take longer than this, they

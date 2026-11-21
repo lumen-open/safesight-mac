@@ -137,9 +137,9 @@ extension CoverPlan {
         #expect(pieces.count == 1 && pieces[0].wayOut == .belowCard)
     }
 
-    @Test func aWindowCoveredWholeForSlownessKeepsItsBandAndItsUnjudgedPicturesCovered() {
-        // Unjudged for longer than TIME_TO_COVER: the window is covered whole, apart from its band; the band's
-        // unjudged entries stay covered or blurred on their own.
+    @Test func aPictureLeftUnjudgedForSlownessIsCoveredPlainlyAndTheBandStaysClear() {
+        // Unjudged for longer than TIME_TO_COVER: the unjudged picture, in the band, is covered plainly; the rest of the
+        // window, judged, is in sight, and so is the rest of its band.
         var calls = 0
         let picture = PixelRect(x: 700, y: 84, w: 128, h: 128)
         let p = DisplayPipeline(display: display, judger: ScriptedJudge { _ in
@@ -150,8 +150,8 @@ extension CoverPlan {
         _ = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, t: 0), snapshot: snapshot, now: 0)
         _ = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, dirty: [picture], t: 0.1), snapshot: snapshot, now: 0.1)
         let plan = p.process(Fixtures.frame(Fixtures.blank(1200, 800), display: display, scale: 2, dirty: [picture], t: 0.7), snapshot: snapshot, now: 0.7)
-        #expect(plan.covers(CGRect(x: 50, y: band.maxY, width: 500, height: 370 - band.maxY), kind: .plain), "covered whole below the band")
-        #expect(plan.covers(CGRect(x: 350, y: 42, width: 64, height: 64)), "the unjudged picture in the band is blurred")
+        #expect(plan.covers(CGRect(x: 350, y: 42, width: 64, height: 64), kind: .plain), "the unjudged picture in the band is covered plainly")
+        #expect(!plan.touches(CGRect(x: 50, y: band.maxY, width: 500, height: 370 - band.maxY)), "the judged rest of the window is in sight")
         #expect(!plan.touches(CGRect(x: 60, y: 32, width: 200, height: 88)))
     }
 }
