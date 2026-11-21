@@ -40,6 +40,14 @@ public enum EnergyMode: String, Sendable, CaseIterable {
 /// Which displays get a look at the last frame on this tick (`WatcherController.askForLooks`). Pure, so the tests run the
 /// app's own pace.
 public enum LookPace {
+    /// Option, not enabled (docs/ENERGY.md, "Looking every tick while many covers wait"). With a number N, a still screen
+    /// is looked at every tick (`Register.TICK`) rather than every `EnergyMode.lookEvery` while more than N covers wait to
+    /// lift (covers found flagged at their last own call aside: looking sooner cannot lift them), and only while the
+    /// judging budget holds at least one judgement; otherwise at today's pace. It spends more energy to settle sooner and
+    /// changes nothing else: the same budget, the same `VIDEO_VOTE` clean rounds, the same clean-cache rule, the same
+    /// `TIME_TO_COVER`. Nil (the default) is today's behaviour. The owner has not chosen to turn it on.
+    public static let TICK_WHILE_COVERS_OVER: Int? = nil
+
     public struct Due: Equatable, Sendable {
         /// Displays whose look interval has passed: their last look time moves to now.
         public var touched: Set<UInt32> = []

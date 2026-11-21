@@ -172,7 +172,7 @@ public final class DisplayPipeline {
     var lastLookAt: TimeInterval?
     func stillLookDue(_ now: TimeInterval) -> Bool {
         guard let pace = stillLookPace, let last = lastLookAt else { return true }
-        let every = hasLeftOverWork || promptLookDue ? pace.tick : pace.every
+        let every = hasLeftOverWork || promptLookDue || coversWantTickPace(now) ? pace.tick : pace.every
         // Half a tick early is still due: the app's own offers come on its tick, and the look starts a little after.
         return now - last >= every - pace.tick / 2
     }
@@ -233,6 +233,24 @@ public final class DisplayPipeline {
     /// no time for, and the background clean checks of pictures shown clear (a check that flags must cover as soon as on
     /// main). The app then looks every tick, not every `EnergyMode.lookEvery`.
     public var hasLeftOverWork: Bool { !pending.isEmpty || !dueAgain.isEmpty || secondChecksWanted }
+    /// The option `LookPace.TICK_WHILE_COVERS_OVER` (nil, the default: off). Set per pipeline so the tests and the lab
+    /// harness can measure it; the app leaves it at the default.
+    public var tickWhileCoversOver: Int? = LookPace.TICK_WHILE_COVERS_OVER
+    /// Covers waiting to lift that a sooner look could lift: those not found flagged at their own last call.
+    var coversWaitingToLift: Int { held.reduce(0) { $0 + ($1.flaggedAt == nil ? 1 : 0) } }
+    /// With the option on, more than its number of covers wait to lift (without the budget check, which needs a time).
+    var manyCoversWait: Bool { tickWhileCoversOver.map { coversWaitingToLift > $0 } ?? false }
+    /// With the option on: more than its number of covers wait, and the budget holds a judgement at `now` (an empty bucket
+    /// gets no extra look).
+    func coversWantTickPace(_ now: TimeInterval) -> Bool {
+        guard manyCoversWait else { return false }
+        var b = bucket; b.refill(now: now)
+        return b.available > 0
+    }
+    /// Whether the app offers a look every tick rather than every `EnergyMode.lookEvery` (`LookPace.due`'s `leftOver`):
+    /// work left over, or, with the option on, many covers waiting. With the option off, exactly `hasLeftOverWork`. The
+    /// pipeline's own pace (`stillLookDue`) still turns a look down when the bucket is empty.
+    public var looksEveryTick: Bool { hasLeftOverWork || manyCoversWait }
 
     /// What the pipeline holds now, in counts only (for the lab event log and tests; nothing about screen content).
     public struct Diagnostics: Sendable, Equatable {

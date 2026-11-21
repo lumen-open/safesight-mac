@@ -32,7 +32,7 @@
 //            (lab build only) a bundle's models against the reference outputs shipped with them, with broken controls
 //            that must fail (spec/detector-contract.md); see Conformance.swift
 //   safesightmac-harness energy FILE --models DIR [--windows FILE] [--pages DIR] [--power full|battery|low]
-//            [--cases still,reuse,video,copy,tick] [--rest S] [--json FILE] [--check]
+//            [--cases still,reuse,video,copy,tick] [--rest S] [--json FILE] [--check] [--tick-while-covers-over N]
 //            (lab build only) CPU time, memory and judgements on a simulated clock, against the energy budget; see Energy.swift
 //   options: --scale N (1, 2 or 3; default 2)  --origin X,Y (global points; default 0,0)  --primary-height H
 //            --rule balanced|either  --window X,Y,W,H (one window, global points; default: the whole display)
@@ -85,6 +85,7 @@ struct EnergySettingsParsed {
     var power = "full"
     var cases: [String]?
     var rest = 60.0
+    var tickWhileCoversOver: Int?
     var check = false
 }
 
@@ -171,6 +172,9 @@ func parse() -> Options {
         case "--power": o.energy.power = v(); if !["full", "battery", "low"].contains(o.energy.power) { fail("--power full|battery|low") }
         case "--check": o.energy.check = true
         case "--rest": o.energy.rest = Double(v()) ?? 60
+        case "--tick-while-covers-over":
+            guard let n = Int(v()), n >= 0 else { fail("--tick-while-covers-over needs a whole number") }
+            o.energy.tickWhileCoversOver = n
         case "--help", "-h": print("see the header of Sources/SafeSightMacHarness/main.swift"); exit(0)
         default:
             if k.hasPrefix("--") { fail("unknown option \(k)") }
@@ -355,6 +359,7 @@ if o.command == "energy" {
     e.power = EnergyMode(rawValue: o.energy.power) ?? .full
     if let c = o.energy.cases { e.cases = c }
     e.restSeconds = o.energy.rest; e.check = o.energy.check
+    e.tickWhileCoversOver = o.energy.tickWhileCoversOver
     MainActor.assumeIsolated {
         Energy.run(detector: detector, files: o.files, windows: o.still.windows, pages: o.bench.pages, scale: o.scale, s: e, json: o.bench.json)
     }

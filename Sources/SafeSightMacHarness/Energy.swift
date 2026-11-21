@@ -6,6 +6,7 @@
 //
 //   safesightmac-harness energy FILE --models DIR [--windows FILE] [--pages DIR] [--power full|battery|low]
 //                                     [--cases still,reuse,video,copy,tick] [--seconds REST] [--json FILE] [--check]
+//                                     [--tick-while-covers-over N]
 //
 // - `still`: FILE (a harmless desktop screenshot) as a still screen. One complete frame, then the looks the watcher would
 //   ask for (`EnergyMode.lookEvery`, only while the pipeline wants one) until nothing is drawn and no look is wanted, then
@@ -24,6 +25,7 @@
 // It includes Core ML's CPU side, not the Neural Engine's or the GPU's own work, and says nothing about battery drain:
 // those need a real Mac (docs/ENERGY.md). Memory is the process's footprint as Activity Monitor counts it.
 // With --check, exits 1 when a figure is over `EnergyBudget`.
+// --tick-while-covers-over N turns on the option `LookPace.TICK_WHILE_COVERS_OVER` (off in the app) for the measurement.
 #if SAFESIGHTMAC_LAB
 import CoreGraphics
 import Darwin
@@ -40,6 +42,8 @@ struct EnergySettings {
     var restSeconds = 60.0
     var maxSettleSeconds = 1200.0
     var check = false
+    /// The option `LookPace.TICK_WHILE_COVERS_OVER`, for measuring it (nil: the app's default, off).
+    var tickWhileCoversOver: Int? = LookPace.TICK_WHILE_COVERS_OVER
 }
 
 /// The detector, counting judgements made beyond the budget each call was given (counts only).
@@ -160,7 +164,7 @@ enum Energy {
             // The next tick at which the app's own pace (`LookPace`) asks for a look.
             let tick = Register.TICK
             var next = (t / tick).rounded(.up) * tick
-            while LookPace.due(now: next, mode: mode, wants: [1], leftOver: p.hasLeftOverWork ? [1] : [], lastAt: [1: lastLook],
+            while LookPace.due(now: next, mode: mode, wants: [1], leftOver: p.looksEveryTick ? [1] : [], lastAt: [1: lastLook],
                                busy: [], waiting: [], holding: false).offered.isEmpty { next += tick }
             t = next
             lastLook = t
@@ -176,8 +180,12 @@ enum Energy {
     static func makePipeline(_ display: DisplayDescriptor, _ d: Detector, mode: EnergyMode) -> DisplayPipeline {
         let w = BudgetWatch(d)
         watch = w
-        return DisplayPipeline(display: display, judger: w, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+        let p = DisplayPipeline(display: display, judger: w, budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [])
+        p.tickWhileCoversOver = tickWhileCoversOver
+        return p
     }
+    /// The option under measurement (`EnergySettings.tickWhileCoversOver`), set by `run`.
+    static var tickWhileCoversOver: Int? = LookPace.TICK_WHILE_COVERS_OVER
 
     static func map(_ display: DisplayDescriptor, _ img: RGBAImage, scale: CGFloat) -> CaptureMap {
         CaptureMap(displayBounds: display.bounds, contentRect: CGRect(origin: .zero, size: display.bounds.size), contentScale: 1,
@@ -395,6 +403,8 @@ enum Energy {
     @MainActor static func run(detector d: Detector, files: [String], windows: String?, pages: String?, scale: CGFloat, s: EnergySettings, json: String?) {
         var out: [String: Any] = ["what": "safesightmac-harness energy", "simulatedClock": true,
                                   "machine": machine(), "footprintAfterModelsMB": r2(footprintMB())]
+        tickWhileCoversOver = s.tickWhileCoversOver
+        if let n = s.tickWhileCoversOver { out["tickWhileCoversOver"] = n }
         var over: [String] = []
         for c in s.cases {
             switch c {

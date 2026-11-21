@@ -376,7 +376,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             plan = fresh.readable ? p.refreshHoles(fresh) : p.cover(because: .windowListUnreadable)
         }
         let ended = ProcessInfo.processInfo.systemUptime
-        let wants = p.needsAnotherLook, leftOver = p.hasLeftOverWork, timings = p.lastTimings, idle = f.status == .idle
+        let wants = p.needsAnotherLook, leftOver = p.looksEveryTick, timings = p.lastTimings, idle = f.status == .idle
         #if SAFESIGHTMAC_LAB
         do {
             let t = p.lastTimings, g = p.diagnostics
