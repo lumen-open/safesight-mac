@@ -39,9 +39,15 @@ public struct HoleGate: Sendable {
     public private(set) var backed: Set<Hole> = []
     public init() {}
 
-    /// Every hole the plans ask for.
+    /// Every hole the plans ask for (each has its backing).
     public static func holes(_ plans: [CoverPlan]) -> [Hole] {
         plans.flatMap { p in CoverLayout.behindPromptRects(p).map { Hole(display: p.display.id, rect: $0) } }
+    }
+
+    /// The holes that cut a cover (`CoverLayout.cuttingPromptRects`): only these wait for their backing, are checked
+    /// against the window list and are watched. A hole that cuts nothing changes nothing on screen but its backing.
+    public static func cuttingHoles(_ plans: [CoverPlan]) -> [Hole] {
+        plans.flatMap { p in CoverLayout.cuttingPromptRects(p).map { Hole(display: p.display.id, rect: $0) } }
     }
 
     /// The plans as they may be drawn now: a hole whose backing was not drawn before stays covered (taken out of a
@@ -50,7 +56,7 @@ public struct HoleGate: Sendable {
         var held = false
         let out = plans.map { plan -> CoverPlan in
             var p = plan
-            let closed = CoverLayout.behindPromptRects(plan).filter { !backed.contains(Hole(display: plan.display.id, rect: $0)) }
+            let closed = CoverLayout.cuttingPromptRects(plan).filter { !backed.contains(Hole(display: plan.display.id, rect: $0)) }
             guard !closed.isEmpty else { return p }
             held = true
             if p.wholeDisplay != nil {
@@ -66,23 +72,31 @@ public struct HoleGate: Sendable {
     /// The backings drawn now (and only these) count as up for the next drawing.
     public mutating func drew(_ holes: Set<Hole>) { backed = holes }
 
-    /// The plans with every hole closed that the window list read now does not hold (`PasswordPrompt.holeStillOpen`):
-    /// the prompt went, moved or changed size, a window came in front of it or behind it, or the list could not be read
-    /// (`windows` nil or unreadable). A closed hole is taken out of the plan, so its backing is no longer wanted, and is
-    /// covered: by the whole-display cover around it, or by a plain cover of its own. Plans without holes are untouched.
+    /// The plans with every hole that cuts a cover closed that the window list read now does not hold
+    /// (`PasswordPrompt.holeStillOpen`): the prompt went, moved or changed size, another window took its place, a window
+    /// came in front of it or behind it, or the list could not be read (`windows` nil or unreadable). A closed hole is
+    /// taken out of the plan, so its backing is no longer wanted, and is covered: by the whole-display cover around it, or
+    /// by a plain cover of its own. A hole that cuts no cover (`PromptFrame.uncut`) is left as it is: closing it would
+    /// only cover the prompt. Plans without a cutting hole are untouched.
     public static func confirm(_ plans: [CoverPlan], windows: WindowSnapshot?, ignoring: Set<Int32>) -> [CoverPlan] {
         plans.map { plan in
-            guard !plan.promptHoles.isEmpty else { return plan }
+            let cutting = CoverLayout.cuttingPromptRects(plan)
+            guard !cutting.isEmpty else { return plan }
+            let failed = plan.promptHoles.filter { r in
+                guard cutting.contains(r.intersection(plan.display.bounds)) else { return false }
+                guard let windows else { return true }
+                return !plan.promptFrames.contains { PasswordPrompt.holeStillOpen(r, of: $0, display: plan.display.bounds, in: windows, ignoring: ignoring) }
+            }
+            guard !failed.isEmpty else { return plan }
             var p = plan
-            let keep = plan.promptHoles.map { r in
-                windows.map { PasswordPrompt.holeStillOpen(r, frames: plan.promptFrames, display: plan.display.bounds, in: $0, ignoring: ignoring) } ?? false
+            p.promptHoles = plan.promptHoles.filter { !failed.contains($0) }
+            p.promptFrames = plan.promptFrames.compactMap { f in
+                var f = f
+                f.holes = f.holes.filter { !failed.contains($0) }
+                f.uncut = f.uncut.filter { !failed.contains($0) }
+                return f.holes.isEmpty ? nil : f
             }
-            guard keep.contains(false) else { return plan }
-            p.promptHoles = zip(plan.promptHoles, keep).filter(\.1).map(\.0)
-            if p.wholeDisplay == nil {
-                p.items += zip(plan.promptHoles, keep).filter { !$0.1 }.map { CoverItem(rect: $0.0, kind: .plain) }
-            }
-            if p.promptHoles.isEmpty { p.promptFrames = [] }
+            if p.wholeDisplay == nil { p.items += failed.map { CoverItem(rect: $0, kind: .plain) } }
             return p
         }
     }
@@ -145,7 +159,7 @@ extension CoverPanel: BackingPanel {
         return isVisible && self.frame == frame && stands(covering: hole)
     }
 
-    func stands(covering hole: CGRect) -> Bool { isVisible && BackingCheck.stands(BackingCheck.info(windowNumber), covering: hole) }
+    func stands(covering hole: CGRect) -> Bool { isVisible && BackingCheck.stands(serverInfo(windowNumber), covering: hole) }
 
     func hide() { orderOut(nil) }
 }
@@ -178,6 +192,9 @@ final class BehindPrompt {
     /// The window list now, read only when a plan has a hole. Nil (or unreadable): no hole opens.
     private let windows: @MainActor () -> WindowSnapshot?
     private let watchLater: @MainActor (TimeInterval, @escaping Turn) -> Void
+    /// Sends what was just drawn to the screen (`CATransaction.flush`): the covers over a hole that closed are committed
+    /// before its backing is taken down on the next turn of the main loop.
+    private let flush: @MainActor () -> Void
     /// This app's own windows (the covers, the backings): never the prompt, never in front of it.
     private let ownPIDs: Set<Int32>
     /// Tries left, for a backing that could not be drawn, before the next change on screen: a few, further apart each
@@ -189,10 +206,10 @@ final class BehindPrompt {
     private var latest: [CoverPlan] = []
     /// How the latest plans are drawn again (the presenter's own `apply`).
     private var redraw: (([CoverPlan]) -> Void)?
-    /// The holes cut in the covers by the last drawing.
+    /// The holes cut in covers by the last drawing (holes that cut no cover are not counted).
     private(set) var cut: Set<HoleGate.Hole> = []
     /// How often a cut hole's prompt and backing are looked at again between drawings: 20 times a second, only while
-    /// a hole is cut (a prompt is up for seconds; nothing runs otherwise).
+    /// a hole actually cuts a cover (a prompt on a screen with nothing covered around it is not watched).
     static let watchEvery: TimeInterval = 0.05
     private var watchPending = false
 
@@ -204,14 +221,16 @@ final class BehindPrompt {
          windows: @escaping @MainActor () -> WindowSnapshot? = { nil },
          watchLater: @escaping @MainActor (TimeInterval, @escaping Turn) -> Void = { d, f in
              DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } },
-         ownPIDs: Set<Int32> = [getpid()]) {
+         ownPIDs: Set<Int32> = [getpid()],
+         flush: @escaping @MainActor () -> Void = { CATransaction.flush() }) {
         self.make = make; self.nextTurn = nextTurn; self.toCocoa = toCocoa; self.later = later
-        self.windows = windows; self.watchLater = watchLater; self.ownPIDs = ownPIDs
+        self.windows = windows; self.watchLater = watchLater; self.ownPIDs = ownPIDs; self.flush = flush
     }
 
-    /// The plans with every hole closed that the window list read now does not hold. Read only when a plan has a hole.
+    /// The plans with every cutting hole closed that the window list read now does not hold. The list is read only when
+    /// a plan has a hole that cuts a cover.
     private func confirmed(_ plans: [CoverPlan]) -> [CoverPlan] {
-        guard plans.contains(where: { !$0.promptHoles.isEmpty }) else { return plans }
+        guard plans.contains(where: { !CoverLayout.cuttingPromptRects($0).isEmpty }) else { return plans }
         return HoleGate.confirm(plans, windows: windows(), ignoring: ownPIDs)
     }
 
@@ -225,6 +244,7 @@ final class BehindPrompt {
         redraw = again
         let plans = confirmed(incoming)
         let wanted = HoleGate.holes(plans)
+        let cutting = Set(HoleGate.cuttingHoles(plans))
         for h in wanted where assigned[h] == nil { assigned[h] = spare.popLast() ?? make() }
         var up: Set<HoleGate.Hole> = []
         CATransaction.begin()
@@ -238,12 +258,12 @@ final class BehindPrompt {
         let open = gate.backed
         let (plansNow, _) = gate.gate(plans)
         draw(plansNow)
-        cut = open.intersection(wanted)
+        cut = open.intersection(cutting)
         gate.drew(up)
         if !cut.isEmpty { watch() }
-        // Drawn again only for a hole held back whose backing is up now (it opens then); one whose backing could not be
-        // drawn stays covered, and is not retried in a loop.
-        let held = up.contains { !open.contains($0) }
+        // Drawn again only for a cutting hole held back whose backing is up now (it opens then); one whose backing could
+        // not be drawn stays covered, and is not retried in a loop. A hole that cuts nothing holds nothing back.
+        let held = up.contains { cutting.contains($0) && !open.contains($0) }
         // A backing that could not be drawn: its hole stays covered, and the same plans are tried again a few times
         // (so an idle screen recovers without waiting for a change), then no more until the next plans.
         if wanted.allSatisfy(up.contains) {
@@ -260,6 +280,8 @@ final class BehindPrompt {
         }
         let going = Set(assigned.keys).subtracting(wanted)
         guard held || !going.isEmpty else { return }
+        // The covers just drawn reach the screen before any backing comes down.
+        if !going.isEmpty { flush() }
         let mine = serial
         nextTurn { [weak self] in
             guard let self, self.serial == mine else { return }
@@ -336,6 +358,8 @@ public protocol CoverPresenter: AnyObject {
 final class CoverPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+    /// Where a backing reads the window server's entry for itself (`BackingCheck.info`; a stand-in in tests).
+    var serverInfo: (Int) -> [String: Any]? = BackingCheck.info
 
     static func make(frame: CGRect) -> CoverPanel {
         let p = CoverPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)

@@ -8,6 +8,11 @@ import Testing
 @testable import SafeSightMacCover
 @testable import SafeSightMacWatcher
 
+/// The frames of prompts standing at `rects` (windows 50, 51, ... of process 900), each with its one hole.
+func promptFrames(_ rects: [CGRect], uncut: Bool = false) -> [PromptFrame] {
+    rects.enumerated().map { i, r in PromptFrame(number: UInt32(50 + i), ownerPID: 900, frame: r, holes: [r], uncut: uncut ? [r] : []) }
+}
+
 @Suite struct HoleGateTests {
     let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
     let hole = CGRect(x: 200, y: 120, width: 200, height: 160)
@@ -87,6 +92,29 @@ import Testing
         #expect(!BackingCheck.stands(missing, covering: hole))
     }
 
+    /// The real backing panel asks the window server about itself, and AppKit's word is not enough: with the window
+    /// server's entry saying it is still fading in (or missing), `place` says it is not up. Run on a real panel, ordered
+    /// in far off every display (it needs a window server session, as `swift test` on a Mac has), its entry stood in.
+    @MainActor @Test func theRealBackingPanelTrustsOnlyTheWindowServer() {
+        let off = CGRect(x: -30000, y: -30000, width: 40, height: 30)
+        let p = CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        defer { p.hide() }
+        let holeHere = CGRect(x: -30000, y: 30000 - 30, width: 40, height: 30)
+        func entry(_ alpha: Double) -> [String: Any] {
+            [kCGWindowAlpha as String: NSNumber(value: alpha), kCGWindowLayer as String: NSNumber(value: CoverLevel.behindPrompt),
+             kCGWindowIsOnscreen as String: NSNumber(value: true), kCGWindowBounds as String: holeHere.dictionaryRepresentation as NSDictionary]
+        }
+        var asked = 0
+        p.serverInfo = { _ in asked += 1; return entry(0.0178) }
+        #expect(!p.place(off, covering: holeHere, theme: .light), "fading in: not up")
+        #expect(asked > 0, "the window server was asked")
+        p.serverInfo = { _ in nil }
+        #expect(!p.place(off, covering: holeHere, theme: .light), "not listed: not up")
+        p.serverInfo = { _ in entry(1) }
+        #expect(p.place(off, covering: holeHere, theme: .light) == p.isVisible, "in place and opaque: up (when AppKit shows it)")
+        #expect(p.animationBehavior == .none && p.alphaValue == 1 && p.isOpaque)
+    }
+
     /// Every cover window, the backing included, is never animated in or out by AppKit.
     @MainActor @Test func coverWindowsAreNeverAnimated() {
         let p = CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
@@ -105,7 +133,7 @@ import Testing
     }
     var plan: CoverPlan {
         CoverPlan(display: d, items: [CoverItem(rect: CGRect(x: 0, y: 0, width: 600, height: 120), kind: .plain)],
-                  promptHoles: [hole], promptFrames: [hole])
+                  promptHoles: [hole], promptFrames: promptFrames([hole]))
     }
     func list(_ w: [WindowInfo]) -> WindowSnapshot { WindowSnapshot(windows: w, time: 0) }
     func closed(_ p: CoverPlan) -> Bool {
@@ -137,6 +165,18 @@ import Testing
             let out = HoleGate.confirm([plan], windows: w, ignoring: [42])
             #expect(closed(out[0]), "\(why): \(out[0])")
         }
+        // Another window at exactly the same place (a new request, say) was never judged: closed.
+        let other = WindowInfo(number: 51, ownerPID: 900, layer: PasswordPrompt.level, bounds: hole, passwordPrompt: true)
+        #expect(closed(HoleGate.confirm([plan], windows: list([other, app]), ignoring: [42])[0]), "same place, another window")
+        let otherOwner = WindowInfo(number: 50, ownerPID: 901, layer: PasswordPrompt.level, bounds: hole, passwordPrompt: true)
+        #expect(closed(HoleGate.confirm([plan], windows: list([otherOwner, app]), ignoring: [42])[0]), "same number, another process")
+        // Prompt B, larger, contains closed prompt A's place: A's hole does not live on in B.
+        let bigger = hole.insetBy(dx: -20, dy: -20)
+        var two = plan
+        two.promptFrames = [PromptFrame(number: 50, ownerPID: 900, frame: hole, holes: [hole]),
+                            PromptFrame(number: 60, ownerPID: 900, frame: bigger, holes: [])]
+        let b = WindowInfo(number: 60, ownerPID: 900, layer: PasswordPrompt.level, bounds: bigger, passwordPrompt: true)
+        #expect(closed(HoleGate.confirm([two], windows: list([b, app]), ignoring: [42])[0]), "A went, B covers its place")
         // A plan with a hole but no frame for it never opens.
         var noFrame = plan; noFrame.promptFrames = []
         #expect(closed(HoleGate.confirm([noFrame], windows: list([prompt(), app]), ignoring: [42])[0]))
@@ -160,6 +200,10 @@ import Testing
         var violations: [String] = []
         /// Where the window list shows a password prompt.
         var promptsAt: [CGRect] = []
+        /// Whether what was drawn last has been sent to the screen (`CATransaction.flush`) yet.
+        var flushed = true
+        /// How often the window list was read.
+        var reads = 0
         func check(_ when: String) {
             for h in cut where !panels.contains(where: { $0.shown && $0.frame == h.rect }) {
                 violations.append("\(when): hole \(h.rect) cut with no backing there")
@@ -179,7 +223,10 @@ import Testing
             return stands(covering: hole)
         }
         func stands(covering hole: CGRect) -> Bool { shown && serverShowsIt && frame.contains(hole) }
-        func hide() { shown = false; world.check("took a backing down") }
+        func hide() {
+            if !world.flushed { world.violations.append("took a backing down before the covers drawn over it reached the screen") }
+            shown = false; world.check("took a backing down")
+        }
     }
 
     /// A password prompt standing at each of `rects` in the window list.
@@ -192,8 +239,8 @@ import Testing
     func setUp() -> (World, BehindPrompt) {
         let w = World()
         let b = BehindPrompt(make: { let p = FakePanel(w); w.panels.append(p); return p },
-                             nextTurn: { w.turns.append($0) }, toCocoa: { $0 }, windows: { Self.prompts(w.promptsAt) },
-                             watchLater: { _, _ in })
+                             nextTurn: { w.turns.append($0) }, toCocoa: { $0 }, windows: { w.reads += 1; return Self.prompts(w.promptsAt) },
+                             watchLater: { _, _ in }, flush: { w.flushed = true })
         return (w, b)
     }
 
@@ -201,10 +248,11 @@ import Testing
     /// The window list shows a prompt at each hole.
     func show(_ holes: [CGRect], _ w: World, _ b: BehindPrompt) {
         w.promptsAt = holes
-        let plan = CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: holes, promptFrames: holes)
+        let plan = CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: holes, promptFrames: promptFrames(holes))
         func draw(_ plans: [CoverPlan]) {
             // A hole is cut when no plain cover was put back over exactly it.
             w.cut = Set(plans.flatMap { p in p.promptHoles.filter { r in !p.items.contains { $0.rect == r } }.map { HoleGate.Hole(display: p.display.id, rect: $0) } })
+            w.flushed = false
             w.check("drew the covers")
         }
         func apply(_ plans: [CoverPlan]) { b.apply(plans, theme: .light, draw: draw, again: apply) }
@@ -237,9 +285,10 @@ import Testing
         #expect(w.cut == [HoleGate.Hole(display: 1, rect: a)])
         // The prompt goes; a plan from before that still has its hole arrives.
         w.promptsAt = []
-        let stale = CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [a], promptFrames: [a])
+        let stale = CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [a], promptFrames: promptFrames([a]))
         func draw(_ plans: [CoverPlan]) {
             w.cut = Set(plans.flatMap { p in p.promptHoles.filter { r in !p.items.contains { $0.rect == r } }.map { HoleGate.Hole(display: p.display.id, rect: $0) } })
+            w.flushed = false
             w.check("drew the covers")
         }
         func apply(_ plans: [CoverPlan]) { b.apply(plans, theme: .light, draw: draw, again: apply) }
@@ -258,17 +307,18 @@ import Testing
             var watches: [(TimeInterval, BehindPrompt.Turn)] = []
             let b = BehindPrompt(make: { let p = FakePanel(w); w.panels.append(p); return p },
                                  nextTurn: { w.turns.append($0) }, toCocoa: { $0 }, windows: { Self.prompts(w.promptsAt) },
-                                 watchLater: { d, f in watches.append((d, f)) })
+                                 watchLater: { d, f in watches.append((d, f)) }, flush: { w.flushed = true })
             let a = CGRect(x: 100, y: 100, width: 150, height: 120)
             var draws = 0
             func draw(_ plans: [CoverPlan]) {
                 draws += 1
                 w.cut = Set(plans.flatMap { p in p.promptHoles.filter { r in !p.items.contains { $0.rect == r } }.map { HoleGate.Hole(display: p.display.id, rect: $0) } })
+                w.flushed = false
                 w.check("drew the covers")
             }
             func apply(_ plans: [CoverPlan]) { b.apply(plans, theme: .light, draw: draw, again: apply) }
             w.promptsAt = [a]
-            apply([CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [a], promptFrames: [a])])
+            apply([CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [a], promptFrames: promptFrames([a]))])
             while !w.turns.isEmpty { w.turns.removeFirst()() }
             #expect(w.cut == [HoleGate.Hole(display: 1, rect: a)])
             // Nothing changed yet: the watch looks, finds all well, and looks again; nothing is drawn.
@@ -289,13 +339,12 @@ import Testing
 
     /// A backing the window server does not show yet as opaque and in place (AppKit said it is up) keeps its hole closed.
     @Test func aBackingTheWindowServerDoesNotShowInPlaceKeepsItsHoleClosed() {
-        let (w, b) = setUp()
+        let w = World()
         let a = CGRect(x: 100, y: 100, width: 150, height: 120)
         var fading: FakePanel?
         let b2 = BehindPrompt(make: { let p = FakePanel(w); p.serverShowsIt = false; fading = p; w.panels.append(p); return p },
                               nextTurn: { w.turns.append($0) }, toCocoa: { $0 }, later: { _, f in w.turns.append(f) },
                               windows: { Self.prompts(w.promptsAt) }, watchLater: { _, _ in })
-        _ = b
         w.promptsAt = [a]
         var cuts: [Set<HoleGate.Hole>] = []
         func draw(_ plans: [CoverPlan]) {
@@ -303,15 +352,64 @@ import Testing
             cuts.append(cut)
         }
         func apply(_ plans: [CoverPlan]) { b2.apply(plans, theme: .light, draw: draw, again: apply) }
-        apply([CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [a], promptFrames: [a])])
+        apply([CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [a], promptFrames: promptFrames([a]))])
         var turns = 0
         while !w.turns.isEmpty && turns < 50 { w.turns.removeFirst()(); turns += 1 }
         #expect(cuts.allSatisfy { $0.isEmpty }, "\(cuts)")
         // Once the window server shows it in place, the hole opens on a later drawing.
         fading?.serverShowsIt = true
-        apply([CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [a], promptFrames: [a])])
+        apply([CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [a], promptFrames: promptFrames([a]))])
         while !w.turns.isEmpty && turns < 100 { w.turns.removeFirst()(); turns += 1 }
         #expect(cuts.last == [HoleGate.Hole(display: 1, rect: a)])
+    }
+
+    /// A prompt on a screen with nothing covered around it: its backing goes up, but nothing waits on it. The prompt is
+    /// never covered (not while its backing goes up, not when the backing fails, not on any check), the window list is not
+    /// read for it, and nothing watches it. When a cover then arrives that its hole cuts, that hole goes through the full
+    /// gate: cut at once only if its backing already stood in place, held covered otherwise.
+    @Test func aHoleThatCutsNothingIsNeverCoveredOrWatchedAndAHoleThatStartsCuttingIsGated() {
+        for backingStands in [true, false] {
+            let w = World()
+            var watches = 0
+            var made: [FakePanel] = []
+            let b = BehindPrompt(make: { let p = FakePanel(w); p.serverShowsIt = backingStands; made.append(p); w.panels.append(p); return p },
+                                 nextTurn: { w.turns.append($0) }, toCocoa: { $0 }, later: { _, _ in },
+                                 windows: { w.reads += 1; return Self.prompts(w.promptsAt) },
+                                 watchLater: { _, _ in watches += 1 }, flush: { w.flushed = true })
+            let a = CGRect(x: 100, y: 100, width: 150, height: 120)
+            var drawn: [CoverPlan] = []
+            func draw(_ plans: [CoverPlan]) { drawn += plans; w.flushed = false }
+            func apply(_ plans: [CoverPlan]) { b.apply(plans, theme: .light, draw: draw, again: apply) }
+            w.promptsAt = [a]
+            // Nothing covered around the prompt: the hole cuts nothing.
+            let clean = CoverPlan(display: d, items: [], promptHoles: [a], promptFrames: promptFrames([a], uncut: true))
+            for _ in 0..<3 { apply([clean]); while !w.turns.isEmpty { w.turns.removeFirst()() } }
+            #expect(drawn.allSatisfy { $0 == clean }, "the prompt is never covered: \(drawn)")
+            #expect(made.count == 1 && made[0].shown, "its backing is up")
+            #expect(w.reads == 0 && watches == 0, "nothing reads the window list or watches for it")
+            // A cover arrives that the hole now cuts.
+            drawn = []
+            let cutting = CoverPlan(display: d, items: [CoverItem(rect: CGRect(x: 0, y: 0, width: 600, height: 100), kind: .plain, source: .window(number: 1, ownerPID: 500))],
+                                    promptHoles: [a], promptFrames: promptFrames([a]))
+            apply([cutting])
+            let first = drawn[0]
+            let coveredOver = first.items.contains { $0.rect == a }
+            #expect(coveredOver == !backingStands, "backing stands \(backingStands): \(first.items.map(\.rect))")
+            #expect(w.reads >= 1, "a cutting hole is checked against the window list")
+            #expect((watches > 0) == backingStands, "watched only while it actually cuts")
+            while !w.turns.isEmpty { w.turns.removeFirst()() }
+            #expect(w.violations.isEmpty, "\(w.violations)")
+        }
+    }
+
+    /// When a hole closes, the covers drawn over it are sent to the screen before its backing is taken down.
+    @Test func theCoversOverAClosedHoleReachTheScreenBeforeItsBackingComesDown() {
+        let (w, b) = setUp()
+        let a = CGRect(x: 100, y: 100, width: 150, height: 120)
+        show([a], w, b)
+        show([], w, b)
+        #expect(w.panels.allSatisfy { !$0.shown })
+        #expect(w.violations.isEmpty, "\(w.violations)")
     }
 
     final class Flaky: BackingPanel {
@@ -336,7 +434,7 @@ import Testing
             let b = BehindPrompt(make: { panel }, nextTurn: { w.turns.append($0) }, toCocoa: { $0 },
                                  later: { d, f in delays.append(d); w.turns.append(f) }, windows: { Self.prompts([hole]) },
                                  watchLater: { _, _ in })
-            let plan = CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [hole], promptFrames: [hole])
+            let plan = CoverPlan(display: d, items: [CoverItem(rect: d.bounds, kind: .plain)], promptHoles: [hole], promptFrames: promptFrames([hole]))
             var cuts: [Set<HoleGate.Hole>] = []
             func draw(_ plans: [CoverPlan]) {
                 let cut = Set(plans.flatMap { p in p.promptHoles.filter { r in !p.items.contains { $0.rect == r } }.map { HoleGate.Hole(display: p.display.id, rect: $0) } })
