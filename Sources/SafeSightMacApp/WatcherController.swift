@@ -353,11 +353,18 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         // The pointer, in global points: the window under it and the pictures nearest it go first.
         let pointer = CGEvent(source: nil)?.location
         let generation = f.generation
-        let plan = p.process(f, snapshot: f.windows ?? WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
+        var plan = p.process(f, snapshot: f.windows ?? WindowList.snapshot(), now: start, pointer: pointer) { [weak self] early in
             #if SAFESIGHTMAC_LAB
             LabEventLog.shared.log("prov d=\(id) items=\(early.items.count) plain=\(early.plainCount) whole=\(early.wholeDisplay?.rawValue ?? "-")")
             #endif
             DispatchQueue.main.async { self?.coordinator.deliver(early, generation: generation) }
+        }
+        // Judging takes a while, and the window list the plan was made with was read before it began: a password
+        // prompt's hole is made again from the list as it is now, so a prompt that went in the meantime is covered at
+        // once (the covers check again just before drawing too).
+        if !plan.promptHoles.isEmpty {
+            let fresh = WindowList.snapshot()
+            plan = fresh.readable ? p.refreshHoles(fresh) : p.cover(because: .windowListUnreadable)
         }
         let ended = ProcessInfo.processInfo.systemUptime
         let wants = p.needsAnotherLook, leftOver = p.hasLeftOverWork, timings = p.lastTimings, idle = f.status == .idle

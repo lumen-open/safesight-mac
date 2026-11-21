@@ -181,6 +181,8 @@ public final class DisplayPipeline {
     /// When each prompt last had the budget floor (`promptFloor`): at most once a second, so a prompt that can never be
     /// judged (a model fault every time) never takes judgements outside the budget for long.
     var promptFloorAt: [JudgeTarget: TimeInterval] = [:]
+    /// What of each judged prompt showed (global points) when it was judged whole: its hole never reaches beyond it.
+    var promptJudgedArea: [JudgeTarget: [CGRect]] = [:]
     /// The last plan before its prompt holes were made: when the window list changes without a new look (a prompt goes),
     /// the holes are made again from it, so a hole never outlives its prompt.
     var lastBase: CoverPlan?
@@ -261,7 +263,7 @@ public final class DisplayPipeline {
         lastBounds = [:]; overloadSince = [:]; hot = []; contentOffset = [:]; rowCache = [:]; lastFrameTime = nil
         judgedGeneration = nil; lastDirtyCheck = nil; checkBase = nil; reportedSince = []; secondChecksDue = false; secondChecksUntil = nil
         promptJudged = []; lastBase = nil; promptCoverFirst = [:]; promptPictures = [:]; promptLookDue = false
-        promptChangedSince = [:]; promptFloorAt = [:]
+        promptChangedSince = [:]; promptFloorAt = [:]; promptJudgedArea = [:]
         cover(because: .notYetJudged)
     }
 
@@ -418,7 +420,8 @@ public final class DisplayPipeline {
         // plain cover over each changed block until that block is judged (`promptCoverFirst`).
         let prompts = promptCandidates(snapshot)
         let promptTargets = Set(prompts.map { JudgeTarget.window(number: $0.number, ownerPID: $0.ownerPID) })
-        promptJudged = promptJudged.filter { t in promptTargets.contains(t) && !promptMoved(t, snapshot) }
+        promptJudged = promptJudged.filter { t in promptTargets.contains(t) && !promptMoved(t, snapshot) && !promptGrew(t, snapshot) }
+        promptJudgedArea = promptJudgedArea.filter { promptJudged.contains($0.key) }
         promptCoverFirst = promptCoverFirst.filter { promptJudged.contains($0.key) }
         promptPictures = promptPictures.filter { promptJudged.contains($0.key) }
         promptChangedSince = promptChangedSince.filter { promptJudged.contains($0.key) }
@@ -767,6 +770,7 @@ public final class DisplayPipeline {
             if promptTargets.contains(p.target), v.overloaded > 0 || v.modelFaults > 0 { promptFailed.insert(p.target) }
             if promptDue, budget > 0, v.overloaded == 0, v.modelFaults == 0, callBox.contains(visBox) {
                 promptJudged.insert(p.target)
+                promptJudgedArea[p.target] = (promptOpenRects(p.target, snapshot)?.rects ?? []).clipped(to: callBox)
                 promptChangedSince[p.target] = nil
                 // Its pictures (the icon), for telling a small change from one that reaches them.
                 promptPictures[p.target] = judger.pictureRegions(img, within: area).map { $0.map(map.toGlobal) }
@@ -978,11 +982,14 @@ public final class DisplayPipeline {
 
     /// The last plan with its holes made again for this window list (a look with nothing to judge): a prompt that went
     /// has its place covered again at once.
-    func refreshHoles(_ snapshot: WindowSnapshot) -> CoverPlan {
+    public func refreshHoles(_ snapshot: WindowSnapshot) -> CoverPlan {
         guard let base = lastBase, snapshot.readable else { return lastPlan }
         // As in a look: a prompt that moved (or is not where the last look saw it) is judged again first.
         let before = promptJudged
-        promptJudged = promptJudged.filter { !promptMoved($0, snapshot) }
+        // A prompt that shows more of itself than when it was judged (a window in front of it went) is judged again too:
+        // a hole made again from a newer list never grows.
+        promptJudged = promptJudged.filter { !promptMoved($0, snapshot) && !promptGrew($0, snapshot) }
+        promptJudgedArea = promptJudgedArea.filter { promptJudged.contains($0.key) }
         promptCoverFirst = promptCoverFirst.filter { promptJudged.contains($0.key) }
         // A prompt dropped here is judged at the next look, which is asked for now (`needsAnotherLook`).
         if promptJudged != before { promptLookDue = true }
@@ -1045,33 +1052,52 @@ public final class DisplayPipeline {
         }
     }
 
-    /// Where each password prompt is left clear: its own rectangle, less every window in front of it (the pointer and
-    /// the window server's other small overlays excepted: they show nothing of anyone's). Only for a prompt judged since
-    /// it appeared (`promptJudged`), and never when another window behind it sits at or above the level of the cover
-    /// drawn behind it (`CoverLevel.behindPrompt`): that window would show through a see-through part of the prompt.
-    func promptHoles(_ snapshot: WindowSnapshot) -> [(target: JudgeTarget, rects: [CGRect])] {
-        guard snapshot.readable else { return [] }
+    /// What of a prompt shows now: its own rectangle, less every window in front of it (the pointer and the window
+    /// server's other small overlays excepted: they show nothing of anyone's). Nil when it is not in the list, or another
+    /// window behind it sits at or above the level of the cover drawn behind it (`CoverLevel.behindPrompt`): that window
+    /// would show through a see-through part of the prompt.
+    func promptOpenRects(_ t: JudgeTarget, _ snapshot: WindowSnapshot) -> (window: WindowInfo, rects: [CGRect])? {
+        guard snapshot.readable else { return nil }
         let others = snapshot.windows.filter { $0.shows && !ignoredPIDs.contains($0.ownerPID) && !$0.systemOverlay }
-        let candidates = Set(promptCandidates(snapshot).map(\.number))
-        var out: [(JudgeTarget, [CGRect])] = []
-        for (i, w) in others.enumerated() where candidates.contains(w.number) {
+        guard let i = others.firstIndex(where: { JudgeTarget.window(number: $0.number, ownerPID: $0.ownerPID) == t }) else { return nil }
+        let w = others[i]
+        if others[(i + 1)...].contains(where: { $0.layer >= CoverLevel.behindPrompt && $0.bounds.intersects(w.bounds) }) { return nil }
+        return (w, others[..<i].reduce([w.bounds]) { $0.subtracting($1.bounds) }.filter(\.hasArea))
+    }
+
+    /// True when more of a judged prompt shows now than was showing when it was judged (`promptJudgedArea`): a window
+    /// that stood in front of it went or moved away, and what it uncovered was never judged as the prompt.
+    func promptGrew(_ t: JudgeTarget, _ snapshot: WindowSnapshot) -> Bool {
+        guard let judged = promptJudgedArea[t] else { return true }
+        guard let open = promptOpenRects(t, snapshot) else { return false }
+        return !open.rects.allSatisfy { r in judged.reduce([r]) { $0.subtracting($1) }.filter(\.hasArea).isEmpty }
+    }
+
+    /// Where each password prompt is left clear: what of it shows (`promptOpenRects`), only for a prompt judged since it
+    /// appeared (`promptJudged`), and only where it showed when it was judged (`promptGrew`: more of it showing closes it).
+    func promptHoles(_ snapshot: WindowSnapshot) -> [(target: JudgeTarget, window: WindowInfo, rects: [CGRect])] {
+        guard snapshot.readable else { return [] }
+        var out: [(JudgeTarget, WindowInfo, [CGRect])] = []
+        for w in promptCandidates(snapshot) {
             let t = JudgeTarget.window(number: w.number, ownerPID: w.ownerPID)
-            guard promptJudged.contains(t) else { continue }
-            let behind = others[(i + 1)...]
-            if behind.contains(where: { $0.layer >= CoverLevel.behindPrompt && $0.bounds.intersects(w.bounds) }) { continue }
-            let rects = others[..<i].reduce([w.bounds]) { $0.subtracting($1.bounds) }.filter(\.hasArea)
-            if !rects.isEmpty { out.append((t, rects)) }
+            guard promptJudged.contains(t), !promptGrew(t, snapshot), let open = promptOpenRects(t, snapshot), !open.rects.isEmpty
+            else { continue }
+            out.append((t, open.window, open.rects))
         }
+        // In front-to-back order, as the window list has them.
         return out
     }
 
     /// The plan as drawn around password prompts: every cover of anything else is cut out of each prompt's hole (a cover
     /// cut in pieces keeps its way-out line on its largest piece); the prompt's own covers stay. A whole-display cover is
-    /// drawn around the holes with the prompts' own covers inside. Holes are made only where they cut something, and a
-    /// plain cover is drawn behind each (`CoverPlan.promptHoles`).
+    /// drawn around the holes with the prompts' own covers inside. Every hole is listed, whether or not it cuts a cover,
+    /// so the plain cover behind it (`CoverPlan.promptHoles`) stays up for as long as the prompt does instead of coming
+    /// and going with the covers around it; with it, each prompt's window and whole rectangle (`CoverPlan.promptFrames`),
+    /// so the drawing can check that same prompt is still there (`HoleGate.confirm`), and which holes cut no cover.
     func withPromptHoles(_ plan: CoverPlan, _ snapshot: WindowSnapshot) -> CoverPlan {
         var p = plan
         p.promptHoles = []
+        p.promptFrames = []
         let holes = promptHoles(snapshot)
         // Changed blocks of an open prompt not judged yet: plain covers of its own, inside its hole.
         let coverFirst = holes.flatMap { h in (promptCoverFirst[h.target] ?? []).map { CoverItem(rect: $0, kind: .plain, source: h.target) } }
@@ -1081,6 +1107,7 @@ public final class DisplayPipeline {
             let own = Set(holes.map(\.target))
             p.items = holes.isEmpty ? [] : plan.items.filter { $0.source.map(own.contains) == true }
             p.promptHoles = holes.flatMap(\.rects)
+            p.promptFrames = holes.map { PromptFrame(number: $0.window.number, ownerPID: $0.window.ownerPID, frame: $0.window.bounds, holes: $0.rects) }
             return p
         }
         guard !holes.isEmpty else { return p }
@@ -1100,8 +1127,12 @@ public final class DisplayPipeline {
             items += pieces
         }
         p.items = items
-        // Each cut hole once, in the order the prompts were found.
-        p.promptHoles = holes.flatMap(\.rects).filter { r in used.contains(r) }
+        // Every hole, in the order the prompts were found; those that cut no cover are marked so: nothing waits on them.
+        p.promptHoles = holes.flatMap(\.rects)
+        p.promptFrames = holes.map { h in
+            PromptFrame(number: h.window.number, ownerPID: h.window.ownerPID, frame: h.window.bounds, holes: h.rects,
+                        uncut: h.rects.filter { r in !used.contains(r) })
+        }
         return p
     }
 

@@ -104,6 +104,24 @@ public enum CoverLevel {
     public static let behindPrompt = PasswordPrompt.level - 1
 }
 
+/// One password prompt with a hole in a plan: which window it is (its number and owner), where it stood, its holes,
+/// and which of those holes cut no cover at all (`uncut`: nothing around it is covered, so only the plain cover behind it
+/// is drawn and nothing waits on it). A whole-display cover is cut by every hole, whatever `uncut` says.
+public struct PromptFrame: Equatable, Hashable, Sendable {
+    public var number: UInt32
+    public var ownerPID: Int32
+    public var frame: CGRect
+    public var holes: [CGRect]
+    public var uncut: [CGRect]
+    public init(number: UInt32, ownerPID: Int32, frame: CGRect, holes: [CGRect], uncut: [CGRect] = []) {
+        self.number = number; self.ownerPID = ownerPID; self.frame = frame; self.holes = holes; self.uncut = uncut
+    }
+    public func hash(into h: inout Hasher) {
+        h.combine(number); h.combine(ownerPID)
+        for r in [frame] + holes + uncut { h.combine(r.minX); h.combine(r.minY); h.combine(r.width); h.combine(r.height) }
+    }
+}
+
 /// Everything drawn on one display, applied in one step.
 public struct CoverPlan: Equatable, Sendable {
     public var display: DisplayDescriptor
@@ -115,9 +133,16 @@ public struct CoverPlan: Equatable, Sendable {
     /// around it, with the prompt's own covers (`items`) inside it. A plain cover is drawn behind it, below the prompt
     /// (`CoverLevel.behindPrompt`).
     public var promptHoles: [CGRect]
+    /// Each password prompt that has a hole in `promptHoles`, as the window list showed it when the plan was made: its
+    /// window, its whole rectangle and its holes (`PromptFrame`). A hole is drawn only while that same window still
+    /// stands at exactly that rectangle when the covers are drawn (`HoleGate.confirm`); a hole with no frame here never
+    /// opens.
+    public var promptFrames: [PromptFrame]
 
-    public init(display: DisplayDescriptor, items: [CoverItem], wholeDisplay: FaultCause? = nil, promptHoles: [CGRect] = []) {
+    public init(display: DisplayDescriptor, items: [CoverItem], wholeDisplay: FaultCause? = nil, promptHoles: [CGRect] = [],
+                promptFrames: [PromptFrame] = []) {
         self.display = display; self.items = items; self.wholeDisplay = wholeDisplay; self.promptHoles = promptHoles
+        self.promptFrames = promptFrames
     }
 
     public static func covered(_ display: DisplayDescriptor, because cause: FaultCause) -> CoverPlan {
@@ -176,6 +201,16 @@ public enum CoverLayout {
 
     /// The plain covers behind password prompts (`CoverPlan.promptHoles`), in global points, cut to the display.
     public static func behindPromptRects(_ plan: CoverPlan) -> [CGRect] { plan.promptHoles.clipped(to: plan.display.bounds) }
+
+    /// The holes that cut a cover (global points, cut to the display): every hole around a whole-display cover; otherwise
+    /// every hole except those the plan says cut nothing (`PromptFrame.uncut`). Only these wait for their backing, are
+    /// checked against the window list just before drawing, and are watched while open.
+    public static func cuttingPromptRects(_ plan: CoverPlan) -> [CGRect] {
+        let all = behindPromptRects(plan)
+        guard plan.wholeDisplay == nil else { return all }
+        let uncut = plan.promptFrames.flatMap(\.uncut).clipped(to: plan.display.bounds)
+        return all.filter { !uncut.contains($0) }
+    }
 
     /// The per-window overlay form (the written pivot of ST-032): one overlay window per cover, its
     /// frame in Cocoa points, cut to the display.

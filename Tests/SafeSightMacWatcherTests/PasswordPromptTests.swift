@@ -189,6 +189,74 @@ final class CountingJudge: Judging {
         #expect(lifted != nil)
     }
 
+    /// The hole, and so the plain cover behind it, is listed for as long as the judged prompt is up, whether or not a
+    /// cover around it is cut: the backing never comes and goes with the covers around the prompt.
+    @Test func aJudgedPromptKeepsItsHoleAndFrameWhenNothingAroundItIsCovered() {
+        let p = pipeline()
+        let windows = [prompt(), app]
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: windows, time: 0), now: 0)
+        let plan = p.process(touched(1, t: 0.1), snapshot: WindowSnapshot(windows: windows, time: 0.1), now: 0.1)
+        #expect(clear(plan, promptRect))
+        #expect(plan.promptHoles == [promptRect], "\(plan.promptHoles)")
+        #expect(plan.promptFrames.map(\.frame) == [promptRect] && plan.promptFrames.map(\.number) == [50], "\(plan.promptFrames)")
+        // Held covered around it again: the same hole and frame, so its backing stays where it is.
+        let covered = coveredBehind(pipeline(), windows)
+        #expect(plan.promptFrames.map(\.uncut) == [[promptRect]], "it cuts nothing: nothing waits on it")
+        #expect(covered.promptHoles == [promptRect] && covered.promptFrames.map(\.frame) == [promptRect])
+        #expect(covered.promptFrames.map(\.uncut) == [[]], "it cuts the cover around it")
+    }
+
+    /// The watcher makes a plan's holes again from the window list read once judging is done: a prompt that went or
+    /// moved while its frame was judged is covered in that same plan.
+    @Test func holesMadeAgainFromAFresherListCloseForAPromptThatWentOrMoved() {
+        for later in [[app], [prompt(bounds: promptRect.offsetBy(dx: 10, dy: 0)), app], [prompt(alpha: 0.5), app]] {
+            let p = pipeline()
+            let plan = coveredBehind(p, [prompt(), app])
+            #expect(plan.promptHoles == [promptRect])
+            let fresh = p.refreshHoles(WindowSnapshot(windows: later, time: 0.15))
+            #expect(fresh.promptHoles.isEmpty && fresh.promptFrames.isEmpty && fresh.covers(promptRect), "\(later)")
+        }
+    }
+
+    /// A window in front of the prompt when it was judged hid part of it. Once that window goes, what it uncovered was
+    /// never judged as the prompt: the hole never grows over it, whether the holes are made again from a newer list
+    /// (after judging) or on the next look, and the prompt is judged again before its hole opens again.
+    @Test func aHoleNeverGrowsOverWhatAWindowInFrontOfThePromptUncovered() {
+        let w = WindowInfo(number: 9, ownerPID: 600, layer: 1001, bounds: CGRect(x: 220, y: 140, width: 64, height: 64))
+        let hidden = CGRect(x: 220, y: 140, width: 64, height: 64)
+        // Made again from a newer list.
+        do {
+            let p = pipeline()
+            let plan = coveredBehind(p, [w, prompt(), app])
+            #expect(!plan.promptHoles.isEmpty && plan.promptHoles.allSatisfy { !$0.intersection(hidden).hasArea }, "\(plan.promptHoles)")
+            let fresh = p.refreshHoles(WindowSnapshot(windows: [prompt(), app], time: 0.15))
+            #expect(fresh.promptHoles.allSatisfy { !$0.intersection(hidden).hasArea }, "never over what was hidden: \(fresh.promptHoles)")
+            #expect(fullyCovered(fresh, hidden))
+            #expect(!p.promptJudged.contains(.window(number: 50, ownerPID: 900)) && p.needsAnotherLook, "judged again first")
+        }
+        // On the next look, with the prompt's pixels left unjudged by that look.
+        do {
+            let j = PerWindowScript()
+            let p = pipeline(j)
+            _ = coveredBehind(p, [w, prompt(), app])
+            j.unjudged = [JudgeTarget.window(number: 50, ownerPID: 900).contextID]
+            let next = p.process(touched(2, t: 0.2), snapshot: WindowSnapshot(windows: [prompt(), app], time: 0.2), now: 0.2)
+            #expect(fullyCovered(next, hidden) && next.promptHoles.allSatisfy { !$0.intersection(hidden).hasArea }, "\(next.promptHoles)")
+        }
+    }
+
+    /// A prompt counted as judged with no record of what of it showed then is treated as having grown: no hole.
+    @Test func aJudgedPromptWithNoRecordOfWhatShowedGetsNoHole() {
+        let p = pipeline()
+        let windows = [prompt(), app]
+        #expect(coveredBehind(p, windows).promptHoles == [promptRect])
+        let t = JudgeTarget.window(number: 50, ownerPID: 900)
+        p.promptJudgedArea[t] = nil
+        let plan = p.refreshHoles(WindowSnapshot(windows: windows, time: 0.15))
+        #expect(plan.promptHoles.isEmpty && fullyCovered(plan, promptRect), "\(plan.promptHoles)")
+        #expect(!p.promptJudged.contains(t), "judged again first")
+    }
+
     @Test func aPromptThatGoesIsCoveredAgainAtOnceAndJudgedAgainWhenItComesBack() {
         let j = PerWindowScript()
         let p = pipeline(j)

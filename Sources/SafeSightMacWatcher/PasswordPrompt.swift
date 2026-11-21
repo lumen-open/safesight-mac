@@ -16,9 +16,16 @@
 //   itself must look like the prompt (`shapeQualifies`, `DisplayPipeline.promptHoles`): exactly at the level the
 //   prompt was read at, fully opaque, no larger than a dialog, at most a quarter of its display, and wholly on it.
 // - What is left clear. Only that window's own rectangle, less every window in front of it, only while it is in the
-//   window list where the last look saw it. A plain cover is drawn behind it, below its level
-//   (`CoverLevel.behindPrompt`), and the hole opens only on a drawing after that cover is on screen (`HoleGate`), so a
-//   see-through or rounded part of the prompt never shows what lies behind.
+//   window list where the last look saw it, and never more of it than showed when it was judged (a window that stood in
+//   front of it and went uncovers something never judged as the prompt: it is judged again first). The list is read
+//   again once judging is done (a hole made again from it may only shrink), and just before every drawing of a hole
+//   that cuts a cover, and while such a hole is open, 20 times a second, the same window (by number and owner) must
+//   still stand at the same place (`PasswordPrompt.holeStillOpen`, `HoleGate.confirm`), so a hole closes in the first
+//   drawing after its prompt goes. A hole that cuts no cover (nothing around the prompt is covered) only has its
+//   backing drawn: nothing waits on it. A plain, opaque cover is drawn behind it, below its level
+//   (`CoverLevel.behindPrompt`), never animated, at least as large as the hole, and the hole opens only on a drawing
+//   after the window server shows that cover in place at full opacity (`HoleGate`, `BackingCheck`), so a see-through
+//   or rounded part of the prompt never shows what lies behind.
 // - Its own content is still judged. The prompt shows the requesting app's name and icon, and an app can choose that
 //   icon (its own, or a picture it names when it asks), drawn at about 64 by 64 points. So the hole opens only once the
 //   prompt's own pixels have been judged since it appeared or moved (it is judged first, with a small budget of its
@@ -110,6 +117,29 @@ public enum PasswordPrompt {
         guard f.onSealedSystemVolume, allowedUIDs.contains(f.uid), let id = f.bundleID, bundleIDs.contains(id),
               let exe = f.bundleExecutable, !exe.isEmpty, !exe.contains("/") else { return false }
         return f.executablePath.hasSuffix(".bundle/Contents/MacOS/" + exe)
+    }
+}
+
+extension PasswordPrompt {
+    /// Whether a hole a plan asks for may be drawn now, by the window list read just before the covers are drawn (the
+    /// plan itself may come from a window list read well before, when its frame was taken for judging): the hole is one
+    /// of `prompt`'s, and that same window (its number and owner: another window, even at the same place, was never
+    /// judged) is still the prompt (its owner checked, its shape as `shapeQualifies` asks, wholly on its display) at
+    /// exactly the rectangle it had; no window in front of it (the pointer and the window server's other small overlays
+    /// excepted) reaches into the hole; and no window behind it sits at or above the backing's level
+    /// (`CoverLevel.behindPrompt`) where it is. `ignoring` is this app's own windows. A list that cannot be read, or any
+    /// doubt, is no.
+    public static func holeStillOpen(_ hole: CGRect, of prompt: PromptFrame, display: CGRect, in snapshot: WindowSnapshot,
+                                     ignoring: Set<Int32>) -> Bool {
+        guard snapshot.readable, hole.hasArea, prompt.holes.contains(hole) else { return false }
+        let others = snapshot.windows.filter { $0.shows && !ignoring.contains($0.ownerPID) && !$0.systemOverlay }
+        guard let i = others.firstIndex(where: { $0.number == prompt.number && $0.ownerPID == prompt.ownerPID }) else { return false }
+        let w = others[i]
+        guard w.passwordPrompt, w.bounds == prompt.frame, w.bounds.contains(hole),
+              shapeQualifies(layer: w.layer, bounds: w.bounds, alpha: w.alpha), fits(w.bounds, display: display) else { return false }
+        if others[..<i].contains(where: { $0.bounds.intersection(hole).hasArea }) { return false }
+        if others[(i + 1)...].contains(where: { $0.layer >= CoverLevel.behindPrompt && $0.bounds.intersects(w.bounds) }) { return false }
+        return true
     }
 }
 
