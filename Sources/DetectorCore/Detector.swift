@@ -45,6 +45,8 @@ public final class Detector {
     let finder: RegionFinder
     let cache = VerdictCache()
     let finderCache = FinderCache()
+    /// The exact keys already worked out for the frame being judged (a still screen's looks judge the same frame again).
+    let frameKeys = FrameKeys()
     /// Exact pixels last judged clear but kept out of the verdict cache by the margin rule, with when they were last
     /// judged. Never reused as a judgement (see `Reason.judgedEarlier`). It orders the work: entries never judged come
     /// before entries judged earlier, and those go oldest first, so a budget too small for every borderline picture
@@ -129,7 +131,7 @@ public final class Detector {
     /// Empties the verdict cache, its sticky marks included, and the finder cache: the lab benches measure from scratch
     /// with it. Nothing in the app calls it (a pause keeps the detector and its caches). Emptying only ever means
     /// judging again, and a picture whose mark goes gets only fresh first chances.
-    public func removeCachedVerdicts() { cache.removeEverything(); finderCache.removeAll(); seenClear.removeAll() }
+    public func removeCachedVerdicts() { cache.removeEverything(); finderCache.removeAll(); seenClear.removeAll(); frameKeys.removeAll() }
 
     /// Runs every model once on a blank tensor, so that the first real judgement does not pay for loading
     /// (the tie-breaker on the GPU costs about 0.2 s the first time). Used by the lab bench.
@@ -159,7 +161,7 @@ public final class Detector {
     /// pixels finds them there. No model runs.
     public func pictures(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect] {
         let A = area.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
-        let key = FinderCache.key(frame, A)
+        let key = FinderCache.key(frame, A, memo: frameKeys)
         if let hit = finderCache.get(key, for: A) { return hit.regions.map(\.rect) }
         let found = finder.find(frame, within: A)
         finderCache.put(key, A, found)
@@ -271,7 +273,7 @@ public final class Detector {
         let A = area?.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
         var t0 = nowNs()
         // The finder's proposals are reused only when every pixel it reads is exactly as before.
-        let finderKey = FinderCache.key(frame, A)
+        let finderKey = FinderCache.key(frame, A, memo: frameKeys)
         timings.cacheMs += msSince(t0)
         t0 = nowNs()
         let found: RegionFinder.Output
@@ -305,7 +307,7 @@ public final class Detector {
         }
         for r in regionRects {
             tasks.append(Task(rect: r, pieces: Self.pieces(r), pass: .region, gridMember: gridMembers.contains(r),
-                              key: VerdictCache.key(frame, r, pass: "region", version: v)))
+                              key: VerdictCache.key(frame, r, pass: "region", version: v, memo: frameKeys)))
         }
         // A thin strip (a wide, short changed area) would cost dozens of tiny whole-pass pieces, and slices over it would
         // reach the models stretched many times over. Its whole pass is grown to `thinBelow` on the short side with the
@@ -313,9 +315,9 @@ public final class Detector {
         // is still judged, never stretched beyond 2:1.
         let thin = A.shortSide < Self.thinBelow && max(A.w, A.h) > 2 * A.shortSide
         let W = thin ? Self.grown(A, to: Self.thinBelow, width: frame.width, height: frame.height) : A
-        tasks.append(Task(rect: W, pieces: Self.pieces(W), pass: .whole, gridMember: false, key: VerdictCache.key(frame, W, pass: "whole", version: v)))
+        tasks.append(Task(rect: W, pieces: Self.pieces(W), pass: .whole, gridMember: false, key: VerdictCache.key(frame, W, pass: "whole", version: v, memo: frameKeys)))
         for s in thin ? [] : Self.slices(A, size: config.sliceSize, stride: config.sliceStride, anchor: ctx.sliceAnchor) {
-            tasks.append(Task(rect: s, pieces: [s], pass: .slice, gridMember: false, key: VerdictCache.key(frame, s, pass: "slice", version: v)))
+            tasks.append(Task(rect: s, pieces: [s], pass: .slice, gridMember: false, key: VerdictCache.key(frame, s, pass: "slice", version: v, memo: frameKeys)))
         }
 
         // Where a blur can apply to a picture region in this call: a small picture in a covered-start context

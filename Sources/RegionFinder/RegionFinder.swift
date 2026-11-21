@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Vendored from the kestrel lab detector (v3-detector, commit 49ecdd9) under Apache-2.0.
+// Made cheaper for SafeSight Mac (docs/ENERGY.md) with the same output byte for byte: the vendored code is kept in
+// the tests as the reference (FinderEquivalenceTests).
 // Picture finder: proposes photo-like regions so that text and interface never reach the
 // heavy models. It leans toward finding: anything unsure counts as a picture. It can be
 // widened by the cell network (CellNet), which may only add cells, never remove them.
@@ -61,52 +63,7 @@ public final class RegionFinder {
         let A = area?.clamped(width: W, height: H) ?? PixelRect(x: 0, y: 0, w: W, h: H)
         let cw = (A.w + 3) / 4, ch = (A.h + 3) / 4
         var mark = [UInt8](repeating: 0, count: cw * ch)  // bit 0 colour stats, bit 1 cell net
-        var seen = [UInt32](repeating: 0, count: 4096)
-        var count = [UInt8](repeating: 0, count: 4096)
-        var stamp: UInt32 = 0
-        var feat = [Float](repeating: 0, count: CellNet.inputCount)
-        img.pixels.withUnsafeBufferPointer { px in
-            for wy in 0..<max(1, ch - 1) {
-                for wx in 0..<max(1, cw - 1) {
-                    let x0 = A.x + wx * 4, y0 = A.y + wy * 4
-                    let x1 = min(x0 + 8, A.maxX), y1 = min(y0 + 8, A.maxY)
-                    if x1 - x0 < 4 || y1 - y0 < 4 { continue }
-                    stamp &+= 1
-                    var distinct = 0, dominant = 0, texture = 0, tcount = 0
-                    var lo = (255, 255, 255), hi = (0, 0, 0)
-                    for y in y0..<y1 {
-                        let row = y * W
-                        for x in x0..<x1 {
-                            let p = (row + x) * 4
-                            let r = Int(px[p]), g = Int(px[p + 1]), b = Int(px[p + 2])
-                            let code = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4)
-                            if seen[code] != stamp { seen[code] = stamp; count[code] = 0; distinct += 1 }
-                            count[code] &+= 1
-                            if Int(count[code]) > dominant { dominant = Int(count[code]) }
-                            lo = (min(lo.0, r), min(lo.1, g), min(lo.2, b)); hi = (max(hi.0, r), max(hi.1, g), max(hi.2, b))
-                            if x >= x0 + 2 {
-                                let q = p - 4, q2 = p - 8
-                                let l = Int(px[q2 + 1]), m = Int(px[q + 1]), n = Int(px[p + 1])
-                                texture += abs(n - 2 * m + l); tcount += 1
-                            }
-                        }
-                    }
-                    let n = (x1 - x0) * (y1 - y0)
-                    let dom = Double(dominant) / Double(n)
-                    let tex = tcount > 0 ? Double(texture) / Double(tcount) : 0
-                    var bits: UInt8 = 0
-                    if distinct >= config.minDistinct && dom <= config.maxDominant && tex >= config.minTexture { bits |= 1 }
-                    if bits == 0, let net = cellNet, distinct >= 4, dom < 0.9 {
-                        feat[0] = Float(distinct) / 64; feat[1] = Float(dom); feat[2] = Float(min(tex, 32) / 32)
-                        feat[3] = Float(hi.0 - lo.0) / 255; feat[4] = Float(hi.1 - lo.1) / 255; feat[5] = Float(hi.2 - lo.2) / 255
-                        if net.isPhoto(feat) { bits |= 2 }
-                    }
-                    if bits != 0 {
-                        for dy in 0..<2 { for dx in 0..<2 where wx + dx < cw && wy + dy < ch { mark[(wy + dy) * cw + wx + dx] |= bits } }
-                    }
-                }
-            }
-        }
+        markCells(img, A, cw: cw, ch: ch, into: &mark)
         // Gutter cells: marked cells crossed by a plain straight line at least `gutterRun` px long.
         // They are cleared so that tiles separated by thin gutters fall into separate groups.
         var core = mark
@@ -134,21 +91,9 @@ public final class RegionFinder {
             for b in pieces { seeds.append((cellRect(b, A, W, H), src)) }
         }
         // Grow each seed to its picture's edges, then merge overlapping results.
-        var grown: [(PixelRect, UInt8)] = seeds.map { (grow(img, $0.0, limit: outerLimit(seedIn: $0.0, outer: outer.boxes.map { cellRect($0, A, W, H) })), $0.1) }
-        var merged = true
-        while merged {
-            merged = false
-            outerLoop: for i in grown.indices {
-                for j in grown.indices where j > i {
-                    if let inter = grown[i].0.intersection(grown[j].0), inter.area * 2 >= grown[i].0.union(grown[j].0).area {
-                        grown[i] = (grown[i].0.union(grown[j].0), grown[i].1 | grown[j].1)
-                        grown.remove(at: j)
-                        merged = true
-                        break outerLoop
-                    }
-                }
-            }
-        }
+        let outerRects = outer.boxes.map { cellRect($0, A, W, H) }
+        var grown: [(PixelRect, UInt8)] = seeds.map { (grow(img, $0.0, limit: outerLimit(seedIn: $0.0, outer: outerRects)), $0.1) }
+        Self.mergeOverlapping(&grown)
         if ProcessInfo.processInfo.environment["FINDER_DEBUG"] != nil {
             print("outer", outer.boxes.count, "inner", inner.boxes.count, "seeds", seeds.count, "grown", grown.count, "cleared", zip(mark, core).filter { $0.0 != 0 && $0.1 == 0 }.count)
             if let e = ProcessInfo.processInfo.environment["FINDER_DEBUG_BOX"]?.split(separator: ",").compactMap({ Int($0) }), e.count == 4 {
@@ -182,6 +127,119 @@ public final class RegionFinder {
             }
         }
         return Output(regions: regions, grids: Self.detectGrids(regions.map(\.rect)), cellsMarked: mark.reduce(0) { $0 + ($1 != 0 ? 1 : 0) }, cellsTotal: cw * ch)
+    }
+
+    /// Merges grown regions that overlap by at least half of their union, as the vendored finder did: again and again, the
+    /// first such pair in order (lowest first index, then lowest second) is merged into the first and the second removed,
+    /// until none is left. It never starts over from the top: before row `i` no pair can merge, and a merge into row `t`
+    /// can only make a pair with `t` itself out of the rows before it (the others are unchanged), so only those are looked
+    /// at again before row `t` is read again from its start. The merges, and their order, are the same.
+    static func mergeOverlapping(_ grown: inout [(PixelRect, UInt8)]) {
+        @inline(__always) func mergeable(_ a: PixelRect, _ b: PixelRect) -> Bool {
+            guard let inter = a.intersection(b) else { return false }
+            return inter.area * 2 >= a.union(b).area
+        }
+        var i = 0
+        while i < grown.count {
+            var j = i + 1
+            while j < grown.count {
+                guard mergeable(grown[i].0, grown[j].0) else { j += 1; continue }
+                grown[i] = (grown[i].0.union(grown[j].0), grown[i].1 | grown[j].1)
+                grown.remove(at: j)
+                // The first pair now is with the merged row, from a row before it, if any.
+                var t = i
+                while let k = (0..<t).first(where: { mergeable(grown[$0].0, grown[t].0) }) {
+                    grown[k] = (grown[k].0.union(grown[t].0), grown[k].1 | grown[t].1)
+                    grown.remove(at: t)
+                    t = k
+                }
+                i = t
+                j = i + 1
+            }
+            i += 1
+        }
+    }
+
+    /// Marks the photo-like 4 px cells of `A` (bit 0 colour stats, bit 1 the cell net): an 8x8 window on a 4 px step is
+    /// photo-like as `FinderConfig` says, and marks the four cells under it. Every pixel lies in up to four windows, so its
+    /// 12-bit colour and its green second difference are worked out once, and the windows read them through raw pointers.
+    /// The marks are exactly those of judging each window on its own pixels (`FinderEquivalenceTests`).
+    func markCells(_ img: RGBAImage, _ A: PixelRect, cw: Int, ch: Int, into mark: inout [UInt8]) {
+        let W = img.width, aw = A.w, ah = A.h
+        var codes = [UInt16](repeating: 0, count: aw * ah)
+        // |g(x) - 2 g(x-1) + g(x-2)| on the green channel, from the third column of A on (a window counts it from its own
+        // third column on, so it never reaches left of the window).
+        var second = [UInt16](repeating: 0, count: aw * ah)
+        var seen = [UInt32](repeating: 0, count: 4096)
+        var count = [UInt8](repeating: 0, count: 4096)
+        var feat = [Float](repeating: 0, count: CellNet.inputCount)
+        let minDistinct = config.minDistinct, maxDominant = config.maxDominant, minTexture = config.minTexture
+        img.pixels.withUnsafeBufferPointer { px in
+            codes.withUnsafeMutableBufferPointer { cp in
+                second.withUnsafeMutableBufferPointer { sp in
+                    for ly in 0..<ah {
+                        var p = ((A.y + ly) * W + A.x) * 4
+                        let o = ly * aw
+                        var g1 = 0, g2 = 0
+                        for lx in 0..<aw {
+                            let r = Int(px[p]), g = Int(px[p + 1]), b = Int(px[p + 2])
+                            cp[o + lx] = UInt16(((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4))
+                            if lx >= 2 { sp[o + lx] = UInt16(abs(g - 2 * g1 + g2)) }
+                            g2 = g1; g1 = g; p += 4
+                        }
+                    }
+                }
+            }
+            codes.withUnsafeBufferPointer { cp in
+            second.withUnsafeBufferPointer { sp in
+            seen.withUnsafeMutableBufferPointer { sn in
+            count.withUnsafeMutableBufferPointer { ct in
+            mark.withUnsafeMutableBufferPointer { mk in
+                var stamp: UInt32 = 0
+                for wy in 0..<max(1, ch - 1) {
+                    for wx in 0..<max(1, cw - 1) {
+                        let lx0 = wx * 4, ly0 = wy * 4
+                        let lx1 = min(lx0 + 8, aw), ly1 = min(ly0 + 8, ah)
+                        if lx1 - lx0 < 4 || ly1 - ly0 < 4 { continue }
+                        stamp &+= 1
+                        var distinct = 0, dominant = 0, texture = 0
+                        for ly in ly0..<ly1 {
+                            let o = ly * aw
+                            for lx in lx0..<lx1 {
+                                let code = Int(cp[o + lx])
+                                if sn[code] != stamp { sn[code] = stamp; ct[code] = 0; distinct += 1 }
+                                ct[code] &+= 1
+                                let c = Int(ct[code])
+                                if c > dominant { dominant = c }
+                            }
+                            for lx in (lx0 + 2)..<lx1 { texture += Int(sp[o + lx]) }
+                        }
+                        let n = (lx1 - lx0) * (ly1 - ly0)
+                        let tcount = (lx1 - lx0 - 2) * (ly1 - ly0)
+                        let dom = Double(dominant) / Double(n)
+                        let tex = tcount > 0 ? Double(texture) / Double(tcount) : 0
+                        var bits: UInt8 = 0
+                        if distinct >= minDistinct && dom <= maxDominant && tex >= minTexture { bits |= 1 }
+                        if bits == 0, let net = cellNet, distinct >= 4, dom < 0.9 {
+                            var lo = (255, 255, 255), hi = (0, 0, 0)
+                            for y in (A.y + ly0)..<(A.y + ly1) {
+                                for x in (A.x + lx0)..<(A.x + lx1) {
+                                    let p = (y * W + x) * 4
+                                    let r = Int(px[p]), g = Int(px[p + 1]), b = Int(px[p + 2])
+                                    lo = (min(lo.0, r), min(lo.1, g), min(lo.2, b)); hi = (max(hi.0, r), max(hi.1, g), max(hi.2, b))
+                                }
+                            }
+                            feat[0] = Float(distinct) / 64; feat[1] = Float(dom); feat[2] = Float(min(tex, 32) / 32)
+                            feat[3] = Float(hi.0 - lo.0) / 255; feat[4] = Float(hi.1 - lo.1) / 255; feat[5] = Float(hi.2 - lo.2) / 255
+                            if net.isPhoto(feat) { bits |= 2 }
+                        }
+                        if bits != 0 {
+                            for dy in 0..<2 { for dx in 0..<2 where wx + dx < cw && wy + dy < ch { mk[(wy + dy) * cw + wx + dx] |= bits } }
+                        }
+                    }
+                }
+            }}}}}
+        }
     }
 
     struct Components { var label: [Int32]; var boxes: [PixelRect]; var sources: [UInt8]; var firstCell: [Int] }
@@ -228,15 +286,52 @@ public final class RegionFinder {
         var x0 = r.x, y0 = r.y, x1 = r.maxX, y1 = r.maxY
         // The page colour: what surrounds the whole marked group (its gutters and margins).
         let bg: (Int, Int, Int)? = nil
+        // A side that stops at a plain line is asked again at every round while the other sides grow, over a span that
+        // only widens. Each side keeps the colour range of the plain line it last saw, so it is asked again only about the
+        // new pixels at the ends of its span: the same answer as reading the whole line (a line is plain when every channel
+        // varies by at most `gutterTolerance` along it, whatever the order of its pixels).
+        var left = PlainLine(), right = PlainLine(), top = PlainLine(), bottom = PlainLine()
+        let tol = config.gutterTolerance, W = img.width
         var changed = true
-        while changed {
-            changed = false
-            if x0 > L.x && !columnUniform(img, x: x0 - 1, y0: y0, y1: y1, bg: bg) { x0 -= 1; changed = true }
-            if x1 < LmaxX && !columnUniform(img, x: x1, y0: y0, y1: y1, bg: bg) { x1 += 1; changed = true }
-            if y0 > L.y && !rowUniform(img, y: y0 - 1, x0: x0, x1: x1, bg: bg) { y0 -= 1; changed = true }
-            if y1 < LmaxY && !rowUniform(img, y: y1, x0: x0, x1: x1, bg: bg) { y1 += 1; changed = true }
+        img.pixels.withUnsafeBufferPointer { px in
+            while changed {
+                changed = false
+                if x0 > L.x && !left.plain(px, at: x0 - 1, from: y0, to: y1, base: (x0 - 1) * 4, step: W * 4, tol: tol) { x0 -= 1; changed = true }
+                if x1 < LmaxX && !right.plain(px, at: x1, from: y0, to: y1, base: x1 * 4, step: W * 4, tol: tol) { x1 += 1; changed = true }
+                if y0 > L.y && !top.plain(px, at: y0 - 1, from: x0, to: x1, base: (y0 - 1) * W * 4, step: 4, tol: tol) { y0 -= 1; changed = true }
+                if y1 < LmaxY && !bottom.plain(px, at: y1, from: x0, to: x1, base: y1 * W * 4, step: 4, tol: tol) { y1 += 1; changed = true }
+            }
         }
         return trim(img, PixelRect(x: x0, y: y0, w: x1 - x0, h: y1 - y0), bg: bg) ?? r
+    }
+
+    /// The last line one side of `grow` found plain: which line, the span read so far (`a..<b`), and its colour range.
+    struct PlainLine {
+        var line = Int.min, a = 0, b = 0
+        var lo = (0, 0, 0), hi = (0, 0, 0)
+
+        /// Whether line `line` is plain over `from..<to` (as `columnUniform` or `rowUniform` would say), reading only what
+        /// it has not read yet when this is the line it found plain last time and its span has only widened. Pixel `i` of
+        /// the line starts at byte `base + i * step`.
+        mutating func plain(_ px: UnsafeBufferPointer<UInt8>, at line: Int, from: Int, to: Int, base: Int, step: Int, tol: Int) -> Bool {
+            @inline(__always) func add(_ i: Int) -> Bool {
+                let p = base + i * step
+                let c = (Int(px[p]), Int(px[p + 1]), Int(px[p + 2]))
+                lo = (min(lo.0, c.0), min(lo.1, c.1), min(lo.2, c.2)); hi = (max(hi.0, c.0), max(hi.1, c.1), max(hi.2, c.2))
+                return hi.0 - lo.0 <= tol && hi.1 - lo.1 <= tol && hi.2 - lo.2 <= tol
+            }
+            if self.line == line && from <= a && b <= to && a < b {
+                for i in from..<a where !add(i) { self.line = .min; return false }
+                for i in b..<to where !add(i) { self.line = .min; return false }
+            } else {
+                // As `columnUniform`: the range starts at the first pixel of the span (read even for an empty span).
+                let p0 = base + from * step
+                lo = (Int(px[p0]), Int(px[p0 + 1]), Int(px[p0 + 2])); hi = lo
+                for i in from..<to where !add(i) { self.line = .min; return false }
+            }
+            self.line = line; a = from; b = to
+            return true
+        }
     }
 
     /// Length of the plain vertical run through column x that contains rows y0..<y1 (0 if those rows are not plain).

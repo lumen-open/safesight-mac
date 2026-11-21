@@ -1,0 +1,247 @@
+{
+  "budget": {
+    "frameCopyCpuMs2880x1800": 3,
+    "reloadCpuSeconds": 2,
+    "settleWithinSeconds": {
+      "battery": 300,
+      "full": 300,
+      "low": 600
+    },
+    "settledJudgementsPerMinute": 0,
+    "settledLooksPerMinute": 0,
+    "settledTimerWakeupsPerMinute": 240,
+    "settlingBurst": 400,
+    "settlingCpuSecondsPerMinute": 30,
+    "settlingJudgementsPerSecond": 40,
+    "settlingLooksPerMinute": 240,
+    "videoCpuShareOfOneCore": 1
+  },
+  "copy": {
+    "2880x1800": {
+      "coreShareAt120fps": 0.17,
+      "coreShareAt60fps": 0.09,
+      "cpuMsPerFrame": 1.43,
+      "ms": 1.42,
+      "worstMs": 1.92
+    },
+    "5120x2880": {
+      "coreShareAt120fps": 0.55,
+      "coreShareAt60fps": 0.28,
+      "cpuMsPerFrame": 4.62,
+      "ms": 4.4,
+      "worstMs": 10.34
+    }
+  },
+  "finder": {
+    "busyPage": {
+      "area": "2880x1800",
+      "cpuMs": 68.3,
+      "ms": 68,
+      "regions": 541
+    },
+    "stillDesktop": {
+      "area": "2048x1536",
+      "cpuMs": 137.67,
+      "ms": 136.98,
+      "regions": 374
+    },
+    "videoFrame": {
+      "area": "1280x720",
+      "cpuMs": 33.73,
+      "ms": 35.14,
+      "regions": 3
+    }
+  },
+  "footprintAfterModelsMB": 752.74,
+  "label": "this branch: the finder, preprocessing and the caches made cheaper, output unchanged",
+  "machine": "Apple M1 Max, macOS Version 26.3 (Build 25D125)",
+  "overBudget": [],
+  "peakFootprintMB": 957.5,
+  "reuse": {
+    "firstShowing": {
+      "budgetUnitsPerSecond": 42.13,
+      "budgetUnitsSpent": 8478,
+      "cpuSeconds": 65.06,
+      "cpuSecondsPerMinute": 19.4,
+      "cpuShareOfOneCore": 0.32,
+      "framesJudged": 1,
+      "judgements": 8478,
+      "judgementsPerMinute": 2527.82,
+      "looks": 591,
+      "looksPerMinute": 176.21,
+      "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
+      "restedAfterSeconds": 201.23,
+      "secondCheckJudgements": 1500,
+      "simulatedSeconds": 201.23,
+      "stagesWallMs": {
+        "all": 95846.57,
+        "cacheHits": 331521,
+        "cacheMisses": 666129,
+        "decision": 288.95,
+        "detector": 92964.9,
+        "detectorCalls": 147836,
+        "finder": 38088.97,
+        "finderCacheHits": 46647,
+        "hashingAndCache": 1234.11,
+        "inference": 37866.85,
+        "outsideDetector": 2881.67,
+        "preprocess": 15322.65
+      }
+    },
+    "footprintMB": 747.52,
+    "page": "busiest held-out page",
+    "power": "full",
+    "reload": {
+      "budgetUnitsPerSecond": 42000000000,
+      "budgetUnitsSpent": 42,
+      "cpuSeconds": 0.11,
+      "cpuSecondsPerMinute": 6565140000,
+      "cpuShareOfOneCore": 109419000,
+      "framesJudged": 1,
+      "judgements": 42,
+      "judgementsPerMinute": 2520000000000,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
+      "restedAfterSeconds": 0,
+      "secondCheckJudgements": 0,
+      "simulatedSeconds": 0,
+      "stagesWallMs": {
+        "all": 243.14,
+        "cacheHits": 309,
+        "cacheMisses": 273,
+        "decision": 0.16,
+        "detector": 243.09,
+        "detectorCalls": 1,
+        "finder": 0,
+        "finderCacheHits": 1,
+        "hashingAndCache": 0.43,
+        "inference": 170.93,
+        "outsideDetector": 0.06,
+        "preprocess": 71.12
+      }
+    }
+  },
+  "sharedMac": "the developer Mac was shared with other work while this ran (load average about 5 to 10); CPU times are the process's own",
+  "simulatedClock": true,
+  "still": {
+    "budgetWatch": {
+      "calls": 112184,
+      "callsOverBudget": 0,
+      "judgementsOverBudget": 0,
+      "secondCheckJudgementsOverBudget": 0
+    },
+    "file": "04-lab-start.png",
+    "firstFrame": {
+      "cpuSeconds": 0.3,
+      "judgements": 42
+    },
+    "footprintMB": 734.75,
+    "power": "full",
+    "rest": {
+      "budgetUnitsPerSecond": 0,
+      "budgetUnitsSpent": 0,
+      "cpuSeconds": 0,
+      "cpuSecondsPerMinute": 0,
+      "cpuShareOfOneCore": 0,
+      "framesJudged": 0,
+      "judgements": 0,
+      "judgementsPerMinute": 0,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "note": "a 'nothing changed' frame every tick, as if the capture sent one; the watcher itself asks for none at rest",
+      "secondCheckJudgements": 0,
+      "simulatedSeconds": 60,
+      "stagesWallMs": {
+        "all": 0.27,
+        "cacheHits": 0,
+        "cacheMisses": 0,
+        "decision": 0,
+        "detector": 0,
+        "detectorCalls": 0,
+        "finder": 0,
+        "finderCacheHits": 0,
+        "hashingAndCache": 0,
+        "inference": 0,
+        "outsideDetector": 0.27,
+        "preprocess": 0
+      }
+    },
+    "settling": {
+      "budgetUnitsPerSecond": 41.48,
+      "budgetUnitsSpent": 10660,
+      "cpuSeconds": 63.91,
+      "cpuSecondsPerMinute": 14.92,
+      "cpuShareOfOneCore": 0.25,
+      "framesJudged": 0,
+      "judgements": 10660,
+      "judgementsPerMinute": 2489.02,
+      "looks": 814,
+      "looksPerMinute": 190.06,
+      "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
+      "secondCheckJudgements": 2666,
+      "settledAtSeconds": 256.97,
+      "simulatedSeconds": 256.97,
+      "stagesWallMs": {
+        "all": 99645.03,
+        "cacheHits": 529242,
+        "cacheMisses": 881050,
+        "decision": 399.66,
+        "detector": 96939.42,
+        "detectorCalls": 112176,
+        "finder": 30750.59,
+        "finderCacheHits": 96429,
+        "hashingAndCache": 1298.96,
+        "inference": 44328.36,
+        "outsideDetector": 2705.62,
+        "preprocess": 19995.49
+      }
+    }
+  },
+  "tick": {
+    "cpuMsPerTick": 0.13,
+    "cpuSecondsPerMinute": 0.03,
+    "msPerTick": 0.22,
+    "note": "the OS reads the quarter-second tick makes at a settled screen (display lists, session state); the stall and wait checks besides are arithmetic",
+    "ticksPerSecond": 4
+  },
+  "video": {
+    "area": "1280x720 px at 30 fps over a 2880x1800 page",
+    "footprintMB": 798.91,
+    "judged": {
+      "budgetUnitsPerSecond": 31.07,
+      "budgetUnitsSpent": 1864,
+      "cpuMsPerFrameJudged": 213.75,
+      "cpuSeconds": 50.44,
+      "cpuSecondsPerMinute": 50.44,
+      "cpuShareOfOneCore": 0.84,
+      "displayCoveredOrBlurredShareAtEnd": 1,
+      "framesCapturedPerMinute": 1800,
+      "framesJudged": 236,
+      "judgements": 1864,
+      "judgementsPerMinute": 1864,
+      "looks": 0,
+      "looksPerMinute": 0,
+      "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
+      "secondCheckJudgements": 0,
+      "simulatedSeconds": 60,
+      "stagesWallMs": {
+        "all": 60019.1,
+        "cacheHits": 51950,
+        "cacheMisses": 60682,
+        "decision": 37.48,
+        "detector": 57985.11,
+        "detectorCalls": 290,
+        "finder": 21374.92,
+        "finderCacheHits": 0,
+        "hashingAndCache": 12919.41,
+        "inference": 10948.42,
+        "outsideDetector": 2033.99,
+        "preprocess": 12669.82
+      },
+      "videoCoveredOrBlurredShareAtEnd": 1
+    },
+    "power": "full"
+  },
+  "what": "safesightmac-harness energy"
+}

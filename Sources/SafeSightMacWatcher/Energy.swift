@@ -85,16 +85,18 @@ public enum EnergyBudget {
     /// Looks a minute while a still screen settles: never more than one a tick. While nothing but covers waits, one a
     /// second (`EnergyMode.lookEvery`); new pictures left over and background clean checks keep the tick's pace.
     public static let SETTLING_LOOKS_PER_MINUTE = Int(60 / Register.TICK)
-    /// The harness's still desktop settles within this long at full power and on battery (measured: 156 s)...
+    /// The harness's still desktop settles within this long at full power and on battery (measured: 222 to 281 s since a
+    /// picture needs three clean checks; 156 s with two)...
     public static let SETTLE_WITHIN: TimeInterval = 300
     /// ...and within this long in Low Power Mode or when hot, where the looks are rarer (measured: 186 s).
     public static func settleWithin(_ mode: EnergyMode) -> TimeInterval { mode == .low ? 2 * SETTLE_WITHIN : SETTLE_WITHIN }
-    /// CPU seconds a simulated minute while the harness's still desktop settles, at full power: no more than main used
-    /// (measured: 29.4 on main, 26.4 here).
-    public static let SETTLING_CPU_SECONDS_PER_MINUTE = 30.0
+    /// CPU seconds a simulated minute while the harness's still desktop settles, at full power (measured: 27.2 before the
+    /// finder, preprocessing and the caches were made cheaper, 14.9 after).
+    public static let SETTLING_CPU_SECONDS_PER_MINUTE = 20.0
     /// CPU seconds for the harness's reload of a judged busy page, until it rests again (measured: 0.2).
     public static let RELOAD_CPU_SECONDS = 2.0
-    /// Share of one core while the harness's video plays (30 frames a second over a busy page; measured: 0.92).
+    /// Share of one core while the harness's video plays (30 frames a second over a busy page; measured: 0.84). Judging
+    /// runs back to back while the video changes, so cheaper judging shows as more frames judged, not as less of a core.
     public static let VIDEO_CPU_SHARE = 1.0
     /// CPU time of the capture callback's frame copy, a 2880 x 1800 frame, in ms (measured: 1.9).
     public static let FRAME_COPY_CPU_MS = 3.0

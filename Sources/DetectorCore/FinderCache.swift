@@ -14,8 +14,11 @@ import Preprocess
 import RegionFinder
 
 final class FinderCache {
-    /// At most this many finder results are kept (a busy screen's result is a few hundred rectangles).
-    static let defaultCapacity = 32
+    /// At most this many finder results are kept (a busy screen's result is a few hundred rectangles, a cover's a handful).
+    /// A look at a still screen makes one judge call per window and one per cover waiting to lift, a few dozen on a busy
+    /// desktop, all on the same pixels as the last look: the store must hold them all, or every look finds again what the
+    /// last one found (with 32, the harness's desktop hit the cache in 2% of its calls while settling).
+    static let defaultCapacity = 512
     private var store: Generations<(origin: PixelRect, output: RegionFinder.Output)>
     private(set) var hits = 0, misses = 0
     init(capacity: Int = FinderCache.defaultCapacity) { store = Generations(capacity: capacity) }
@@ -23,11 +26,12 @@ final class FinderCache {
     /// How far beyond the area the finder can read.
     static func reach(_ a: PixelRect) -> Int { max(68, (a.shortSide + 3) / 2 + 4) }
 
-    static func key(_ img: RGBAImage, _ a: PixelRect) -> ExactKey {
+    static func key(_ img: RGBAImage, _ a: PixelRect, memo: FrameKeys? = nil) -> ExactKey {
         let r = reach(a)
         let e = PixelRect(x: a.x - r, y: a.y - r, w: a.w + 2 * r, h: a.h + 2 * r).clamped(width: img.width, height: img.height) ?? a
-        return ExactKey.of(img, e, header: [UInt64(a.x - e.x), UInt64(a.y - e.y), UInt64(e.maxX - a.maxX), UInt64(e.maxY - a.maxY),
-                                            UInt64(a.w), UInt64(a.h)], tag: "finder/1")
+        let header = [UInt64(a.x - e.x), UInt64(a.y - e.y), UInt64(e.maxX - a.maxX), UInt64(e.maxY - a.maxY), UInt64(a.w), UInt64(a.h)]
+        if let memo { return memo.key(img, e, header: header, tag: "finder/1") }
+        return ExactKey.of(img, e, header: header, tag: "finder/1")
     }
 
     func get(_ k: ExactKey, for a: PixelRect) -> RegionFinder.Output? {
