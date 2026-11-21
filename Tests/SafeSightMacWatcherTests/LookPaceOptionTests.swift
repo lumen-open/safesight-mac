@@ -6,6 +6,7 @@
 // The figures in docs/ENERGY.md come from `figures` (set SAFESIGHTMAC_LOOKPACE_FIGURES=1; it takes a while).
 import CoreGraphics
 import Foundation
+import Preprocess
 import Testing
 @testable import DetectorCore
 @testable import SafeSightMacWatcher
