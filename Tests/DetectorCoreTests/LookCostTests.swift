@@ -96,4 +96,18 @@ final class LookCostTests: XCTestCase {
         _ = memo.key(two, r, header: [], tag: "t")
         XCTAssertEqual(memo.misses, after)
     }
+
+    /// The very same pixel storage read as a frame of other dimensions (400 x 300, then 300 x 400) holds other pictures at
+    /// the same rectangle: its keys are its own, never the other frame's.
+    func testTheSameStorageWithOtherDimensionsIsAnotherFrame() {
+        let wide = frame(400, 300, seed: 11)
+        let tall = RGBAImage(width: 300, height: 400, pixels: wide.pixels)   // shares the storage (copy on write)
+        let memo = FrameKeys()
+        let r = PixelRect(x: 20, y: 30, w: 120, h: 90)
+        let kw = memo.key(wide, r, header: [7], tag: "t")
+        let kt = memo.key(tall, r, header: [7], tag: "t")
+        XCTAssertEqual(kt, ExactKey.of(tall, r, header: [7], tag: "t"))
+        XCTAssertNotEqual(kt, kw, "other dimensions, other pixels at the same rectangle")
+        XCTAssertEqual(memo.key(wide, r, header: [7], tag: "t"), ExactKey.of(wide, r, header: [7], tag: "t"))
+    }
 }

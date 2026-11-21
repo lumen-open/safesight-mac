@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The picture finder was made cheaper for energy (docs/ENERGY.md). What it proposes decides what reaches the models, so it
-// must propose exactly what it did before, rectangle for rectangle and in the same order: these tests run the finder and
+// must propose exactly what it did before: the same regions in the same order, and the same grids (`detectGrids` walks a
+// dictionary, so the grids' order is not fixed from one run to the next, in the original too). These tests run the finder and
 // the vendored original (`ReferenceFinder`) on many synthetic screens and areas and compare everything they return.
 // Synthetic patterns only.
 import Foundation
@@ -54,8 +55,12 @@ final class FinderEquivalenceTests: XCTestCase {
     func assertSame(_ a: RegionFinder.Output, _ b: ReferenceFinder.Output, _ what: String, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertEqual(a.regions.map(\.rect), b.regions.map(\.rect), "regions: \(what)", file: file, line: line)
         XCTAssertEqual(a.regions.map(\.source.rawValue), b.regions.map(\.source.rawValue), "sources: \(what)", file: file, line: line)
-        XCTAssertEqual(a.grids.map(\.members), b.grids.map(\.members), "grids: \(what)", file: file, line: line)
-        XCTAssertEqual(a.grids.map(\.bounds), b.grids.map(\.bounds), "grid bounds: \(what)", file: file, line: line)
+        // Grids as a set: each grid's members (in its own reading order), bounds and cell size, sorted.
+        func grids(_ g: [(members: [PixelRect], bounds: PixelRect, w: Int, h: Int)]) -> [String] {
+            g.map { "\($0.bounds) \($0.w)x\($0.h) \($0.members)" }.sorted()
+        }
+        XCTAssertEqual(grids(a.grids.map { ($0.members, $0.bounds, $0.cellSize.w, $0.cellSize.h) }),
+                       grids(b.grids.map { ($0.members, $0.bounds, $0.cellSize.w, $0.cellSize.h) }), "grids: \(what)", file: file, line: line)
         XCTAssertEqual(a.cellsMarked, b.cellsMarked, "cells marked: \(what)", file: file, line: line)
         XCTAssertEqual(a.cellsTotal, b.cellsTotal, "cells: \(what)", file: file, line: line)
     }
