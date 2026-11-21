@@ -189,6 +189,33 @@ final class CountingJudge: Judging {
         #expect(lifted != nil)
     }
 
+    /// The hole, and so the plain cover behind it, is listed for as long as the judged prompt is up, whether or not a
+    /// cover around it is cut: the backing never comes and goes with the covers around the prompt.
+    @Test func aJudgedPromptKeepsItsHoleAndFrameWhenNothingAroundItIsCovered() {
+        let p = pipeline()
+        let windows = [prompt(), app]
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: WindowSnapshot(windows: windows, time: 0), now: 0)
+        let plan = p.process(touched(1, t: 0.1), snapshot: WindowSnapshot(windows: windows, time: 0.1), now: 0.1)
+        #expect(clear(plan, promptRect))
+        #expect(plan.promptHoles == [promptRect], "\(plan.promptHoles)")
+        #expect(plan.promptFrames == [promptRect], "\(plan.promptFrames)")
+        // Held covered around it again: the same hole and frame, so its backing stays where it is.
+        let covered = coveredBehind(pipeline(), windows)
+        #expect(covered.promptHoles == [promptRect] && covered.promptFrames == [promptRect])
+    }
+
+    /// The watcher makes a plan's holes again from the window list read once judging is done: a prompt that went or
+    /// moved while its frame was judged is covered in that same plan.
+    @Test func holesMadeAgainFromAFresherListCloseForAPromptThatWentOrMoved() {
+        for later in [[app], [prompt(bounds: promptRect.offsetBy(dx: 10, dy: 0)), app], [prompt(alpha: 0.5), app]] {
+            let p = pipeline()
+            let plan = coveredBehind(p, [prompt(), app])
+            #expect(plan.promptHoles == [promptRect])
+            let fresh = p.refreshHoles(WindowSnapshot(windows: later, time: 0.15))
+            #expect(fresh.promptHoles.isEmpty && fresh.promptFrames.isEmpty && fresh.covers(promptRect), "\(later)")
+        }
+    }
+
     @Test func aPromptThatGoesIsCoveredAgainAtOnceAndJudgedAgainWhenItComesBack() {
         let j = PerWindowScript()
         let p = pipeline(j)

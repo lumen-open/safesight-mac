@@ -978,7 +978,7 @@ public final class DisplayPipeline {
 
     /// The last plan with its holes made again for this window list (a look with nothing to judge): a prompt that went
     /// has its place covered again at once.
-    func refreshHoles(_ snapshot: WindowSnapshot) -> CoverPlan {
+    public func refreshHoles(_ snapshot: WindowSnapshot) -> CoverPlan {
         guard let base = lastBase, snapshot.readable else { return lastPlan }
         // As in a look: a prompt that moved (or is not where the last look saw it) is judged again first.
         let before = promptJudged
@@ -1049,29 +1049,32 @@ public final class DisplayPipeline {
     /// the window server's other small overlays excepted: they show nothing of anyone's). Only for a prompt judged since
     /// it appeared (`promptJudged`), and never when another window behind it sits at or above the level of the cover
     /// drawn behind it (`CoverLevel.behindPrompt`): that window would show through a see-through part of the prompt.
-    func promptHoles(_ snapshot: WindowSnapshot) -> [(target: JudgeTarget, rects: [CGRect])] {
+    func promptHoles(_ snapshot: WindowSnapshot) -> [(target: JudgeTarget, frame: CGRect, rects: [CGRect])] {
         guard snapshot.readable else { return [] }
         let others = snapshot.windows.filter { $0.shows && !ignoredPIDs.contains($0.ownerPID) && !$0.systemOverlay }
         let candidates = Set(promptCandidates(snapshot).map(\.number))
-        var out: [(JudgeTarget, [CGRect])] = []
+        var out: [(JudgeTarget, CGRect, [CGRect])] = []
         for (i, w) in others.enumerated() where candidates.contains(w.number) {
             let t = JudgeTarget.window(number: w.number, ownerPID: w.ownerPID)
             guard promptJudged.contains(t) else { continue }
             let behind = others[(i + 1)...]
             if behind.contains(where: { $0.layer >= CoverLevel.behindPrompt && $0.bounds.intersects(w.bounds) }) { continue }
             let rects = others[..<i].reduce([w.bounds]) { $0.subtracting($1.bounds) }.filter(\.hasArea)
-            if !rects.isEmpty { out.append((t, rects)) }
+            if !rects.isEmpty { out.append((t, w.bounds, rects)) }
         }
         return out
     }
 
     /// The plan as drawn around password prompts: every cover of anything else is cut out of each prompt's hole (a cover
     /// cut in pieces keeps its way-out line on its largest piece); the prompt's own covers stay. A whole-display cover is
-    /// drawn around the holes with the prompts' own covers inside. Holes are made only where they cut something, and a
-    /// plain cover is drawn behind each (`CoverPlan.promptHoles`).
+    /// drawn around the holes with the prompts' own covers inside. Every hole is listed, whether or not it cuts a cover,
+    /// so the plain cover behind it (`CoverPlan.promptHoles`) stays up for as long as the prompt does instead of coming
+    /// and going with the covers around it; with it, each prompt's whole rectangle (`CoverPlan.promptFrames`), so the
+    /// drawing can check the prompt is still there (`HoleGate.confirm`).
     func withPromptHoles(_ plan: CoverPlan, _ snapshot: WindowSnapshot) -> CoverPlan {
         var p = plan
         p.promptHoles = []
+        p.promptFrames = []
         let holes = promptHoles(snapshot)
         // Changed blocks of an open prompt not judged yet: plain covers of its own, inside its hole.
         let coverFirst = holes.flatMap { h in (promptCoverFirst[h.target] ?? []).map { CoverItem(rect: $0, kind: .plain, source: h.target) } }
@@ -1081,17 +1084,16 @@ public final class DisplayPipeline {
             let own = Set(holes.map(\.target))
             p.items = holes.isEmpty ? [] : plan.items.filter { $0.source.map(own.contains) == true }
             p.promptHoles = holes.flatMap(\.rects)
+            p.promptFrames = holes.isEmpty ? [] : holes.map(\.frame)
             return p
         }
         guard !holes.isEmpty else { return p }
         var items: [CoverItem] = []
-        var used: [CGRect] = []
         for item in plan.items {
             // A cover of unknown source is never cut (it covers more).
             guard let source = item.source else { items.append(item); continue }
             let cutBy = holes.filter { $0.target != source }.flatMap(\.rects).filter { $0.intersects(item.rect) }
             if cutBy.isEmpty { items.append(item); continue }
-            used += cutBy
             var pieces = cutBy.reduce([item.rect]) { $0.subtracting($1) }.filter(\.hasArea)
                 .map { CoverItem(rect: $0, kind: item.kind, wayOut: false, source: item.source) }
             if item.wayOut, let i = pieces.indices.max(by: { pieces[$0].rect.width * pieces[$0].rect.height < pieces[$1].rect.width * pieces[$1].rect.height }) {
@@ -1100,8 +1102,9 @@ public final class DisplayPipeline {
             items += pieces
         }
         p.items = items
-        // Each cut hole once, in the order the prompts were found.
-        p.promptHoles = holes.flatMap(\.rects).filter { r in used.contains(r) }
+        // Every hole, in the order the prompts were found.
+        p.promptHoles = holes.flatMap(\.rects)
+        p.promptFrames = holes.map(\.frame)
         return p
     }
 

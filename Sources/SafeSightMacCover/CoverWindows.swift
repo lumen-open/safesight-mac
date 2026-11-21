@@ -65,21 +65,76 @@ public struct HoleGate: Sendable {
 
     /// The backings drawn now (and only these) count as up for the next drawing.
     public mutating func drew(_ holes: Set<Hole>) { backed = holes }
+
+    /// The plans with every hole closed that the window list read now does not hold (`PasswordPrompt.holeStillOpen`):
+    /// the prompt went, moved or changed size, a window came in front of it or behind it, or the list could not be read
+    /// (`windows` nil or unreadable). A closed hole is taken out of the plan, so its backing is no longer wanted, and is
+    /// covered: by the whole-display cover around it, or by a plain cover of its own. Plans without holes are untouched.
+    public static func confirm(_ plans: [CoverPlan], windows: WindowSnapshot?, ignoring: Set<Int32>) -> [CoverPlan] {
+        plans.map { plan in
+            guard !plan.promptHoles.isEmpty else { return plan }
+            var p = plan
+            let keep = plan.promptHoles.map { r in
+                windows.map { PasswordPrompt.holeStillOpen(r, frames: plan.promptFrames, display: plan.display.bounds, in: $0, ignoring: ignoring) } ?? false
+            }
+            guard keep.contains(false) else { return plan }
+            p.promptHoles = zip(plan.promptHoles, keep).filter(\.1).map(\.0)
+            if p.wholeDisplay == nil {
+                p.items += zip(plan.promptHoles, keep).filter { !$0.1 }.map { CoverItem(rect: $0.0, kind: .plain) }
+            }
+            if p.promptHoles.isEmpty { p.promptFrames = [] }
+            return p
+        }
+    }
+}
+
+/// Whether the window server shows a backing as the hole needs it, read from its own entry in the window list (not from
+/// what AppKit was asked for: an ordered-in window can still be fading or growing into place there): on screen, at the
+/// backing's level, at full opacity, and covering the whole hole (global points). Anything missing or unreadable is no.
+public enum BackingCheck {
+    public static func stands(_ info: [String: Any]?, covering hole: CGRect) -> Bool {
+        guard let info, hole.hasArea,
+              (info[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue == true,
+              (info[kCGWindowLayer as String] as? NSNumber)?.intValue == CoverLevel.behindPrompt,
+              let alpha = (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue, alpha.isFinite, alpha >= 1,
+              let b = info[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: b as CFDictionary)
+        else { return false }
+        return bounds.contains(hole)
+    }
+
+    /// The window server's entry for one of this app's windows, or nil.
+    public static func info(_ windowNumber: Int) -> [String: Any]? {
+        guard windowNumber > 0,
+              let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(windowNumber)) as? [[String: Any]]
+        else { return nil }
+        return list.first { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == windowNumber }
+    }
 }
 
 /// One plain cover behind a password prompt: a click-through panel below the prompt's level (`CoverPanel` in the app; a
 /// stand-in in tests, so the order of drawing can be checked without windows).
 @MainActor
 protocol BackingPanel: AnyObject {
-    /// Puts the panel at `frame` (Cocoa points), draws it plain and orders it in. True only when it then stands at
-    /// exactly that frame and is on screen.
-    func place(_ frame: CGRect, theme: CoverTheme) -> Bool
+    /// Puts the panel at `frame` (Cocoa points), draws it plain and opaque and orders it in, with no animation. True
+    /// only when it then stands at exactly that frame and the window server shows it covering `hole` (global points)
+    /// at full opacity (`stands`).
+    func place(_ frame: CGRect, covering hole: CGRect, theme: CoverTheme) -> Bool
+    /// True while the window server shows it on screen, at full opacity, covering all of `hole` (`BackingCheck`).
+    func stands(covering hole: CGRect) -> Bool
     func hide()
 }
 
 extension CoverPanel: BackingPanel {
-    func place(_ frame: CGRect, theme: CoverTheme) -> Bool {
+    func place(_ frame: CGRect, covering hole: CGRect, theme: CoverTheme) -> Bool {
         if level != CoverLevels.behindPrompt { level = CoverLevels.behindPrompt }
+        // Opaque, at full opacity, and never animated in or out (`CoverPanel.make`): AppKit's own animation fades and
+        // grows a window into place, and the window server shows it see-through and smaller meanwhile.
+        if animationBehavior != .none { animationBehavior = .none }
+        if alphaValue != 1 { alphaValue = 1 }
+        if !isOpaque { isOpaque = true }
+        let fill = NSColor(cgColor: theme.cover.cg()) ?? .black
+        if backgroundColor != fill { backgroundColor = fill }
         if self.frame != frame { setFrame(frame, display: false) }
         // Without a layer nothing is drawn: the hole then stays covered.
         guard let root = contentView?.layer else { return false }
@@ -87,8 +142,10 @@ extension CoverPanel: BackingPanel {
         root.sublayers = [LayerFactory.layer(root.frame, .plain, theme)]
         orderFrontRegardless()
         display()
-        return isVisible && self.frame == frame
+        return isVisible && self.frame == frame && stands(covering: hole)
     }
+
+    func stands(covering hole: CGRect) -> Bool { isVisible && BackingCheck.stands(BackingCheck.info(windowNumber), covering: hole) }
 
     func hide() { orderOut(nil) }
 }
@@ -96,9 +153,14 @@ extension CoverPanel: BackingPanel {
 /// The plain covers drawn behind password prompts (`CoverPlan.promptHoles`), one panel per hole, below the prompt's
 /// level, so the prompt shows over it and nothing behind the prompt shows through it. Shared by both forms. The order of
 /// drawing is what keeps a hole from ever showing without its backing:
+/// - every drawing first reads the window list (`windows`) and closes each hole its prompt no longer holds
+///   (`HoleGate.confirm`): a plan can come from a window list read well before, and a hole never stays open for a
+///   prompt that went;
 /// - opening: the backing is drawn first, the covers still over the hole; the hole is cut only on a later drawing,
-///   once that backing stood at exactly its place (`HoleGate`); a plan held back is drawn again on the next turn of the
-///   main loop;
+///   once the window server showed that backing at exactly its place, opaque, on two drawings in a row (`HoleGate`,
+///   `BackingPanel.stands`); a plan held back is drawn again on the next turn of the main loop;
+/// - while a hole is cut, the window list and its backing are looked at again every `watchEvery`, and the covers are
+///   drawn again at once if either fails;
 /// - closing or moving: the covers are drawn first (the hole covered, or cut at its new place only once that place has
 ///   its own backing), and the backing of a hole that went is taken down only on the next turn of the main loop;
 /// - each hole keeps its own panel for as long as it lasts, so two holes never swap panels while either is cut.
@@ -113,6 +175,11 @@ final class BehindPrompt {
     private let nextTurn: @MainActor (@escaping Turn) -> Void
     private let toCocoa: @MainActor (CGRect) -> CGRect
     private let later: @MainActor (TimeInterval, @escaping Turn) -> Void
+    /// The window list now, read only when a plan has a hole. Nil (or unreadable): no hole opens.
+    private let windows: @MainActor () -> WindowSnapshot?
+    private let watchLater: @MainActor (TimeInterval, @escaping Turn) -> Void
+    /// This app's own windows (the covers, the backings): never the prompt, never in front of it.
+    private let ownPIDs: Set<Int32>
     /// Tries left, for a backing that could not be drawn, before the next change on screen: a few, further apart each
     /// time (0.25, 0.5, 1 and 2 seconds), never a tight loop. Back to the full count once every backing is up.
     static let retries = 4
@@ -120,35 +187,60 @@ final class BehindPrompt {
     private var retryPending = false
     /// The latest plans: a retry draws these, not the ones it was scheduled with.
     private var latest: [CoverPlan] = []
+    /// How the latest plans are drawn again (the presenter's own `apply`).
+    private var redraw: (([CoverPlan]) -> Void)?
+    /// The holes cut in the covers by the last drawing.
+    private(set) var cut: Set<HoleGate.Hole> = []
+    /// How often a cut hole's prompt and backing are looked at again between drawings: 20 times a second, only while
+    /// a hole is cut (a prompt is up for seconds; nothing runs otherwise).
+    static let watchEvery: TimeInterval = 0.05
+    private var watchPending = false
 
     init(make: @escaping @MainActor () -> BackingPanel = { CoverPanel.make(frame: CGRect(x: 0, y: 0, width: 1, height: 1)) },
          nextTurn: @escaping @MainActor (@escaping Turn) -> Void = { f in DispatchQueue.main.async { MainActor.assumeIsolated { f() } } },
          toCocoa: @escaping @MainActor (CGRect) -> CGRect = { CoordinateSpace.toCocoa($0, primaryHeight: CoverCanvas.primaryHeight) },
          later: @escaping @MainActor (TimeInterval, @escaping Turn) -> Void = { d, f in
-             DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } }) {
+             DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } },
+         windows: @escaping @MainActor () -> WindowSnapshot? = { nil },
+         watchLater: @escaping @MainActor (TimeInterval, @escaping Turn) -> Void = { d, f in
+             DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } },
+         ownPIDs: Set<Int32> = [getpid()]) {
         self.make = make; self.nextTurn = nextTurn; self.toCocoa = toCocoa; self.later = later
+        self.windows = windows; self.watchLater = watchLater; self.ownPIDs = ownPIDs
+    }
+
+    /// The plans with every hole closed that the window list read now does not hold. Read only when a plan has a hole.
+    private func confirmed(_ plans: [CoverPlan]) -> [CoverPlan] {
+        guard plans.contains(where: { !$0.promptHoles.isEmpty }) else { return plans }
+        return HoleGate.confirm(plans, windows: windows(), ignoring: ownPIDs)
     }
 
     /// Draws the backings `plans` want, then the covers by `draw`, with every hole still closed whose backing was not up
-    /// before this drawing; then, on the next turn of the main loop, takes down the backings of holes that went and draws
-    /// `plans` again by `again` if a hole was held back (unless newer plans came first).
-    func apply(_ plans: [CoverPlan], theme: CoverTheme, draw: ([CoverPlan]) -> Void, again: @escaping ([CoverPlan]) -> Void) {
+    /// before this drawing, or whose prompt the window list read now does not hold; then, on the next turn of the main
+    /// loop, takes down the backings of holes that went and draws `plans` again by `again` if a hole was held back
+    /// (unless newer plans came first).
+    func apply(_ incoming: [CoverPlan], theme: CoverTheme, draw: ([CoverPlan]) -> Void, again: @escaping ([CoverPlan]) -> Void) {
         serial += 1
-        latest = plans
+        latest = incoming
+        redraw = again
+        let plans = confirmed(incoming)
         let wanted = HoleGate.holes(plans)
         for h in wanted where assigned[h] == nil { assigned[h] = spare.popLast() ?? make() }
         var up: Set<HoleGate.Hole> = []
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         // Backings of holes still wanted only; those of holes that went stay where they are until the covers are drawn.
-        for h in wanted where assigned[h]?.place(toCocoa(h.rect), theme: theme) == true { up.insert(h) }
+        // Each backing is at least as large as its hole (rounded outward to whole points).
+        for h in wanted where assigned[h]?.place(toCocoa(h.rect.integral), covering: h.rect, theme: theme) == true { up.insert(h) }
         CATransaction.commit()
         // A hole opens only when its backing was up before this drawing and still is.
         gate.drew(gate.backed.intersection(up))
         let open = gate.backed
         let (plansNow, _) = gate.gate(plans)
         draw(plansNow)
+        cut = open.intersection(wanted)
         gate.drew(up)
+        if !cut.isEmpty { watch() }
         // Drawn again only for a hole held back whose backing is up now (it opens then); one whose backing could not be
         // drawn stays covered, and is not retried in a loop.
         let held = up.contains { !open.contains($0) }
@@ -176,6 +268,22 @@ final class BehindPrompt {
         }
     }
 
+    /// While a hole is cut: every `watchEvery`, the window list is read again and each cut hole's backing is looked at;
+    /// if the prompt no longer holds a cut hole (it went, say) or its backing no longer stands, the latest plans are drawn
+    /// again at once, which closes it.
+    private func watch() {
+        guard !watchPending else { return }
+        watchPending = true
+        watchLater(Self.watchEvery) { [weak self] in
+            guard let self else { return }
+            self.watchPending = false
+            guard !self.cut.isEmpty else { return }
+            let still = Set(HoleGate.holes(self.confirmed(self.latest)))
+            let fine = self.cut.allSatisfy { h in still.contains(h) && self.assigned[h]?.stands(covering: h.rect) == true }
+            if fine { self.watch() } else { self.redraw?(self.latest) }
+        }
+    }
+
     /// Takes down every backing whose hole is not in `keeping` (the covers over it are drawn by now).
     private func takeDown(keeping: Set<HoleGate.Hole>) {
         for (h, panel) in assigned where !keeping.contains(h) {
@@ -189,6 +297,7 @@ final class BehindPrompt {
     func removeAll() {
         serial += 1
         latest = []
+        cut = []
         takeDown(keeping: [])
         gate.drew([])
     }
@@ -233,6 +342,9 @@ final class CoverPanel: NSPanel {
         p.isOpaque = false
         p.backgroundColor = .clear
         p.hasShadow = false
+        // Never animated: AppKit's default animation fades and grows a window in when it is ordered in, and fades and
+        // shrinks it out, and the window server shows it see-through and smaller meanwhile.
+        p.animationBehavior = .none
         p.ignoresMouseEvents = true
         p.level = CoverLevels.canvas
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
@@ -365,9 +477,14 @@ public final class CoverCanvas: CoverPresenter {
     private struct Drawn: Equatable { var plan: CoverPlan; var theme: CoverTheme; var notice: CoverNotice?; var menuBar: CGFloat; var scale: CGFloat; var frame: CGRect }
     /// When each canvas was last brought to the front of its level.
     private var frontedAt: [UInt32: TimeInterval] = [:]
-    private let behind = BehindPrompt()
+    private let behind: BehindPrompt
     public var notice: CoverNotice?
-    public init(notice: CoverNotice? = nil) { self.notice = notice }
+    /// `windows` reads the window list (with the prompt's owner checks) just before a plan with a password prompt's
+    /// hole is drawn; without it no hole ever opens.
+    public init(notice: CoverNotice? = nil, windows: (@MainActor () -> WindowSnapshot?)? = nil) {
+        self.notice = notice
+        behind = BehindPrompt(windows: windows ?? { nil })
+    }
 
     static var primaryHeight: CGFloat { CGDisplayBounds(CGMainDisplayID()).height }
 
@@ -428,8 +545,12 @@ public final class OverlayCovers: CoverPresenter {
     public var notice: CoverNotice?
     /// When every panel was last brought to the front: at most four times a second, besides each panel newly shown.
     private var frontedAt: TimeInterval = -.infinity
-    private let behind = BehindPrompt()
-    public init(notice: CoverNotice? = nil) { self.notice = notice }
+    private let behind: BehindPrompt
+    /// As for `CoverCanvas`: without `windows` no hole ever opens.
+    public init(notice: CoverNotice? = nil, windows: (@MainActor () -> WindowSnapshot?)? = nil) {
+        self.notice = notice
+        behind = BehindPrompt(windows: windows ?? { nil })
+    }
 
     public func apply(_ plans: [CoverPlan]) {
         behind.apply(plans, theme: CoverTheme.current, draw: { draw($0) }, again: { [weak self] in self?.apply($0) })

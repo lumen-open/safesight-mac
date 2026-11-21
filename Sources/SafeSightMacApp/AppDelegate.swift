@@ -13,7 +13,10 @@ import SafeSightMacWatcher
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
-    let watcher = WatcherController(presenter: CoverForm.current == .overlays ? OverlayCovers() : CoverCanvas())
+    /// The covers read the window list again just before drawing a password prompt's hole, so it never stays open for a
+    /// prompt that went.
+    let watcher = WatcherController(presenter: CoverForm.current == .overlays
+        ? OverlayCovers(windows: { WindowList.snapshot() }) : CoverCanvas(windows: { WindowList.snapshot() }))
     private var practice: PracticePresentation = PracticePresentation(.unknown(reason: "not read yet"))
     private var pausedUntil: Date?
     private var pausedIndefinitely = false

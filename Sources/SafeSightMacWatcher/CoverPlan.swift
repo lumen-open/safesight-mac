@@ -115,9 +115,15 @@ public struct CoverPlan: Equatable, Sendable {
     /// around it, with the prompt's own covers (`items`) inside it. A plain cover is drawn behind it, below the prompt
     /// (`CoverLevel.behindPrompt`).
     public var promptHoles: [CGRect]
+    /// The whole window rectangle (global points) of each password prompt that has a hole in `promptHoles`, as the
+    /// window list showed it when the plan was made. Each hole is drawn only while a window that is still the prompt
+    /// stands at exactly one of these when the covers are drawn (`HoleGate.confirm`); a hole with no frame here never opens.
+    public var promptFrames: [CGRect]
 
-    public init(display: DisplayDescriptor, items: [CoverItem], wholeDisplay: FaultCause? = nil, promptHoles: [CGRect] = []) {
+    public init(display: DisplayDescriptor, items: [CoverItem], wholeDisplay: FaultCause? = nil, promptHoles: [CGRect] = [],
+                promptFrames: [CGRect] = []) {
         self.display = display; self.items = items; self.wholeDisplay = wholeDisplay; self.promptHoles = promptHoles
+        self.promptFrames = promptFrames
     }
 
     public static func covered(_ display: DisplayDescriptor, because cause: FaultCause) -> CoverPlan {
