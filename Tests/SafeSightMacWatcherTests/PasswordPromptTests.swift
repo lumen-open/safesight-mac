@@ -245,6 +245,18 @@ final class CountingJudge: Judging {
         }
     }
 
+    /// A prompt counted as judged with no record of what of it showed then is treated as having grown: no hole.
+    @Test func aJudgedPromptWithNoRecordOfWhatShowedGetsNoHole() {
+        let p = pipeline()
+        let windows = [prompt(), app]
+        #expect(coveredBehind(p, windows).promptHoles == [promptRect])
+        let t = JudgeTarget.window(number: 50, ownerPID: 900)
+        p.promptJudgedArea[t] = nil
+        let plan = p.refreshHoles(WindowSnapshot(windows: windows, time: 0.15))
+        #expect(plan.promptHoles.isEmpty && fullyCovered(plan, promptRect), "\(plan.promptHoles)")
+        #expect(!p.promptJudged.contains(t), "judged again first")
+    }
+
     @Test func aPromptThatGoesIsCoveredAgainAtOnceAndJudgedAgainWhenItComesBack() {
         let j = PerWindowScript()
         let p = pipeline(j)

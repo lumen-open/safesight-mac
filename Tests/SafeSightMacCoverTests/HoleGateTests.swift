@@ -58,6 +58,16 @@ func promptFrames(_ rects: [CGRect], uncut: Bool = false) -> [PromptFrame] {
         #expect(second.plans[0].promptHoles == [hole] && !covered(second.plans[0], hole))
     }
 
+    /// Around a whole-display cover every hole cuts it, whatever the plan marks as cutting nothing: each still waits for
+    /// its backing.
+    @Test func aWholeDisplayCoverIsCutByEveryHoleWhateverIsMarkedUncut() {
+        let whole = CoverPlan(display: d, items: [], wholeDisplay: .windowAboveCovers, promptHoles: [hole],
+                              promptFrames: promptFrames([hole], uncut: true))
+        #expect(CoverLayout.cuttingPromptRects(whole) == [hole])
+        let first = HoleGate().gate([whole])
+        #expect(first.heldBack && first.plans[0].promptHoles.isEmpty && covered(first.plans[0], hole), "closed until its backing is up")
+    }
+
     @Test func plansWithoutHolesAreUntouched() {
         let g = HoleGate()
         let plain = CoverPlan(display: d, items: [CoverItem(rect: hole, kind: .plain)])
