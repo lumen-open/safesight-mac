@@ -190,9 +190,9 @@ extension ScreenSim {
         print(String(format: "LOOKPACE four rounds N=%d: settled %.1f s (least %.1f), %d looks", n, at, least, run.looks))
     }
 
-    /// `EnergyBudgetTests`' still screen with the option on: its limits (judgements within the budget, at most a look a
-    /// tick, settled within `SETTLE_WITHIN`, nothing judged at rest).
-    @Test(arguments: [1, 8, 32]) func theEnergyBudgetLimitsHold(n: Int) {
+    /// `EnergyBudgetTests`' still screen with the option on (and off, for the figures): its limits (judgements within the
+    /// budget, at most a look a tick, settled within `SETTLE_WITHIN`, nothing judged at rest).
+    @Test(arguments: [nil, 1, 8, 32] as [Int?]) func theEnergyBudgetLimitsHold(n: Int?) {
         let e = EnergyBudgetTests()
         for mode in EnergyMode.allCases {
             let judge = CostJudge(entries: StillScreenSettlesTests.grid(PixelRect(x: 0, y: 30, w: 600, h: 370)), wholeCost: StillScreenSettlesTests.wholeCost)
@@ -205,7 +205,7 @@ extension ScreenSim {
             #expect(at <= EnergyBudget.settleWithin(mode), "\(mode): settled in \(at) s")
             #expect(run.judgementsWhenSettled <= EnergyBudget.SETTLED_JUDGEMENTS_PER_MINUTE)
             #expect(!p.needsAnotherLook && !p.looksEveryTick)
-            print(String(format: "LOOKPACE budget %@ N=%d: settled %.1f s, %d judgements, %d looks", mode.rawValue, n, at, run.judgements, run.looks))
+            print(String(format: "LOOKPACE budget %@ %@: settled %.1f s, %d judgements, %d looks", mode.rawValue, n.map { "N=\($0)" } ?? "off", at, run.judgements, run.looks))
         }
     }
 

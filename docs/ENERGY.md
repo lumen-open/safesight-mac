@@ -145,6 +145,34 @@ What we found and left alone: in the harness's video, once the full re-judge eve
 
 Since then (the `scroll-video` change): a call now leaves for later only the entries it left unjudged, each already held covered where it stands until its own clean rounds, so after a full re-judge the next calls are over what changes and what was left, not over the whole display. In the cover layer's simulation of the virtual Mac (`SustainedChangeTests`), a minute of video no longer ends in a cover of the whole display: the largest cover while it plays is 8% of the display, against 96% before. The full re-judge's slices that reach into the video's area still change with every frame, so they stay covered until the video stops (about 84% of the rest of the display in that simulation, as before). The live harness has not been run again. That simulation's fake judge, in its exact mode, makes a whole pass or slice new whenever a change reaches its place, so it is pessimistic for scrolling: the real detector keys entries by their pixels and anchors its slices to the scroll offset, so slices that only moved with the page come back from the cache.
 
+## Option, not enabled: looking every tick while many covers wait
+
+After a page scrolls, it can leave hundreds of small covers, each waiting for its four clean rounds. While only covers wait, a still screen is looked at once a second (`EnergyMode.lookEvery`). `LookPace.TICK_WHILE_COVERS_OVER` is an option to look every tick (4 times a second) instead while more than N covers wait. It would spend more energy to settle sooner. Nothing else changes: the same judging budget, the same four clean rounds, the same clean-cache rule, the same `TIME_TO_COVER`. A look with an empty bucket judges nothing extra, and covers found flagged are not counted. **It is off** (`nil`), and nothing in the app turns it on.
+
+We measured it in the simulation (`LookPaceOptionTests`, the fake judge of `UsableCoversTests`, simulated time and CPU). The busy page is scrolled for 60 s and then left still. "Exact" is the fake judge's exact mode; "old" is the mode the tests were first written in. The still desktop is the one under the Dock's display-sized window, timed from its first frame. "Settled CPU" is the next two minutes with the menu bar clock ticking.
+
+| Case | Setting | Settles in | CPU-s settling | Judgements | Looks | Settled CPU-s a minute |
+|---|---|---|---|---|---|---|
+| Scrolled page, exact | off (today) | 378.5 s | 363.7 | 15,206 | 1,248 | 0.90 |
+| | N = 32 | 393.7 s | 381.9 | 15,810 | 1,315 | 0.72 |
+| | N = 8 | 393.7 s | 381.9 | 15,810 | 1,315 | 0.72 |
+| | N = 1 | 393.6 s | 382.1 | 15,810 | 1,320 | 0.72 |
+| Scrolled page, old | off (today) | 80.0 s | 77.4 | 3,450 | 259 | 5.25 |
+| | N = 32 | 91.4 s | 82.7 | 3,712 | 343 | 5.77 |
+| | N = 8 | 91.4 s | 82.7 | 3,712 | 343 | 5.77 |
+| | N = 1 | 91.2 s | 82.7 | 3,704 | 349 | 5.77 |
+| Still desktop | off, 32, 8 and 1 | 44.4 s | 39.0 | 1,972 | 165 | 0.63 |
+| `EnergyBudgetTests` desktop, full power | off, 32, 8 | 84.0 s | – | 1,754 | 134 | – |
+| | N = 1 | 84.5 s | – | 1,764 | 145 | – |
+| `EnergyBudgetTests` desktop, Low Power | off, 32, 8 | 85.0 s | – | 1,753 | 101 | – |
+| | N = 1 | 86.5 s | – | 1,783 | 114 | – |
+
+In every run, with the option on or off, no cover lifted before four clean rounds (checked after every frame), and judgements stayed within the budget plus its first burst. Every `EnergyBudgetTests` limit still holds with the option on, in every mode.
+
+What this shows: **the option makes settling slower and costs more, not less.** The scrolled page's settling is held back by the judging budget, not by how often the watcher looks: 15,206 judgements at 40 a second is about 380 s, which is how long it takes. Looking four times as often hands each look a quarter of the budget. The cheaper entries get judged again before the dearer ones are reached, so about 4% more judgements go to the same covers, and settling takes 4% longer (15 s on the exact page, 11 s on the old one). The extra looks also cost CPU, about 5% more. The still desktop does not change at all: its settling is new pictures and background clean checks, which are already looked at every tick. The settled-minute CPU differs between the runs only because the clock and the 30-second full re-judge fall at different points of each run.
+
+A setting that makes settling faster would need more judging budget, and that is a different trade. The `energy` harness command can measure the option with real models (`--tick-while-covers-over N`). It has not been run: it needs the models folder.
+
 ## What is not measured yet
 
 - **Battery drain.** Nothing here measures watts. CPU time on a fast Mac is a stand-in, not a battery figure.
