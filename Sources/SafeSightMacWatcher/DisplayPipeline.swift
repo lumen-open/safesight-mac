@@ -44,6 +44,13 @@ public final class DisplayPipeline {
         /// left unjudged, it goes into a cover that already holds all of it, or stands on its own, never into the union of
         /// the two (which grew, frame by frame of scrolling, into a cover of the whole window).
         var fromMotion = false
+        /// Ever found flagged (by its own call, a call it was shared into, or a flag cover merged into it). Such a cover is
+        /// judged at its own size at every round, never only inside a larger cover's call (`countableInside`).
+        var everFlagged = false
+        /// Made only for entries left unjudged and never flagged: a larger cover of the same window that holds all of it
+        /// may count it with its own call. A picture can flag only when looked at closely (a call its own size, where the
+        /// whole pass is not shrunk as far): a cover ever flagged needs its own-size call every round.
+        var countableInside: Bool { fromOverload && !everFlagged && !fromMotion }
         /// The entries over it judged clean (freshly, or from the exact-match cache) since its last clean judgement: when
         /// every entry over it is in here, that is one more clean judgement of every pixel it hides, even if the budget
         /// spread the judging over several calls. Emptied by a flag, a change in its area, a move and each vote.
@@ -433,7 +440,21 @@ public final class DisplayPipeline {
         // Only a frame with new pixels can change anything (a "nothing changed" frame is judged on the last frame's).
         let newPixels = previous != nil || !changedAreas.isEmpty
         for i in held.indices {
-            if moved.contains(where: { $0.0 == held[i].target }) { held[i].round = []; continue }
+            if let m = moved.first(where: { $0.0 == held[i].target }) {
+                held[i].round = []
+                // The window moved: what the cover hides now must be what it hid before, moved with it, or its count starts
+                // again (a change under a cover during a move is a change like any other).
+                guard newPixels else { continue }
+                let h = held[i]
+                let was = (h.whole ? m.1 : h.rel.offsetBy(dx: m.1.minX, dy: m.1.minY)).intersection(d)
+                if let gNow = fullRect(h, snapshot, visible), let nowPx = map.toPixels(gNow), let wasPx = map.toPixels(was), let prev = previous,
+                   nowPx.w == wasPx.w, nowPx.h == wasPx.h,
+                   MotionFinder.matches(old: prev, new: img, r: nowPx, t: Translation(dx: nowPx.x - wasPx.x, dy: nowPx.y - wasPx.y)) {
+                    continue
+                }
+                held[i].clean = 0
+                continue
+            }
             guard newPixels else { continue }
             if let g = fullRect(held[i], snapshot, visible), coverChanged(g) {
                 held[i].clean = 0; held[i].round = []
@@ -831,21 +852,12 @@ public final class DisplayPipeline {
             newCovers += covers(from: v, target: p.target, origin: o, img: img, map: map,
                                 callArea: map.toGlobal(area), visibleBox: visBox)
 
-            // Slowness covers more: in a window left with unjudged entries for longer than `TIME_TO_COVER`, every entry
-            // still unjudged is covered plainly (not only blurred) until it is judged (step 2). Only those: the detector
-            // returns every entry a call did not judge as `overload` with its own rectangle (an unjudged whole pass is the
-            // whole call area), and everything else in the window was judged, freshly, from the cache, or on exactly these
-            // pixels before. Covering the whole window here covered a display-sized window (the Dock's) for minutes over
-            // one small change, and a cover that size could only lift once everything on the display had been judged four
-            // times over with nothing changing anywhere (`overloadCoversWhatIsUnjudged`).
+            // Slowness covers more (step 2): see `slownessCovers`.
             if v.overloaded > 0 {
                 let since = overloadSince[p.target] ?? now
                 overloadSince[p.target] = since
                 if now - since >= Register.TIME_TO_COVER {
-                    for e in v.regions where e.reason == .overload {
-                        newCovers.append(Held(target: p.target, rel: map.toGlobal(e.rect).offsetBy(dx: -o.x, dy: -o.y), whole: false,
-                                              kind: .plain, clean: 0, fromOverload: true))
-                    }
+                    newCovers += slownessCovers(v, target: p.target, origin: o, map: map)
                 }
                 // Judged again over the same area: the picture finder then proposes the same pictures, so the entries
                 // judged in this call are not proposed afresh (and left unjudged) in the next.
@@ -875,7 +887,7 @@ public final class DisplayPipeline {
         let fulls = held.map { fullRect($0, snapshot, visible) }
         /// The largest waiting cover of the same window that holds all of cover `i` and is not judged yet in this look.
         func container(_ i: Int) -> Int? {
-            guard let gi = fulls[i] else { return nil }
+            guard held[i].countableInside, let gi = fulls[i] else { return nil }
             return waiting.filter { k in
                 k != i && !countedInside.contains(k) && held[k].target == held[i].target && held[k].flaggedAt == nil
                     && (fulls[k].map { $0.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel).contains(gi) } ?? false)
@@ -886,57 +898,70 @@ public final class DisplayPipeline {
             let spent = msSince(tRun)
             guard spent < callWallMs || checked == 0 else { break }
             if countedInside.contains(turn) { if turn != movedFirst { inTurn += 1 }; continue }
-            // A cover held inside a larger one of the same window is judged by that one's call (which counts it too), so
-            // the judgements it needs are made once.
-            let i = turn == movedFirst ? turn : (container(turn) ?? turn)
-            countedInside.insert(i)
-            guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
-            if held[i].flaggedAt == g, !reported.contains(where: { $0.intersects(g) }), !moved.contains(where: { $0.0 == held[i].target }),
-               now - (held[i].flaggedWhen ?? now) < Register.RECHECK_FLAGGED_EVERY {
-                // Not judged in this look: it gives up its place in line (it saves up again when it is next judged).
-                saving[CallKey(target: held[i].target, area: area)] = nil
-                continue
-            }
-            bucket.refill(now: now)
-            var budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
-            budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(Double(Self.recheckFloor), (callWallMs - spent) / msPerJudgement))))
-            let callKey = CallKey(target: held[i].target, area: area)
-            if judged { budget = againBudget(callKey, normal: budget) }
-            let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
-            tStage = clock()
-            let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: nil)
-            let callMs = msSince(tStage)
-            timing.judgeMs += callMs
-            if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
-            timing.calls += 1; timing.judgements += v.judgements; timing.overloaded += v.overloaded
-            timing.rechecks += 1
-            checked += 1
-            if turn != movedFirst { inTurn += 1 }
-            if judged { afterAgain(callKey, given: budget, v) }
-            noteSecondChecks(v, now: now)
-            if judged { bucket.spend(v.judgements) }
-            share(v, target: held[i].target, map: map, except: i)
-            if tally(i, v, over: g, map: map, img: img) == .flagged {
-                if held[i].flaggedAt != g || now - (held[i].flaggedWhen ?? now) >= Register.RECHECK_FLAGGED_EVERY { held[i].flaggedWhen = now }
-                held[i].flaggedAt = g
-            } else {
-                held[i].flaggedAt = nil
-            }
-            // Every other cover of the same window that lies wholly inside this call is counted by it too, as a call over a
-            // window's changed area counts the covers it spans (`countCleanJudgements`): the call judged every pixel each of
-            // them hides, and only its entries over each one count. They are not judged again on their own in this look.
-            // Smaller covers inside a larger one (a picture's cover inside the cover of what was left unjudged around it)
-            // no longer each pay for the same judgements again.
-            let slack = g.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel)
-            for j in waiting where j != i && !countedInside.contains(j) && held[j].target == held[i].target {
-                guard let gj = fullRect(held[j], snapshot, visible), slack.contains(gj) else { continue }
-                if tally(j, v, over: gj, map: map, img: img) == .flagged {
-                    if held[j].flaggedAt != gj || now - (held[j].flaggedWhen ?? now) >= Register.RECHECK_FLAGGED_EVERY { held[j].flaggedWhen = now }
-                    held[j].flaggedAt = gj
-                } else {
-                    held[j].flaggedAt = nil
+            // A cover for unjudged entries held inside a larger one of the same window is judged by that one's call first,
+            // which counts it if it judged a picture exactly there, at its own size; otherwise it is judged on its own next.
+            let candidates = turn == movedFirst ? [turn] : (container(turn).map { [$0, turn] } ?? [turn])
+            var turnTaken = false
+            for i in candidates where !countedInside.contains(i) {
+                guard msSince(tRun) < callWallMs || checked == 0 else { break }
+                countedInside.insert(i)
+                guard let g = fullRect(held[i], snapshot, visible), let area = map.toPixels(g) else { continue }
+                if held[i].flaggedAt == g, !reported.contains(where: { $0.intersects(g) }), !moved.contains(where: { $0.0 == held[i].target }),
+                   now - (held[i].flaggedWhen ?? now) < Register.RECHECK_FLAGGED_EVERY {
+                    // Not judged in this look: it gives up its place in line (it saves up again when it is next judged).
+                    saving[CallKey(target: held[i].target, area: area)] = nil
+                    continue
                 }
-                countedInside.insert(j)
+                bucket.refill(now: now)
+                var budget = judged ? min(bucket.available, Register.DETECTOR_CALL_CAP) : Register.DETECTOR_CALL_CAP
+                budget = min(budget, Int(min(Double(Register.DETECTOR_CALL_CAP), max(Double(Self.recheckFloor), (callWallMs - spent) / msPerJudgement))))
+                let callKey = CallKey(target: held[i].target, area: area)
+                if judged { budget = againBudget(callKey, normal: budget) }
+                let ctx = JudgeContext(windowID: held[i].target.contextID, startsCovered: false, display: .trusted, isVideo: false, now: date)
+                tStage = clock()
+                let v = judger.judgeArea(img, context: ctx, within: area, budget: budget, progress: nil)
+                let callMs = msSince(tStage)
+                timing.judgeMs += callMs
+                if v.judgements > 0 { msPerJudgement = 0.7 * msPerJudgement + 0.3 * callMs / Double(v.judgements) }
+                timing.calls += 1; timing.judgements += v.judgements; timing.overloaded += v.overloaded
+                timing.rechecks += 1
+                checked += 1
+                if turn != movedFirst && !turnTaken { inTurn += 1; turnTaken = true }
+                if judged { afterAgain(callKey, given: budget, v) }
+                noteSecondChecks(v, now: now)
+                if judged { bucket.spend(v.judgements) }
+                share(v, target: held[i].target, map: map, except: i)
+                if tally(i, v, over: g, map: map, img: img) == .flagged {
+                    if held[i].flaggedAt != g || now - (held[i].flaggedWhen ?? now) >= Register.RECHECK_FLAGGED_EVERY { held[i].flaggedWhen = now }
+                    held[i].flaggedAt = g
+                } else {
+                    held[i].flaggedAt = nil
+                }
+                // Every other cover of the same window that lies wholly inside this call is counted by it too, as a call over a
+                // window's changed area counts the covers it spans (`countCleanJudgements`): the call judged every pixel each of
+                // them hides, and only its entries over each one count. They are not judged again on their own in this look.
+                // Smaller covers inside a larger one (a picture's cover inside the cover of what was left unjudged around it)
+                // no longer each pay for the same judgements again.
+                let slack = g.insetBy(dx: -map.pointsPerPixel, dy: -map.pointsPerPixel)
+                /// Whether this call judged a picture exactly where cover `gj` stands, at its own size (a region entry of that
+                /// rectangle): only then has the larger call looked at what it hides as closely as its own call would.
+                func judgedAtItsOwnSize(_ gj: CGRect) -> Bool {
+                    v.regions.contains { e in
+                        let r = map.toGlobal(e.rect)
+                        return e.pass == .region && abs(r.minX - gj.minX) <= map.pointsPerPixel && abs(r.minY - gj.minY) <= map.pointsPerPixel
+                            && abs(r.maxX - gj.maxX) <= map.pointsPerPixel && abs(r.maxY - gj.maxY) <= map.pointsPerPixel
+                    }
+                }
+                for j in waiting where j != i && !countedInside.contains(j) && held[j].target == held[i].target && held[j].countableInside {
+                    guard let gj = fullRect(held[j], snapshot, visible), slack.contains(gj), judgedAtItsOwnSize(gj) else { continue }
+                    if tally(j, v, over: gj, map: map, img: img) == .flagged {
+                        if held[j].flaggedAt != gj || now - (held[j].flaggedWhen ?? now) >= Register.RECHECK_FLAGGED_EVERY { held[j].flaggedWhen = now }
+                        held[j].flaggedAt = gj
+                    } else {
+                        held[j].flaggedAt = nil
+                    }
+                    countedInside.insert(j)
+                }
             }
         }
         if !waiting.isEmpty { recheckTurn = (recheckTurn + (movedFirst == nil ? max(1, checked) : inTurn)) % max(1, waiting.count) }
@@ -1431,11 +1456,11 @@ public final class DisplayPipeline {
     func share(_ v: FrameVerdict, target: JudgeTarget, map: CaptureMap, except: Int? = nil) {
         let entries = v.regions.map { ($0, map.toGlobal($0.rect)) }
         for i in held.indices where i != except && held[i].target == target {
-            if v.coverWindow { held[i].clean = 0; held[i].round = []; continue }
+            if v.coverWindow { held[i].clean = 0; held[i].round = []; held[i].everFlagged = true; continue }
             guard let g = held[i].missingSince == nil ? held[i].lastGlobal : nil else { continue }
             for (e, r) in entries where r.intersects(g) {
                 if e.display != .clear && e.reason != .overload {
-                    held[i].clean = 0; held[i].round = []
+                    held[i].clean = 0; held[i].round = []; held[i].everFlagged = true
                     break
                 }
                 if ![.overload, .judgedEarlier, .rejudgeDue].contains(e.reason) { held[i].round.insert(EntryKey(pass: e.pass, rect: e.rect)) }
@@ -1451,7 +1476,7 @@ public final class DisplayPipeline {
     func tally(_ i: Int, _ v: FrameVerdict, over g: CGRect, map: CaptureMap, img: RGBAImage) -> Tally {
         let over = v.regions.filter { map.toGlobal($0.rect).intersects(g) }
         if v.coverWindow || over.contains(where: { $0.display != .clear && $0.reason != .overload }) {
-            held[i].clean = 0; held[i].round = []
+            held[i].clean = 0; held[i].round = []; held[i].everFlagged = true
             return .flagged
         }
         guard !over.isEmpty else { return .none }
@@ -1461,6 +1486,19 @@ public final class DisplayPipeline {
         held[i].clean += 1
         held[i].round = []
         return .vote
+    }
+
+    /// Step 2 of "slowness covers more" (register ST-031): what a window has left unjudged for longer than
+    /// `TIME_TO_COVER`. Every entry still unjudged in the call is covered plainly (not only blurred) until it is judged.
+    /// Only those: the detector returns every entry a call did not judge as `overload` with its own rectangle (an
+    /// unjudged whole pass is the whole call area), and everything else in the window was judged, freshly, from the cache,
+    /// or on exactly these pixels before. (The rule was the whole window covered; on macOS 26 the Dock owns a window the
+    /// size of the display, so that was the whole display, for minutes, over one small change.) To go back to the
+    /// whole-window rule, return `[Held(target: target, rel: .null, whole: true, kind: .plain, clean: 0, fromOverload: true)]`.
+    func slownessCovers(_ v: FrameVerdict, target: JudgeTarget, origin o: CGPoint, map: CaptureMap) -> [Held] {
+        v.regions.filter { $0.reason == .overload }.map { e in
+            Held(target: target, rel: map.toGlobal(e.rect).offsetBy(dx: -o.x, dy: -o.y), whole: false, kind: .plain, clean: 0, fromOverload: true)
+        }
     }
 
     /// Cuts every region cover to its window's bounds (or the display, for the display surface), so merging and moving
@@ -1486,6 +1524,9 @@ public final class DisplayPipeline {
         if (n.fromOverload || n.fromMotion) && !n.whole {
             if let i = held.firstIndex(where: { $0.target == n.target && !$0.whole && $0.rel.insetBy(dx: -0.5, dy: -0.5).contains(n.rel) }) {
                 held[i].kind = held[i].kind.stronger(n.kind)
+                held[i].everFlagged = held[i].everFlagged || n.everFlagged
+                // A copy of a cover whose content went here hides something new: the count starts again.
+                if n.fromMotion { held[i].clean = 0; held[i].round = []; held[i].everFlagged = true }
             } else {
                 held.append(n)
             }
@@ -1499,6 +1540,7 @@ public final class DisplayPipeline {
             if !n.fromOverload || rel != held[i].rel { held[i].clean = 0; held[i].round = [] }
             held[i].rel = rel
             held[i].kind = held[i].kind.stronger(n.kind)
+            if !n.fromOverload || n.everFlagged { held[i].everFlagged = true }
         } else {
             held.append(n)
         }

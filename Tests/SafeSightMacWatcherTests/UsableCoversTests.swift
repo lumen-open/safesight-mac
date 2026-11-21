@@ -516,4 +516,217 @@ struct ScreenSim {
         let next = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 0.2), snapshot: snap, now: 0.2)
         #expect(!next.touches(CGRect(x: 0, y: 305, width: 600, height: 95)), "nothing below the scrolled area, which never changed, stays covered")
     }
+
+    /// A page of texture, `offset` rows scrolled, in the top 300 rows of a 600 by 400 frame.
+    static func scrolledFrame(_ page: RGBAImage, offset: Int) -> RGBAImage {
+        var img = Fixtures.blank(600, 400)
+        for y in 0..<300 {
+            let src = ((offset + y) * 600) * 4, dst = (y * 600) * 4
+            img.pixels.replaceSubrange(dst..<(dst + 600 * 4), with: page.pixels[src..<(src + 600 * 4)])
+        }
+        return img
+    }
+
+    static func texturedPage() -> RGBAImage {
+        var page = Fixtures.blank(600, 1000)
+        Fixtures.paint(&page, PixelRect(x: 0, y: 0, w: 600, h: 1000), channel: nil, seed: 11)
+        return page
+    }
+
+    /// A judge that judges nothing again (every entry shown as judged earlier), so no cover lifts and none is added.
+    static func stillJudge() -> VerdictScript {
+        VerdictScript { area in
+            FrameVerdict(regions: [RegionVerdict(rect: area, display: .clear, reason: .judgedEarlier, pass: .whole)],
+                         coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: 0)
+        }
+    }
+
+    /// Where a scrolled cover's content went (when it did not simply move with the page) is covered in the final plan too,
+    /// and stays held, not only in the early plans of that look.
+    @Test func whereAScrolledCoversContentWentIsCoveredInTheFinalPlan() {
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let p = DisplayPipeline(display: d, judger: Self.stillJudge(), budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = Fixtures.oneWindow(d.bounds)
+        let page = Self.texturedPage()
+        _ = p.process(Fixtures.frame(Self.scrolledFrame(page, offset: 200), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        p.held = [DisplayPipeline.Held(target: .window(number: 10, ownerPID: 500), rel: CGRect(x: 100, y: 100, width: 100, height: 40), whole: false, kind: .plain, clean: 0)]
+        var img = Self.scrolledFrame(page, offset: 180)
+        Fixtures.paint(&img, PixelRect(x: 100, y: 120, w: 100, h: 40), channel: nil, seed: 99)   // not simply moved
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 600, h: 300)], t: 0.1), snapshot: snap, now: 0.1)
+        let later = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 0.2), snapshot: snap, now: 0.2)
+        #expect(later.covers(CGRect(x: 100, y: 120, width: 100, height: 40)), "where the content went is covered in a later final plan: \(p.heldLines)")
+        #expect(later.covers(CGRect(x: 100, y: 100, width: 100, height: 40)), "and the old place")
+    }
+
+    /// A copy is cut to what changed, but where pixels changed outside the area the frame reported, it is kept there too.
+    @Test func aScrolledCoversCopyIsKeptWherePixelsChangedOutsideWhatWasReported() {
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let p = DisplayPipeline(display: d, judger: Self.stillJudge(), budgetShare: Register.JUDGEMENT_BUDGET, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = Fixtures.oneWindow(d.bounds)
+        let page = Self.texturedPage()
+        _ = p.process(Fixtures.frame(Self.scrolledFrame(page, offset: 200), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        p.held = [DisplayPipeline.Held(target: .window(number: 10, ownerPID: 500), rel: CGRect(x: 100, y: 250, width: 100, height: 40), whole: false, kind: .plain, clean: 0)]
+        var img = Self.scrolledFrame(page, offset: 180)
+        Fixtures.paint(&img, PixelRect(x: 0, y: 300, w: 600, h: 30), channel: nil, seed: 5)   // changed, but not reported
+        _ = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 600, h: 300)], t: 0.1), snapshot: snap, now: 0.1)
+        let later = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 0.2), snapshot: snap, now: 0.2)
+        #expect(later.covers(CGRect(x: 100, y: 270, width: 100, height: 40)), "the copy reaches into changed pixels the frame did not report: \(p.heldLines)")
+    }
+
+    // MARK: Covers counted by a larger cover's call
+
+    /// Clean, with a region entry (a picture judged at its own size) for each of `pictures` inside the call.
+    static func cleanWith(_ pictures: [PixelRect]) -> VerdictScript {
+        VerdictScript { area in
+            var v = VerdictScript.clean(area)
+            v.regions += pictures.filter { area.intersection($0) == $0 }.map { RegionVerdict(rect: $0, display: .clear, reason: .judgedClean, pass: .region) }
+            return v
+        }
+    }
+
+    /// A judge that flags only when it looks closely (a call no bigger than 120 points a side): a picture seen as explicit at
+    /// its own size and clean in a call over a much larger area.
+    static func zoomJudge() -> VerdictScript {
+        VerdictScript { area in
+            if area.w <= 120 && area.h <= 120 {
+                return FrameVerdict(regions: [RegionVerdict(rect: area, display: .cover, reason: .bothFamilies, pass: .whole)],
+                                    coverWindow: false, strike: false, hot: false, judgements: 2, overloaded: 0)
+            }
+            return VerdictScript.clean(area)
+        }
+    }
+
+    func zoomRun(innerFromOverload: Bool, regionSeenInLargerCall: Bool = false) -> (CoverPlan, DisplayPipeline) {
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let inner = PixelRect(x: 150, y: 150, w: 100, h: 100)
+        let zoom = Self.zoomJudge()
+        let judge = regionSeenInLargerCall ? VerdictScript { area in
+            var v = zoom.answer(area)
+            if area.w > 120, area.intersection(inner) == inner { v.regions.append(RegionVerdict(rect: inner, display: .clear, reason: .judgedClean, pass: .region)) }
+            return v
+        } : zoom
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = Fixtures.oneWindow(d.bounds)
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        let t = JudgeTarget.window(number: 10, ownerPID: 500)
+        p.held = [DisplayPipeline.Held(target: t, rel: CGRect(x: 50, y: 50, width: 400, height: 300), whole: false, kind: .plain, clean: 0, fromOverload: true),
+                  DisplayPipeline.Held(target: t, rel: CGRect(x: 150, y: 150, width: 100, height: 100), whole: false, kind: .plain, clean: 0, fromOverload: innerFromOverload)]
+        var plan = p.lastPlan
+        for k in 0..<12 {
+            let tt = 0.1 + Double(k)
+            plan = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: tt), snapshot: snap, now: tt)
+        }
+        return (plan, p)
+    }
+
+    /// A flagged picture's cover inside a larger cover of the same window is still judged at its own size at every round:
+    /// it stays covered, and so does the larger one, whose count its flag starts again.
+    @Test func aFlaggedCoverInsideALargerOneIsJudgedAtItsOwnSize() {
+        let (plan, p) = zoomRun(innerFromOverload: false)
+        #expect(plan.covers(CGRect(x: 150, y: 150, width: 100, height: 100), kind: .plain), "the picture flagged up close stays covered: \(p.heldLines)")
+    }
+
+    /// Even when the larger call judged a picture exactly there, a cover once flagged is judged at its own size every round.
+    @Test func aFlaggedCoverIsJudgedAtItsOwnSizeEvenWhenALargerCallSawItsPicture() {
+        let (plan, p) = zoomRun(innerFromOverload: false, regionSeenInLargerCall: true)
+        #expect(plan.covers(CGRect(x: 150, y: 150, width: 100, height: 100), kind: .plain), "\(p.heldLines)")
+    }
+
+    /// The same for a cover made for entries left unjudged that its own call then finds flagged: from then on it is judged
+    /// at its own size too.
+    @Test func aCoverForUnjudgedEntriesOnceFlaggedIsJudgedAtItsOwnSize() {
+        let (plan, p) = zoomRun(innerFromOverload: true)
+        #expect(plan.covers(CGRect(x: 150, y: 150, width: 100, height: 100), kind: .plain), "flagged once, judged up close from then on: \(p.heldLines)")
+    }
+
+    /// Two larger covers that both hold a cover for unjudged entries: the second's call does not count it again in the same
+    /// look (one clean judgement a look, at most).
+    @Test func aCoverInsideTwoLargerOnesIsCountedOnceALook() {
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let p = DisplayPipeline(display: d, judger: Self.cleanWith([PixelRect(x: 150, y: 150, w: 100, h: 100)]), budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = Fixtures.oneWindow(d.bounds)
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        let t = JudgeTarget.window(number: 10, ownerPID: 500)
+        p.held = [DisplayPipeline.Held(target: t, rel: CGRect(x: 0, y: 0, width: 300, height: 300), whole: false, kind: .plain, clean: 0, fromOverload: true),
+                  DisplayPipeline.Held(target: t, rel: CGRect(x: 100, y: 100, width: 300, height: 290), whole: false, kind: .plain, clean: 0, fromOverload: true),
+                  DisplayPipeline.Held(target: t, rel: CGRect(x: 150, y: 150, width: 100, height: 100), whole: false, kind: .plain, clean: 0, fromOverload: true)]
+        _ = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: 0.1), snapshot: snap, now: 0.1)
+        let inner = p.held.first { $0.rel == CGRect(x: 150, y: 150, width: 100, height: 100) }
+        #expect(inner?.clean == 1, "one clean judgement in one look: \(p.heldLines)")
+    }
+
+    /// A cover only partly inside a larger one is never counted by the larger one's call: the part outside is not in it.
+    @Test func aCoverPartlyInsideALargerOneIsNotCountedByItsCall() {
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let outside = PixelRect(x: 301, y: 0, w: 299, h: 400)
+        // Anything reaching past x = 300 is left unjudged; the rest is clean, with the picture that the partly inside
+        // cover stands over seen in part, at its own size, where it is inside.
+        let seen = PixelRect(x: 250, y: 100, w: 50, h: 100)
+        var ready = false
+        let judge = VerdictScript { area in
+            if ready && area.intersects(outside) {
+                return FrameVerdict(regions: [RegionVerdict(rect: area, display: .cover, reason: .overload, pass: .whole)],
+                                    coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: 1)
+            }
+            var v = VerdictScript.clean(area)
+            if area.intersection(seen) == seen { v.regions.append(RegionVerdict(rect: PixelRect(x: 250, y: 100, w: 100, h: 100), display: .clear, reason: .judgedClean, pass: .region)) }
+            return v
+        }
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = Fixtures.oneWindow(d.bounds)
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        let t = JudgeTarget.window(number: 10, ownerPID: 500)
+        p.held = [DisplayPipeline.Held(target: t, rel: CGRect(x: 0, y: 0, width: 300, height: 300), whole: false, kind: .plain, clean: 0, fromOverload: true),
+                  DisplayPipeline.Held(target: t, rel: CGRect(x: 250, y: 100, width: 100, height: 100), whole: false, kind: .plain, clean: 0, fromOverload: true)]
+        ready = true
+        var plan = p.lastPlan
+        for k in 0..<12 {
+            let tt = 0.1 + Double(k)
+            plan = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: tt), snapshot: snap, now: tt)
+        }
+        #expect(plan.covers(CGRect(x: 250, y: 100, width: 100, height: 100)), "never lifted on a call that did not hold all of it: \(p.heldLines)")
+        #expect(p.held.first { $0.rel == CGRect(x: 250, y: 100, width: 100, height: 100) }?.clean == 0, "and never counted by one: \(p.heldLines)")
+    }
+
+    // MARK: Counts that must start again
+
+    /// A cover's copy joining a cover that already holds it starts that cover's count again: it hides something new.
+    @Test func aCopyJoiningACoverStartsItsCountAgain() {
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let p = DisplayPipeline(display: d, judger: VerdictScript { VerdictScript.clean($0) }, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let t = JudgeTarget.window(number: 10, ownerPID: 500)
+        p.held = [DisplayPipeline.Held(target: t, rel: CGRect(x: 0, y: 0, width: 300, height: 300), whole: false, kind: .plain, clean: 3)]
+        var copy = DisplayPipeline.Held(target: t, rel: CGRect(x: 50, y: 50, width: 100, height: 40), whole: false, kind: .plain, clean: 0)
+        copy.fromMotion = true
+        p.merge(copy)
+        #expect(p.held.count == 1 && p.held[0].clean == 0, "\(p.heldLines)")
+    }
+
+    /// A window moves and, at the same time, what one of its covers hides changes: the cover's count starts again. When the
+    /// content only moved with the window, the count stands.
+    func moveWindow(changeUnderCover: Bool) -> Int {
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let p = DisplayPipeline(display: d, judger: Self.stillJudge(), budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let content = Self.texturedPage()
+        func frame(windowX: Int) -> RGBAImage {
+            var img = Fixtures.blank(600, 400)
+            for y in 0..<300 {
+                let src = (y * 600) * 4, dst = (y * 600 + windowX) * 4
+                img.pixels.replaceSubrange(dst..<(dst + 300 * 4), with: content.pixels[src..<(src + 300 * 4)])
+            }
+            return img
+        }
+        func snap(_ x: CGFloat) -> WindowSnapshot { WindowSnapshot(windows: [WindowInfo(number: 10, ownerPID: 500, layer: 0, bounds: CGRect(x: x, y: 0, width: 300, height: 300))], time: 0) }
+        _ = p.process(Fixtures.frame(frame(windowX: 0), display: d, scale: 1, t: 0), snapshot: snap(0), now: 0)
+        p.held = [DisplayPipeline.Held(target: .window(number: 10, ownerPID: 500), rel: CGRect(x: 100, y: 100, width: 80, height: 80), whole: false, kind: .plain, clean: 3)]
+        var moved = frame(windowX: 50)
+        if changeUnderCover { Fixtures.paint(&moved, PixelRect(x: 160, y: 120, w: 40, h: 40), channel: nil, seed: 3) }
+        _ = p.process(Fixtures.frame(moved, display: d, scale: 1, dirty: [PixelRect(x: 0, y: 0, w: 352, h: 304)], t: 0.1), snapshot: snap(50), now: 0.1)
+        return p.held.first?.clean ?? -1
+    }
+
+    @Test func aChangeUnderACoverWhileItsWindowMovesStartsItsCountAgain() {
+        #expect(moveWindow(changeUnderCover: true) == 0, "changed while moving: the count starts again")
+        #expect(moveWindow(changeUnderCover: false) == 3, "only moved: the count stands")
+    }
 }
