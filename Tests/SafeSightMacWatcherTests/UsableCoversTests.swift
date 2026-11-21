@@ -596,7 +596,7 @@ struct ScreenSim {
         }
     }
 
-    func zoomRun(innerFromOverload: Bool, regionSeenInLargerCall: Bool = false) -> (CoverPlan, DisplayPipeline) {
+    func zoomRun(innerFromOverload: Bool, regionSeenInLargerCall: Bool = false, innerFlaggedBefore: Bool = false) -> (CoverPlan, DisplayPipeline) {
         let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
         let inner = PixelRect(x: 150, y: 150, w: 100, h: 100)
         let zoom = Self.zoomJudge()
@@ -611,6 +611,7 @@ struct ScreenSim {
         let t = JudgeTarget.window(number: 10, ownerPID: 500)
         p.held = [DisplayPipeline.Held(target: t, rel: CGRect(x: 50, y: 50, width: 400, height: 300), whole: false, kind: .plain, clean: 0, fromOverload: true),
                   DisplayPipeline.Held(target: t, rel: CGRect(x: 150, y: 150, width: 100, height: 100), whole: false, kind: .plain, clean: 0, fromOverload: innerFromOverload)]
+        p.held[1].everFlagged = innerFlaggedBefore
         var plan = p.lastPlan
         for k in 0..<12 {
             let tt = 0.1 + Double(k)
@@ -750,5 +751,70 @@ struct ScreenSim {
         }
         // The look judges it again where it is (the judge here finds it clean): the final plan may open its hole there.
         #expect(plan.promptHoles.allSatisfy { moved.contains($0) }, "a hole only where the prompt is now: \(plan.promptHoles)")
+    }
+
+    // MARK: "Never flagged", on its own
+
+    /// A cover made for unjudged entries that was flagged before is judged at its own size every round, even where the
+    /// larger call judges a picture exactly where it stands: only the flag tells it from a cover that may be counted inside.
+    @Test func aCoverForUnjudgedEntriesFlaggedBeforeIsNeverCountedInside() {
+        let (plan, p) = zoomRun(innerFromOverload: true, regionSeenInLargerCall: true, innerFlaggedBefore: true)
+        #expect(plan.covers(CGRect(x: 150, y: 150, width: 100, height: 100), kind: .plain), "flagged before, judged up close: \(p.heldLines)")
+    }
+
+    /// A cover made for unjudged entries that a call shared into it finds flagged (another cover's call over part of it)
+    /// is from then on judged at its own size at every round until it lifts, not counted by a larger cover's call.
+    @Test func aCoverFlaggedThroughASharedCallIsJudgedAtItsOwnSizeFromThenOn() {
+        let d = DisplayDescriptor(id: 1, bounds: CGRect(x: 0, y: 0, width: 600, height: 400))
+        let inner = PixelRect(x: 150, y: 150, w: 100, h: 100), small = PixelRect(x: 160, y: 160, w: 60, h: 60)
+        var smallFlags = 2
+        let judge = VerdictScript { area in
+            if area == small && smallFlags > 0 {
+                smallFlags -= 1
+                return FrameVerdict(regions: [RegionVerdict(rect: area, display: .cover, reason: .bothFamilies, pass: .whole)],
+                                    coverWindow: false, strike: false, hot: false, judgements: 2, overloaded: 0)
+            }
+            var v = VerdictScript.clean(area)
+            if area.w > 120, area.intersection(inner) == inner { v.regions.append(RegionVerdict(rect: inner, display: .clear, reason: .judgedClean, pass: .region)) }
+            return v
+        }
+        let p = DisplayPipeline(display: d, judger: judge, budgetShare: 1e6, ignoredPIDs: [], callWallMs: .infinity)
+        let snap = Fixtures.oneWindow(d.bounds)
+        _ = p.process(Fixtures.frame(Fixtures.blank(600, 400), display: d, scale: 1, t: 0), snapshot: snap, now: 0)
+        let t = JudgeTarget.window(number: 10, ownerPID: 500)
+        p.held = [DisplayPipeline.Held(target: t, rel: CGRect(x: 50, y: 50, width: 400, height: 300), whole: false, kind: .plain, clean: 0, fromOverload: true),
+                  DisplayPipeline.Held(target: t, rel: CGRect(x: 150, y: 150, width: 100, height: 100), whole: false, kind: .plain, clean: 0, fromOverload: true),
+                  DisplayPipeline.Held(target: t, rel: CGRect(x: 160, y: 160, width: 60, height: 60), whole: false, kind: .plain, clean: 0)]
+        var flaggedAt: Int?
+        var looksAfter: [Bool] = []
+        for k in 0..<16 {
+            let tt = 0.1 + Double(k)
+            judge.calls = []
+            _ = p.process(CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: tt), snapshot: snap, now: tt)
+            let i = p.held.firstIndex { $0.rel == CGRect(x: 150, y: 150, width: 100, height: 100) }
+            if flaggedAt == nil, let i, p.held[i].everFlagged { flaggedAt = k; continue }
+            if flaggedAt != nil, i != nil { looksAfter.append(judge.calls.contains(inner)) }
+        }
+        #expect(flaggedAt != nil, "the shared call flagged it")
+        #expect(!looksAfter.isEmpty && looksAfter.allSatisfy { $0 }, "judged at its own size at every look after: \(looksAfter)")
+    }
+
+    /// A judged prompt that moves and shrinks so that it sits inside where it was judged gets no hole until it is judged
+    /// again where it is now.
+    @Test func aPromptThatMovesInsideItsOldPlaceIsJudgedAgainBeforeItsHoleOpens() {
+        let t = PasswordPromptTests()
+        let judge = PerWindowScript()
+        let p = t.pipeline(judge)
+        let first = t.coveredBehind(p, [t.prompt(), t.app])
+        #expect(first.promptHoles == [t.promptRect], "the hole is open before the move")
+        // From now on the prompt's own calls leave it unjudged: its hole can open again only by a judgement.
+        judge.unjudged = [JudgeTarget.window(number: 50, ownerPID: 900).contextID]
+        let moved = CGRect(x: 210, y: 130, width: 180, height: 140)
+        var early: [CoverPlan] = []
+        let plan = p.process(t.touched(2, t: 0.2), snapshot: WindowSnapshot(windows: [t.prompt(bounds: moved), t.app], time: 0.2), now: 0.2) { early.append($0) }
+        for e in early + [plan] {
+            #expect(e.promptHoles.isEmpty, "no hole before it is judged again where it is: \(e.promptHoles)")
+            #expect(t.fullyCovered(e, moved), "covered where it is now")
+        }
     }
 }
