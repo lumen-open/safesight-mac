@@ -140,6 +140,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// does this just before the app ends).
     @MainActor func hideEverything() {
         presenter.removeAll()
+        coordinator.presenterCleared()
         repairCard.hide()
     }
 

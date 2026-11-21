@@ -204,6 +204,7 @@ public final class CoverCoordinator {
         running = false
         restartDue = nil; topUpDue = nil
         presenter.removeAll()
+        gate.reset()
         shown = []
         onShown?(shown)
     }
@@ -374,6 +375,11 @@ public final class CoverCoordinator {
         return true
     }
 
+    /// The last update handed to the presenter, so one exactly like it is not handed over again.
+    private var gate = DrawGate()
+    /// The presenter was cleared by someone else (the emergency quit): the next update is drawn whatever it holds.
+    public func presenterCleared() { gate.reset() }
+
     /// True while the canvases are drawn covered whole during a lock, waiting for the lock screen to be drawn.
     public private(set) var waitingForLockScreen = false
 
@@ -388,6 +394,8 @@ public final class CoverCoordinator {
         // covered whole meanwhile, and is drawn covered whole on the way back.
         if coverage.holds.contains(.locked) {
             let since = holdSince[.locked] ?? clock()
+            // Drawn here some other way: the next update after the lock is drawn whatever it holds.
+            gate.reset()
             if state(coverage.list.ids).lockScreenUp || clock() - since >= Self.lockScreenWait {
                 waitingForLockScreen = false
                 presenter.removeAll()
@@ -398,7 +406,10 @@ public final class CoverCoordinator {
             }
         } else {
             waitingForLockScreen = false
-            presenter.apply(shown)
+            // An update exactly like the last one drawn is not drawn again (`DrawGate`): the judging hands one over for
+            // every frame the capture sends, most of them the same.
+            // What is on screen is still checked against it at every update (`keepUp`), as before.
+            if gate.shouldDraw(shown, now: clock(), urgent: urgent) { presenter.apply(shown) } else { presenter.keepUp() }
         }
         if urgent { flush() }
         let judged = coverage.list.judged, required = coverage.required

@@ -257,3 +257,34 @@ public enum ContainBlur {
         return BlurTile(columns: cols, rows: rows, rgba: out)
     }
 }
+
+/// Whether an update must be drawn, or is exactly what the screen already shows. The judging hands the drawing a plan
+/// for every frame the capture sends (about 30 a second on some Macs, a "nothing changed" frame included), and most
+/// are the same as the last one drawn. Only an update identical to the last one drawn, display by display, is
+/// left out, so a plan that adds, moves, changes or lifts anything is always drawn at once. One left out is still
+/// checked against the screen (the presenter's `keepUp`: a canvas the system hid is shown again at once). An identical update with
+/// something on screen is still drawn at least every `refreshEvery` (the canvases are brought to the front of their
+/// level then, so a window that came up at the same level never stays over the covers for longer than before), and one
+/// with a password prompt's hole is always drawn: its hole is checked against the window list at every drawing.
+/// Urgent updates are always drawn.
+public struct DrawGate: Sendable {
+    /// How often an unchanged update with something on screen is drawn again (the canvases' own refresh rate).
+    public static let refreshEvery: TimeInterval = 0.25
+    private var last: [CoverPlan]?
+    private var lastAt: TimeInterval = -.infinity
+
+    public init() {}
+
+    /// True when `plans` must be drawn now; it then counts as the last update drawn.
+    public mutating func shouldDraw(_ plans: [CoverPlan], now: TimeInterval, urgent: Bool) -> Bool {
+        let same = last == plans
+        let showsNothing = plans.allSatisfy { $0.wholeDisplay == nil && $0.items.isEmpty && $0.promptHoles.isEmpty }
+        let hole = plans.contains { !$0.promptHoles.isEmpty }
+        guard urgent || !same || hole || (!showsNothing && now - lastAt >= Self.refreshEvery) else { return false }
+        last = plans; lastAt = now
+        return true
+    }
+
+    /// Forgets the last update drawn (the canvases were taken off, or drawn some other way): the next one is drawn.
+    public mutating func reset() { last = nil; lastAt = -.infinity }
+}

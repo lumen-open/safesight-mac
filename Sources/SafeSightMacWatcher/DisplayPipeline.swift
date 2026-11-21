@@ -60,9 +60,10 @@ public final class DisplayPipeline {
     struct EntryKey: Hashable { var pass: JudgePass; var rect: PixelRect }
     var held: [Held] = []
     var pending: [CGRect] = []
-    /// Parts of a full re-judge (`FULL_REJUDGE`) at a still screen that a look had no time for, with nothing in them left
-    /// unjudged: judged at the next looks, and shown as judged before, unchanged, meanwhile (never blurred for want of
-    /// time, so a still screen does not flicker at every full pass).
+    /// Parts of a full re-judge (`FULL_REJUDGE`) that a look had no time for, with nothing in them left unjudged and every
+    /// pixel as in the last frame (a still screen, or a part of the screen that did not change while another did): judged
+    /// at the next looks, and shown as judged before, unchanged, meanwhile (never blurred for want of time, so a still
+    /// screen does not flicker at every full pass, and a page scrolling or a video playing does not hold up the rest).
     var dueAgain: [CGRect] = []
     /// Everything the last final plan drew: kept in every early plan of the next look, so an early plan only ever adds to
     /// what is on screen (the blurs over parts left for later, `pending`, and the reach ahead of covers moving with
@@ -653,17 +654,25 @@ public final class DisplayPipeline {
         }
         // Parts this call had no time for: blurred in this plan, and judged in the next call.
         var leftOver: [CoverItem] = []
-        // A part a still look may leave for the next looks (`dueAgain`) rather than blur: see the parts loop.
+        // A part a look may leave for the next looks (`dueAgain`) rather than blur: see the parts loop.
         // The window list compared is every window that can show anything here: not this app's own, and not the window
         // server's small overlays (the pointer, the recording indicator), which draw nothing of anyone's.
         let windowsHere = snapshot.windows.filter { $0.bounds.intersects(d) && !ignoredPIDs.contains($0.ownerPID) && !$0.systemOverlay }
         let sameWindows = windowsHere == lastWindows
+        // A part whose every pixel is exactly as in the last frame judged: for that part, this frame is a "nothing changed"
+        // frame, whatever changes elsewhere (a page scrolling, a video playing in another part of the screen). On a frame
+        // that says nothing changed, every part is.
+        func unchanged(_ p: TargetArea) -> Bool {
+            if idle { return true }
+            guard let prev = previous else { return false }
+            return p.changed.allSatisfy { r in map.toPixels(r).map { !DirtyRegions.differ(prev, img, $0) } ?? false }
+        }
         func onlyDue(_ p: TargetArea) -> Bool {
             let known: Bool
             if case .surface = p.target { known = true } else { known = lastBounds[p.target] != nil }
-            return idle && judged && sameWindows && known && !moved.contains(where: { $0.0 == p.target }) && !hot.contains(p.target)
+            return judged && sameWindows && known && !moved.contains(where: { $0.0 == p.target }) && !hot.contains(p.target)
                 && !fresh.contains(p.target) && !pendingBefore.contains { r in p.changed.contains { $0.intersects(r) } }
-                && now - (dueSince[p.target] ?? now) < Register.JUDGING_STALL
+                && now - (dueSince[p.target] ?? now) < Register.JUDGING_STALL && unchanged(p)
         }
         // The calls that only judge again made in this look: a saving lasts while its call is made, or, for the first in line,
         // while its cover is held, so a saving never waits for a call that no longer comes.
@@ -723,10 +732,11 @@ public final class DisplayPipeline {
                   let area = map.toPixels(changedBox.intersection(visBox)) else { continue }
             let spentMs = msSince(tRun)
             if spentMs >= partsWallMs {
-                // At a still screen, a part only due to be judged again (the `FULL_REJUDGE` rhythm) with nothing in it left
-                // unjudged shows what was judged before, unchanged, until its turn (at most `JUDGING_STALL`): it is not
-                // blurred for want of time. Anything left unjudged before, anything new, a window that is hot, and every part
-                // of a look whose window list changed (a window moved, opened, closed or came forward) are blurred.
+                // A part only due to be judged again (the `FULL_REJUDGE` rhythm), with nothing in it left unjudged and every
+                // pixel as in the last frame, shows what was judged before, unchanged, until its turn (at most
+                // `JUDGING_STALL`): it is not blurred for want of time. Anything left unjudged before, anything new, any
+                // pixel not as in the last frame (reported or not), a window that is hot, and every part of a look whose
+                // window list changed (a window moved, opened, closed or came forward) are blurred.
                 if onlyDue(p) {
                     dueAgain += p.changed; if dueSince[p.target] == nil { dueSince[p.target] = now }
                     timing.leftForLater += 1; continue
@@ -794,7 +804,7 @@ public final class DisplayPipeline {
             let callMs = msSince(tStage)
             timing.judgeMs += callMs
             if again { afterAgain(callKey, given: budget, v) }
-            // A part is judged again only by a call with budget. At a still look one given none (the bucket was empty) waits
+            // A part is judged again only by a call with budget. One given none (the bucket was empty), unchanged, waits
             // on `dueAgain`, shown as judged before, while that may be (`onlyDue`); past it, it is blurred until judged.
             if budget == 0 && dueSince[p.target] == nil && onlyDue(p) {
                 dueAgain += p.changed; dueSince[p.target] = now
@@ -859,9 +869,11 @@ public final class DisplayPipeline {
                 if now - since >= Register.TIME_TO_COVER {
                     newCovers += slownessCovers(v, target: p.target, origin: o, map: map)
                 }
-                // Judged again over the same area: the picture finder then proposes the same pictures, so the entries
-                // judged in this call are not proposed afresh (and left unjudged) in the next.
-                pending.append(map.toGlobal(area).intersection(visBox))
+                // What is left for later is what this call left unjudged: each entry it did not reach, where it stands
+                // (`leftUnjudged`). Every other entry of the call was judged, served from the clean cache or shown as
+                // judged before on the same pixels; every entry left unjudged is held covered (or blurred) where it
+                // stands until it has its own clean rounds (`covers(from:)`).
+                pending += leftUnjudged(v, map: map, within: map.toGlobal(area).intersection(visBox))
             } else {
                 overloadSince[p.target] = nil
             }
@@ -1030,6 +1042,7 @@ public final class DisplayPipeline {
         }
         for n in newCovers { merge(n) }
         clipToTargets(snapshot)
+        mergeDuplicates()
         held.removeAll { fullRect($0, snapshot, visible) == nil }
         for i in held.indices where held[i].missingSince == nil { held[i].lastGlobal = fullRect(held[i], snapshot, visible) }
         contentOffset = contentOffset.filter { visible[$0.key] != nil }
@@ -1337,6 +1350,7 @@ public final class DisplayPipeline {
         held += split
         for c in copies { merge(c) }
         clipToTargets(snapshot)
+        mergeDuplicates()
         return lead
     }
 
@@ -1501,6 +1515,24 @@ public final class DisplayPipeline {
         }
     }
 
+    /// The work a call left for later (global points, cut to `within`, the call's area where its window shows): the
+    /// rectangle of every entry it left unjudged (`overload`, a model failure included), and nothing else.
+    ///
+    /// It was the whole call area. After a full re-judge (`FULL_REJUDGE`) of a window the size of the display (the Dock's,
+    /// on macOS 26), that kept every later call display-sized for as long as anything in it kept changing: each such call's
+    /// whole pass was a new picture of the whole display, and when the budget did not reach it the whole display was
+    /// covered, for as long as a page scrolled or a video played. Every entry left out of `pending` now was judged in this
+    /// call (freshly, from the cache, or shown as judged before on exactly these pixels, which is the same display rule as
+    /// before): nothing in it waits for anything. And `pending` decides only what is judged again sooner: what was left
+    /// unjudged is held covered (or blurred) where it stands by `covers(from:)`, and that cover lifts only after its own
+    /// clean rounds, whatever `pending` holds. A change after this frame is reported, or found by the pixel checks, as
+    /// before.
+    func leftUnjudged(_ v: FrameVerdict, map: CaptureMap, within area: CGRect) -> [CGRect] {
+        let left = v.regions.filter { $0.reason == .overload }.map { map.toGlobal($0.rect).intersection(area) }.filter(\.hasArea)
+        // A call that says it left something unjudged without saying where: all of it is judged again.
+        return left.isEmpty ? [area] : left
+    }
+
     /// Cuts every region cover to its window's bounds (or the display, for the display surface), so merging and moving
     /// with content never grow one past where its window can show anything. One left with nothing is dropped: no part of
     /// its window is there.
@@ -1515,6 +1547,38 @@ public final class DisplayPipeline {
             let r = held[i].rel.intersection(frame)
             if r.hasArea { held[i].rel = r } else { held.remove(at: i) }
         }
+    }
+
+    /// Covers of the same target over exactly the same rectangle are one cover: they hide the same pixels and are judged
+    /// by the same calls. Covers moving with scrolled content, the pieces they leave behind and the copies where their
+    /// content went often land exactly on one another (half the covers held after a minute of scrolling a busy page), and
+    /// each then took its own call at every round. They become one cover with the most cautious state of them all: the
+    /// lowest clean count and only the round entries they all hold, the stronger kind, ever flagged if any was, counted inside
+    /// a larger cover only if all could be, and judged again as soon as the first of them was due. It lifts no sooner than
+    /// the last of them would have, and every pixel any of them hid stays hidden until then.
+    func mergeDuplicates() {
+        struct Place: Hashable { var target: JudgeTarget; var whole: Bool; var x, y, w, h: CGFloat }
+        var first: [Place: Int] = [:]
+        var drop: [Int] = []
+        for i in held.indices {
+            let h = held[i]
+            let key = Place(target: h.target, whole: h.whole, x: h.whole ? 0 : h.rel.minX, y: h.whole ? 0 : h.rel.minY,
+                            w: h.whole ? 0 : h.rel.width, h: h.whole ? 0 : h.rel.height)
+            guard let j = first[key] else { first[key] = i; continue }
+            var k = held[j]
+            k.round = k.clean == h.clean ? k.round.intersection(h.round) : (k.clean < h.clean ? k.round : h.round)
+            k.clean = min(k.clean, h.clean)
+            k.kind = k.kind.stronger(h.kind)
+            k.everFlagged = k.everFlagged || h.everFlagged
+            k.fromOverload = k.fromOverload && h.fromOverload
+            k.fromMotion = k.fromMotion || h.fromMotion
+            if h.flaggedAt != nil && (k.flaggedAt == nil || (h.flaggedWhen ?? 0) < (k.flaggedWhen ?? 0)) { k.flaggedAt = h.flaggedAt; k.flaggedWhen = h.flaggedWhen }
+            if let m = h.missingSince { k.missingSince = min(k.missingSince ?? m, m) }
+            if k.lastGlobal == nil { k.lastGlobal = h.lastGlobal }
+            held[j] = k
+            drop.append(i)
+        }
+        for i in drop.reversed() { held.remove(at: i) }
     }
 
     func merge(_ n: Held) {

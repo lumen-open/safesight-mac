@@ -349,9 +349,18 @@ public enum CoverNotice: Equatable, Sendable {
 public protocol CoverPresenter: AnyObject {
     /// Applies one plan per display. Displays without a plan lose their covers.
     func apply(_ plans: [CoverPlan])
+    /// The update handed over is exactly the last one applied (`DrawGate`): what is on screen is checked against it again
+    /// and put right where it is not (a canvas the system hid, a canvas whose frame, scale, theme or menu bar height no
+    /// longer matches, a canvas due to be brought to the front of its level), as `apply` with the same plans did, without
+    /// counting as an update drawn.
+    func keepUp()
     func removeAll()
     /// What the covers carry besides the way out (the Testing edition's line), or nil.
     var notice: CoverNotice? { get set }
+}
+
+extension CoverPresenter {
+    public func keepUp() {}
 }
 
 /// A panel that can never take focus.
@@ -517,9 +526,16 @@ public final class CoverCanvas: CoverPresenter {
         NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id }
     }
 
+    /// The last plans applied, for `keepUp`.
+    private var applied: [CoverPlan] = []
+
     public func apply(_ plans: [CoverPlan]) {
+        applied = plans
         behind.apply(plans, theme: CoverTheme.current, draw: { draw($0) }, again: { [weak self] in self?.apply($0) })
     }
+
+    /// The same plans applied again: only what no longer matches is drawn (`Drawn`), as before the gate.
+    public func keepUp() { apply(applied) }
 
     private func draw(_ plans: [CoverPlan]) {
         let ids = Set(plans.map(\.display.id))
@@ -576,9 +592,16 @@ public final class OverlayCovers: CoverPresenter {
         behind = BehindPrompt(windows: windows ?? { nil })
     }
 
+    /// The last plans applied, for `keepUp`.
+    private var applied: [CoverPlan] = []
+
     public func apply(_ plans: [CoverPlan]) {
+        applied = plans
         behind.apply(plans, theme: CoverTheme.current, draw: { draw($0) }, again: { [weak self] in self?.apply($0) })
     }
+
+    /// The same plans applied again, as before the gate.
+    public func keepUp() { apply(applied) }
 
     private func draw(_ plans: [CoverPlan]) {
         let theme = CoverTheme.current
@@ -669,6 +692,13 @@ public final class WatchedPresenter: CoverPresenter {
         showing = now
         onCoversShown?(now)
         onDrawn?(plans)
+    }
+
+    /// As `apply` with the same plans, for the watchdog; not an update drawn (`onDrawn` does not hear it).
+    public func keepUp() {
+        if showing { onCoversShown?(true) }
+        inner.keepUp()
+        onCoversShown?(showing)
     }
 
     public func removeAll() {

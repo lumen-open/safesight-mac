@@ -14,6 +14,8 @@ import Testing
     var applied: [[CoverPlan]] = []
     var removed = 0
     func apply(_ plans: [CoverPlan]) { applied.append(plans) }
+    var keptUp = 0
+    func keepUp() { keptUp += 1 }
     func removeAll() { removed += 1 }
     var last: [CoverPlan] { applied.last ?? [] }
     /// Why display `id` is covered whole in the last drawing (nil: it shows its judged plan).
