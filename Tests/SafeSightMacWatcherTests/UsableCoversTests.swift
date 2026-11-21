@@ -26,8 +26,6 @@ final class RuleJudge: Judging {
     struct Picture { var rect: PixelRect; var cost: Int; var borderline: Bool; var id = 0; var tag = 0 }
     struct Key: Hashable { var pass: JudgePass; var rect: PixelRect; var tag: Int }
     var pictures: [Picture]
-    /// Changed areas so far: a whole pass or slice over any of them shows something else (a new tag).
-    var changes: [PixelRect] = []
     /// Whole passes and slices holding a borderline picture are borderline too.
     var bigPassesBorderline = true
     var flagged: Set<Int> = []
@@ -48,12 +46,25 @@ final class RuleJudge: Judging {
 
     /// The content under `r` changed: its pictures and the passes over it become new entries.
     func change(_ r: PixelRect) {
-        changes.append(r)
-        if changes.count > 64 { changes.removeFirst(changes.count - 64); changeBase += 1 }
+        changes += 1
+        lastChange[r] = changes
+        changeList.append(r)
+        if changeList.count > 64 { changeList.removeFirst(changeList.count - 64); changeBase += 1 }
         for i in pictures.indices where pictures[i].rect.intersects(r) { pictures[i].tag += 1 }
     }
+    /// Changes so far.
+    var changes = 0
+    /// Exact entries: only the whole passes and slices a change reached are new, as the detector's keys (its pixels) are.
+    /// Off (as these tests were written), once 64 changes have been made every whole pass and slice anywhere is new at
+    /// every change: a busy page or a video makes the whole screen's passes new in every frame, the menu bar's included.
+    var exactChanges = false
+    var lastChange: [PixelRect: Int] = [:]
+    var changeList: [PixelRect] = []
     var changeBase = 0
-    func tag(_ r: PixelRect) -> Int { changeBase * 1000 + changes.filter { $0.intersects(r) }.count }
+    func tag(_ r: PixelRect) -> Int {
+        if exactChanges { return lastChange.filter { $0.key.intersects(r) }.map(\.value).max() ?? 0 }
+        return changeBase * 1000 + changeList.filter { $0.intersects(r) }.count
+    }
     func reusable(_ k: Key) -> Bool { !marked.contains(k) && (cleanRuns[k] ?? 0) >= VerdictCache.CLEAN_CHECKS }
     func waiting(_ k: Key) -> Bool { !marked.contains(k) && (cleanRuns[k] ?? 0) > 0 && (cleanRuns[k] ?? 0) < VerdictCache.CLEAN_CHECKS }
 
@@ -132,8 +143,12 @@ final class RuleJudge: Judging {
             let out = all.map { RegionVerdict(rect: $0.rect, display: $0.key.pass == .region ? .contain : .cover, reason: .overload, pass: $0.key.pass) }
             return FrameVerdict(regions: out, coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: out.count)
         }
-        return run(all, budget: budget)
+        let v = run(all, budget: budget)
+        onCall?(area, budget, v)
+        return v
     }
+    /// Hears every judge call (its area, budget and verdict), for measurements.
+    var onCall: ((PixelRect, Int, FrameVerdict) -> Void)?
 
     func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? {
         callCost(area)
@@ -196,8 +211,11 @@ struct ScreenSim {
             }
         }
         plans.append((t, plan))
+        // Every plan handed to the drawing, in order: the early ones, then the final one (one for every frame).
+        delivered += early.map { (t, $0) } + [(t, plan)]
         t += max(1 / fps, Double(judge.clockNs - before) / 1e9)
     }
+    var delivered: [(t: Double, plan: CoverPlan)] = []
 
     /// The first frame: complete, the whole frame new.
     mutating func full() {
@@ -208,7 +226,7 @@ struct ScreenSim {
 
     /// Paints a change at `r` (frame pixels) and sends the frame that shows it.
     mutating func change(_ r: PixelRect, value: UInt8? = nil) {
-        let v = value ?? UInt8(judge.changes.count % 200 + 20)
+        let v = value ?? UInt8(judge.changeList.count % 200 + 20)
         for y in r.y..<r.maxY { for x in r.x..<r.maxX { img.pixels[(y * img.width + x) * 4] = v } }
         judge.change(r)
         frame(changed: [r])
