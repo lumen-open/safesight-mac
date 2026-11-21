@@ -238,18 +238,14 @@ extension ScreenSim {
 
     // MARK: The figures (docs/ENERGY.md)
 
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["SAFESIGHTMAC_LOOKPACE_FIGURES"] != nil))
-    func figures() {
-        for n in [nil, 32, 8, 1] as [Int?] {
-            let name = n.map { "N=\($0)" } ?? "off"
-            for exact in [true, false] {
-                let f = scroll(n, exact: exact)
-                print("LOOKPACE FIG scroll \(exact ? "exact" : "old") \(name): \(f.line)")
-                #expect(f.earlyLifts.isEmpty && f.overBudget <= 0)
-            }
-            let f = desktop(n)
-            print("LOOKPACE FIG desktop \(name): \(f.line)")
-            #expect(f.earlyLifts.isEmpty && f.overBudget <= 0)
-        }
+    /// Each N against the default (-1 stands for off), the scroll in exact and old mode, and the still desktop.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SAFESIGHTMAC_LOOKPACE_FIGURES"] != nil),
+          arguments: [-1, 32, 8, 1], ["exact", "old", "desktop"])
+    func figures(n: Int, what: String) {
+        let option = n < 0 ? nil : n
+        let name = option.map { "N=\($0)" } ?? "off"
+        let f = what == "desktop" ? desktop(option) : scroll(option, exact: what == "exact")
+        print("LOOKPACE FIG \(what) \(name): \(f.line)")
+        #expect(f.earlyLifts.isEmpty && f.overBudget <= 0, "\(f.line) \(f.earlyLifts.prefix(3))")
     }
 }
