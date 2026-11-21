@@ -18,7 +18,9 @@ function refuses(fn, reason, detail) {
   });
 }
 
-const goodRequest = () => ({ kind: K.KIND.EXIT, requestId: random(16), challenge: random(32), label: "Sam's Mac", items: [] });
+const goodRequest = () => ({ kind: K.KIND.EXIT, requestId: random(16), nonce: random(32), detail: 0, label: "Sam's Mac", items: [] });
+// A valid detail and item list for each kind.
+const DETAIL = { 0: 0, 1: 0, 2: 7, 3: 2, 4: 0 };
 const goodEnrolment = () => {
   const a = makeAuthenticator(32);
   return { credentialId: a.credentialId, publicKey: a.raw };
@@ -87,51 +89,57 @@ describe('checksum and text form', () => {
 describe('request code', () => {
   test('round-trips every kind', () => {
     for (const kind of Object.values(K.KIND)) {
-      const r = { ...goodRequest(), kind, items: kind === K.KIND.ADMIN_BATCH ? [random(32), random(32), random(32)] : [] };
+      const r = { ...goodRequest(), kind, detail: DETAIL[kind], items: kind === K.KIND.ADMIN_WINDOW ? [random(32), random(32), random(32)] : [] };
       const back = K.decodeRequestCode(K.encodeRequestCode(r));
       assert.equal(back.version, 1);
       assert.equal(back.kind, kind);
       assert.equal(back.kindName, K.KIND_NAMES[kind]);
       assert.deepEqual(back.requestId, r.requestId);
-      assert.deepEqual(back.challenge, r.challenge);
+      assert.deepEqual(back.nonce, r.nonce);
+      assert.equal(back.detail, r.detail);
       assert.equal(back.label, r.label);
-      assert.deepEqual(back.items, r.items);
+      assert.deepEqual([...back.items], r.items);
+      assert.equal(back.challenge, undefined, 'a request code carries no challenge');
     }
   });
 
-  test('matches the shared vectors', () => {
+  test('matches the shared vectors', async () => {
     for (const v of vectors.request) {
-      const fields = { kind: v.kind, requestId: hex(v.requestId), challenge: hex(v.challenge), label: v.label, items: v.items.map(hex) };
+      const fields = { kind: v.kind, requestId: hex(v.requestId), nonce: hex(v.nonce), detail: v.detail, label: v.label, items: v.items.map(hex) };
       assert.equal(K.encodeRequestCode(fields), v.text, v.name);
       const back = K.decodeRequestCode(v.text);
       assert.equal(back.kindName, v.name);
       assert.equal(toHex(back.requestId), v.requestId);
-      assert.equal(toHex(back.challenge), v.challenge);
+      assert.equal(toHex(back.nonce), v.nonce);
+      assert.equal(back.detail, v.detail);
       assert.equal(back.label, v.label);
       assert.deepEqual(back.items.map(toHex), v.items);
-      assert.equal(K.clientDataPrefix(back.challenge, vectors.origin), v.clientDataPrefix);
+      const challenge = await K.deriveChallenge(back);
+      assert.equal(toHex(challenge), v.challenge, v.name);
+      assert.equal(K.clientDataPrefix(challenge, vectors.origin), v.clientDataPrefix);
     }
   });
 
   test('the largest request fits, one more item or byte does not', () => {
-    const big = { ...goodRequest(), kind: K.KIND.ADMIN_BATCH, label: 'M'.repeat(32), items: Array.from({ length: 16 }, () => random(32)) };
+    const big = { ...goodRequest(), kind: K.KIND.ADMIN_WINDOW, label: 'M'.repeat(32), items: Array.from({ length: 16 }, () => random(32)) };
     const text = K.encodeRequestCode(big);
     assert.ok(text.length < K.LIMITS.text);
     assert.equal(K.decodeRequestCode(text).items.length, 16);
     refuses(() => K.encodeRequestCode({ ...big, items: [...big.items, random(32)] }), 'malformed');
     refuses(() => K.encodeRequestCode({ ...big, label: 'M'.repeat(33) }), 'malformed');
-    // A 17-item batch wrapped by hand, with a correct checksum, is refused when read.
+    // A 17-item admin window wrapped by hand, with a correct checksum, is refused when read.
     const body = concat(bodyOf(text).slice(0, -(1 + 16 * 32)), new Uint8Array([17]), ...Array.from({ length: 17 }, () => random(32)));
     refuses(() => K.decodeRequestCode(textOf(envelope({ type: 2, body }))), 'malformed');
   });
 
   test('refuses wrong kinds, item counts and field sizes', () => {
     refuses(() => K.encodeRequestCode({ ...goodRequest(), kind: 5 }), 'malformed');
-    refuses(() => K.encodeRequestCode({ ...goodRequest(), kind: K.KIND.ADMIN_BATCH, items: [] }), 'malformed');
+    refuses(() => K.encodeRequestCode({ ...goodRequest(), kind: K.KIND.ADMIN_WINDOW, items: [] }), 'malformed');
     refuses(() => K.encodeRequestCode({ ...goodRequest(), kind: K.KIND.EXIT, items: [random(32)] }), 'malformed');
     refuses(() => K.encodeRequestCode({ ...goodRequest(), requestId: random(15) }), 'malformed');
-    refuses(() => K.encodeRequestCode({ ...goodRequest(), challenge: random(31) }), 'malformed');
-    refuses(() => K.encodeRequestCode({ ...goodRequest(), kind: K.KIND.ADMIN_BATCH, items: [random(31)] }), 'malformed');
+    refuses(() => K.encodeRequestCode({ ...goodRequest(), nonce: random(31) }), 'malformed');
+    refuses(() => K.encodeRequestCode({ ...goodRequest(), nonce: undefined }), 'malformed');
+    refuses(() => K.encodeRequestCode({ ...goodRequest(), kind: K.KIND.ADMIN_WINDOW, items: [random(31)] }), 'malformed');
     const body = bodyOf(K.encodeRequestCode(goodRequest()));
     for (const kind of [5, 6, 255]) refuses(() => K.decodeRequestCode(textOf(envelope({ type: 2, body: concat(new Uint8Array([kind]), body.slice(1)) }))), 'malformed');
     const withItem = concat(body.slice(0, -1), new Uint8Array([1]), random(32));
@@ -148,7 +156,7 @@ describe('request code', () => {
     for (const label of refused) refuses(() => K.encodeRequestCode({ ...goodRequest(), label }), 'malformed');
     // The same labels wrapped by hand are refused when read, as is text that is not UTF-8.
     const body = bodyOf(K.encodeRequestCode(goodRequest()));
-    const head = body.slice(0, 1 + 16 + 32);
+    const head = body.slice(0, 1 + 16 + 32 + 2);
     const wrap = labelBytes => textOf(envelope({ type: 2, body: concat(head, new Uint8Array([labelBytes.length]), labelBytes, new Uint8Array([0])) }));
     for (const label of ['Sam‮CAM', ' Sam', 'Sam\u0007']) refuses(() => K.decodeRequestCode(wrap(utf8(label))), 'malformed');
     refuses(() => K.decodeRequestCode(wrap(new Uint8Array([0x53, 0xff, 0x4d]))), 'malformed');
@@ -156,14 +164,41 @@ describe('request code', () => {
     refuses(() => K.decodeRequestCode(wrap(new Uint8Array(0))), 'malformed');
   });
 
-  test('says plainly what is asked', () => {
-    const base = goodRequest();
-    assert.match(K.askText({ ...base, kind: K.KIND.TEST }), /changes nothing/);
-    assert.match(K.askText({ ...base, kind: K.KIND.EXIT }), /asked to leave/);
-    assert.match(K.askText({ ...base, kind: K.KIND.LOWER_WAIT }), /wait shorter/);
-    assert.match(K.askText({ ...base, kind: K.KIND.LOOSEN_SETTING }), /settings/);
-    assert.match(K.askText({ ...base, kind: K.KIND.ADMIN_BATCH, items: [random(32)] }), /an admin change/);
-    assert.match(K.askText({ ...base, kind: K.KIND.ADMIN_BATCH, items: [random(32), random(32)] }), /2 admin changes/);
+  test('refuses a detail its kind does not allow', () => {
+    const at = (kind, detail) => ({ ...goodRequest(), kind, detail, items: kind === K.KIND.ADMIN_WINDOW ? [random(32)] : [] });
+    for (const days of K.WAIT_DAYS) assert.equal(K.decodeRequestCode(K.encodeRequestCode(at(K.KIND.LOWER_WAIT, days))).detail, days);
+    for (const setting of [1, 2, 3]) assert.equal(K.decodeRequestCode(K.encodeRequestCode(at(K.KIND.LOOSEN_SETTING, setting))).detail, setting);
+    const bad = [
+      [K.KIND.LOWER_WAIT, 365], [K.KIND.LOWER_WAIT, 0], [K.KIND.LOWER_WAIT, 1], [K.KIND.LOWER_WAIT, 14], [K.KIND.LOWER_WAIT, 0xffff],
+      [K.KIND.LOOSEN_SETTING, 0], [K.KIND.LOOSEN_SETTING, 4], [K.KIND.LOOSEN_SETTING, 0x0102],
+      [K.KIND.TEST, 1], [K.KIND.EXIT, 7], [K.KIND.ADMIN_WINDOW, 1], [K.KIND.EXIT, 0x100],
+    ];
+    for (const [kind, detail] of bad) {
+      refuses(() => K.encodeRequestCode(at(kind, detail)), 'malformed');
+      // Wrapped by hand with a correct checksum, it is refused when read too.
+      const body = bodyOf(K.encodeRequestCode(at(kind, kind === K.KIND.LOWER_WAIT ? 7 : kind === K.KIND.LOOSEN_SETTING ? 1 : 0)));
+      body[49] = detail >>> 8;
+      body[50] = detail & 0xff;
+      refuses(() => K.decodeRequestCode(textOf(envelope({ type: 2, body }))), 'malformed');
+    }
+    for (const detail of [undefined, -1, 1.5, 0x10000, '7']) refuses(() => K.encodeRequestCode(at(K.KIND.LOWER_WAIT, detail)), 'malformed');
+  });
+
+  test('says plainly what approving does, from the signed fields alone', () => {
+    const base = { ...goodRequest(), label: 'Studio' };
+    assert.equal(K.askText({ ...base, kind: K.KIND.TEST }), 'This only checks that your key works with Studio. Approving it changes nothing.');
+    assert.equal(K.askText({ ...base, kind: K.KIND.EXIT }), 'Approving ends protection on Studio 24 hours from now.');
+    assert.equal(K.askText({ ...base, kind: K.KIND.LOWER_WAIT, detail: 7 }), 'Approving lets Studio lower its wait to 7 days, 24 hours from now.');
+    assert.equal(K.askText({ ...base, kind: K.KIND.LOWER_WAIT, detail: 182 }), 'Approving lets Studio lower its wait to 182 days, 24 hours from now.');
+    assert.equal(K.askText({ ...base, kind: K.KIND.LOOSEN_SETTING, detail: 1 }), 'Approving lets Studio remove its browser profile, 24 hours from now.');
+    assert.equal(K.askText({ ...base, kind: K.KIND.LOOSEN_SETTING, detail: 2 }), 'Approving lets Studio turn strict cover mode off, 24 hours from now.');
+    assert.equal(K.askText({ ...base, kind: K.KIND.LOOSEN_SETTING, detail: 3 }), 'Approving lets Studio set its detector rule to Balanced, 24 hours from now.');
+    assert.equal(K.askText({ ...base, kind: K.KIND.ADMIN_WINDOW, items: [random(32)] }), 'Approving gives Studio administrator time 24 hours from now, for 1 item.');
+    assert.equal(K.askText({ ...base, kind: K.KIND.ADMIN_WINDOW, items: [random(32), random(32)] }), 'Approving gives Studio administrator time 24 hours from now, for 2 items.');
+    // Nothing is said about a request that would not decode.
+    refuses(() => K.askText({ ...base, kind: K.KIND.LOWER_WAIT, detail: 365 }), 'malformed');
+    refuses(() => K.askText({ ...base, kind: K.KIND.EXIT, items: [random(32)] }), 'malformed');
+    refuses(() => K.askText({ ...base, kind: 5 }), 'malformed');
   });
 });
 

@@ -137,14 +137,17 @@
     }
   }
 
-  // A request (SD-196): say plainly what is asked, then wait for the keyholder's answer.
+  // A request (SD-196): say plainly what is asked, then wait for the keyholder's answer. Every
+  // word shown comes from the decoded fields held in `current`, and the passkey later signs the
+  // challenge derived from those same fields (SD-306).
   function openRequest(text) {
     const req = K.decodeRequestCode(K.extractCode(text));
     const test = req.kind === K.KIND.TEST;
+    const ask = K.askText(req);
     current = req;
     $('request-eyebrow').textContent = test ? 'Test' : 'Request';
     $('request-title').textContent = test ? `A test from ${req.label}` : `A request from ${req.label}`;
-    $('request-ask').textContent = K.askText(req);
+    $('request-ask').textContent = ask;
     $('request-real').hidden = test;
     $('request-approve').textContent = test ? 'Approve the test' : 'Approve with my key';
     setError('request-error', '');
@@ -161,7 +164,8 @@
     busy(true);
     try {
       const rpId = location.hostname;
-      const cred = await navigator.credentials.get({ publicKey: K.getOptions({ rpId, challenge: req.challenge }) });
+      const challenge = await K.deriveChallenge(req);
+      const cred = await navigator.credentials.get({ publicKey: K.getOptions({ rpId, challenge }) });
       if (!cred || !cred.response || !cred.response.signature) throw new K.CodeError('passkey', 'no signature came back');
       const r = cred.response;
       const code = await K.approvalFromGet({

@@ -113,8 +113,34 @@ export function assertionFor(auth, { rpId, origin, challenge, flags = 0x05, coun
   return { authenticatorData, clientDataJSON, signature };
 }
 
+// The challenge for a request's fields (SD-306), written here independently of core.js with
+// node:crypto, as make-challenge-vectors.mjs and the keeper build it.
+export function challengeOf({ kind, requestId, detail, label, items, nonce }) {
+  const tag = utf8(kind === 0 ? 'SafeSightMac keyholder test approval' : 'SafeSightMac keyholder approval');
+  const labelBytes = utf8(label);
+  return sha256(concat(
+    new Uint8Array([tag.length]), tag, new Uint8Array([1, kind]), requestId,
+    new Uint8Array([detail >> 8, detail & 0xff]), new Uint8Array([labelBytes.length]), labelBytes,
+    new Uint8Array([items.length]), ...items, nonce,
+  ));
+}
+
+// A fixed 64-byte ES256 signature (r then s) in the DER form a passkey returns.
+export function rawToDer(raw) {
+  const int = b => {
+    let i = 0;
+    while (i < b.length - 1 && b[i] === 0) i++;
+    let v = b.subarray(i);
+    if (v[0] & 0x80) v = concat(new Uint8Array([0]), v);
+    return concat(new Uint8Array([0x02, v.length]), v);
+  };
+  const body = concat(int(raw.subarray(0, 32)), int(raw.subarray(32, 64)));
+  return concat(new Uint8Array([0x30, body.length]), body);
+}
+
 // The keeper's check of an approval, in the order of chapter 03 section 8, written here
-// independently of core.js. Returns 'ok' or the first step that fails.
+// independently of core.js. Returns 'ok' or the first step that fails. The challenge is built
+// from the request's own fields, as the keeper builds it from its record of the request.
 export function keeperCheck({ approvalText, pin, request, origin, rpId }) {
   let a;
   try {
@@ -127,7 +153,7 @@ export function keeperCheck({ approvalText, pin, request, origin, rpId }) {
   const flags = a.authenticatorData[32];
   if (!(flags & 0x01) || !(flags & 0x04)) return 'flags';
   const prefix = Buffer.from(
-    `{"type":"webauthn.get","challenge":"${Buffer.from(request.challenge).toString('base64url')}","origin":"${origin}"`,
+    `{"type":"webauthn.get","challenge":"${Buffer.from(challengeOf(request)).toString('base64url')}","origin":"${origin}"`,
     'utf8',
   );
   if (Buffer.compare(Buffer.from(a.clientData.subarray(0, prefix.length)), prefix) !== 0) return 'prefix';

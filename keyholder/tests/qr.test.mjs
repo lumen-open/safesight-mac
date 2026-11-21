@@ -3,7 +3,9 @@
 // structure of every version, and golden outputs. When the golden outputs were made, each one,
 // and a code of every version 1 to 40 at its smallest and fullest, was decoded back to the exact
 // text by Apple's CoreImage QR reader (CIDetector) on macOS. A change to the encoder that alters
-// a golden hash must be checked that way again before the hash is updated.
+// a golden hash must be checked that way again before the hash is updated. The five built from
+// tests/vectors.json were remade when the request code body was redefined (SD-306), and each
+// new one was decoded back to its exact text with CIDetector the same way before it was set here.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -127,11 +129,11 @@ test('golden outputs, each decoded by CoreImage when made', () => {
   const golden = [
     ['HELLO WORLD', 1, 0, '4c1240bbfb84568fca60ed756358070c8a58cda10a44492afe598922fc3a385b'],
     ['hello, keyholder', 2, 1, '4ba6bd5d6782c196b4c9b1f774d3837780764f9823d632c3f161433dc2b0ee9f'],
-    [vectors.request[0].text, 5, 3, '681798f117125b22da983e925be4e91d3b8f2ed6f81ad12a42ddf47b1bf04faa'],
-    [vectors.request[4].text, 8, 6, '960cac1df7bdcd678f3b315ea12056e0ac925977ffea4b7cadcf155e1cca8028'],
-    [vectors.enrolment[0].text, 6, 6, 'd26ac3bc5ae317381b7b184b1e5ea8418ef692136cba5362b9ee462f2abeca19'],
-    [vectors.approval[0].text, 13, 5, 'c4a14fc45476652228b1c68083427c53eef4930c7fb89bc3c7558164de77ed1c'],
-    [vectors.approval[1].text, 16, 4, '762ecb5d07f887ab13f3425059f3331183fa8b19c070c7cea1b31d95bb2f1635'],
+    [vectors.request[0].text, 5, 4, 'd9c4b19605b651c49a0331622c12e1b86a6a9c0e835c2fdfafb2be6d77f6b7da'],
+    [vectors.request[4].text, 8, 3, '4e92e65a74fdddbd84667c9e8bffa2d25d63c3fe5a2ec1dba308a92eea0c4f3a'],
+    [vectors.enrolment[0].text, 6, 4, '98fef0da298018d70ff8113193405a62192a829e32a754b394ddbf318da4346c'],
+    [vectors.approval[0].text, 13, 5, '4f2bdd43b184d5a3b8a329e4f5a087eb55fa1f43d2c1c4f31e3686cac710a0bc'],
+    [vectors.approval[1].text, 16, 6, 'f9b4d8f4a86aca16531baff2fca6dbf5375a177f390cb8771f55741ab2a99a33'],
   ];
   for (const [text, version, mask, hash] of golden) {
     const qr = K.qr.encode(text);

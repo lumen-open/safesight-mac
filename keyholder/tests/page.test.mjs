@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import { build, policy, sources } from '../build.mjs';
-import { CORE_SOURCE, K, ROOT, assertionFor, attestationFor, keeperCheck, makeAuthenticator, random } from './helpers.mjs';
+import { CORE_SOURCE, K, ROOT, assertionFor, attestationFor, concat, envelope, keeperCheck, makeAuthenticator, random, textOf } from './helpers.mjs';
 
 const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
 const src = sources();
@@ -134,7 +134,13 @@ describe('the words on the page', () => {
   test('no word the project never uses, and none that suggests watching or reporting', () => {
     const words = [/can't be bypassed/i, /100%/, /blocks all/i, /treats addiction/i, /nobody can ever unlock it/i,
       /\bmonitor/i, /\breport/i, /\bwatch/i, /accountab/i, /\btamper/i, /\battempt/i, /\bviolat/i, /\bporn/i, /\bexplicit\b/i];
-    const askTexts = Object.values(K.KIND).map(kind => K.askText({ kind, items: [random(32), random(32)] }));
+    const base = { requestId: random(16), nonce: random(32), label: "Sam's Mac", detail: 0, items: [] };
+    const askTexts = [
+      ...[0, 1].map(kind => ({ ...base, kind })),
+      ...K.WAIT_DAYS.map(detail => ({ ...base, kind: K.KIND.LOWER_WAIT, detail })),
+      ...[1, 2, 3].map(detail => ({ ...base, kind: K.KIND.LOOSEN_SETTING, detail })),
+      { ...base, kind: K.KIND.ADMIN_WINDOW, items: [random(32), random(32)] },
+    ].map(K.askText);
     for (const text of [visible, src.page, ...askTexts]) for (const w of words) assert.doesNotMatch(text, w);
   });
 });
@@ -205,8 +211,9 @@ function fakeBrowser({ hash = '', framed = false, passkeys = true, auth = makeAu
   return { $, shown, calls, location, win, auth };
 }
 
+const DETAIL = { 0: 0, 1: 0, 2: 7, 3: 2, 4: 0 };
 function requestText(kind = K.KIND.EXIT, label = "Sam's Mac") {
-  const fields = { kind, requestId: random(16), challenge: random(32), label, items: kind === K.KIND.ADMIN_BATCH ? [random(32)] : [] };
+  const fields = { kind, requestId: random(16), nonce: random(32), detail: DETAIL[kind], label, items: kind === K.KIND.ADMIN_WINDOW ? [random(32)] : [] };
   return { fields, text: K.encodeRequestCode(fields) };
 }
 
@@ -250,10 +257,10 @@ describe('the screens', () => {
     assert.equal(b.location.hash, '');
     assert.deepEqual(b.shown(), ['screen-request']);
     assert.equal(b.$('request-title').textContent, "A request from Sam's Mac");
-    assert.equal(b.$('request-ask').textContent, "They've asked to leave. If you approve, their wait becomes 24 hours.");
+    assert.equal(b.$('request-ask').textContent, "Approving ends protection on Sam's Mac 24 hours from now.");
     assert.equal(b.$('request-real').hidden, false);
     await b.$('request-approve').click();
-    assert.deepEqual(b.calls.get[0].challenge, fields.challenge, 'the passkey signs the challenge exactly');
+    assert.deepEqual(b.calls.get[0].challenge, await K.deriveChallenge(fields), 'the passkey signs the challenge derived from what is shown');
     assert.deepEqual(b.shown(), ['screen-approved']);
     assert.equal(b.$('approved-label').textContent, "Sam's Mac");
     const pin = { publicKey: b.auth.raw };
@@ -262,6 +269,23 @@ describe('the screens', () => {
     assert.ok(b.$('approved-qr-path').attrs.d.length > 100);
     await b.$('approved-done').click();
     assert.equal(b.$('approved-text').value, '', 'the code is cleared once done');
+  });
+
+  test('the passkey signs the fields on screen, so a changed code gets a different signature', async () => {
+    const { fields, text } = requestText(K.KIND.EXIT, "Sam's Mac");
+    // The same request with its kind, detail and label changed, wrapped with a correct checksum.
+    const body = K.base32Decode(text).slice(6, -4);
+    const label = new TextEncoder().encode("Alex's Mac");
+    const crafted = concat(new Uint8Array([K.KIND.LOWER_WAIT]), body.slice(1, 49), new Uint8Array([0, 7, label.length]), label, new Uint8Array([0]));
+    const b = fakeBrowser({ hash: `#${textOf(envelope({ type: 2, body: crafted }))}` });
+    assert.equal(b.$('request-title').textContent, "A request from Alex's Mac");
+    assert.equal(b.$('request-ask').textContent, "Approving lets Alex's Mac lower its wait to 7 days, 24 hours from now.");
+    await b.$('request-approve').click();
+    const shown = { ...fields, kind: K.KIND.LOWER_WAIT, detail: 7, label: "Alex's Mac" };
+    assert.deepEqual(b.calls.get[0].challenge, await K.deriveChallenge(shown));
+    assert.notDeepEqual(b.calls.get[0].challenge, await K.deriveChallenge(fields));
+    const pin = { publicKey: b.auth.raw };
+    assert.equal(keeperCheck({ approvalText: b.$('approved-text').value, pin, request: fields, origin: 'https://keyholder.example', rpId: 'keyholder.example' }), 'prefix');
   });
 
   test('a test request says it changes nothing', async () => {
@@ -332,7 +356,7 @@ describe('the screens', () => {
     b.location.hash = `#${requestText(K.KIND.LOWER_WAIT).text}`;
     for (const f of b.win.listeners.hashchange) f();
     assert.deepEqual(b.shown(), ['screen-request']);
-    assert.match(b.$('request-ask').textContent, /wait shorter/);
+    assert.equal(b.$('request-ask').textContent, "Approving lets Sam's Mac lower its wait to 7 days, 24 hours from now.");
     assert.deepEqual(b.calls.replaced, ['/keyholder/']);
   });
 });
