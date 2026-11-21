@@ -103,4 +103,30 @@ import Testing
         r.coordinator.deliver(.clear(a), generation: g)
         #expect(r.presenter.applied.count - before == 1 || r.presenter.last.allSatisfy { $0.wholeDisplay != nil }, "drawn (or still covered whole after the lock)")
     }
+
+    /// An update left out is still checked against the screen at once, every time: a canvas the system hid (a switch of
+    /// Spaces, say) is shown again at the next update, as before, not only at the next one drawn.
+    @Test func everyUpdateLeftOutIsCheckedAgainstTheScreen() {
+        let (r, g) = judged()
+        let plan = with([CGRect(x: 10, y: 10, width: 40, height: 40)])
+        r.coordinator.deliver(plan, generation: g)
+        let drawn = r.presenter.applied.count, kept = r.presenter.keptUp
+        for _ in 0..<5 { r.os.now += 0.01; r.coordinator.deliver(plan, generation: g) }
+        #expect(r.presenter.applied.count == drawn, "nothing new drawn")
+        #expect(r.presenter.keptUp - kept == 5, "but every one checked against the screen: \(r.presenter.keptUp - kept)")
+    }
+
+    /// The watched presenter passes the check on to the canvases and tells the watchdog a cover may be up while it runs,
+    /// but does not count it as an update drawn.
+    @Test func theWatchedPresenterPassesTheCheckOn() {
+        let inner = RecordingPresenter()
+        let watched = WatchedPresenter(inner)
+        var drawnHeard = 0, shown: [Bool] = []
+        watched.onDrawn = { _ in drawnHeard += 1 }
+        watched.onCoversShown = { shown.append($0) }
+        watched.apply([with([CGRect(x: 10, y: 10, width: 40, height: 40)])])
+        drawnHeard = 0; shown = []
+        watched.keepUp()
+        #expect(inner.keptUp == 1 && drawnHeard == 0 && shown == [true, true], "\(shown)")
+    }
 }

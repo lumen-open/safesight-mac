@@ -261,7 +261,8 @@ public enum ContainBlur {
 /// Whether an update must be drawn, or is exactly what the screen already shows. The judging hands the drawing a plan
 /// for every frame the capture sends (about 30 a second on some Macs, a "nothing changed" frame included), and most
 /// are the same as the last one drawn. Only an update identical to the last one drawn, display by display, is
-/// left out, so a plan that adds, moves, changes or lifts anything is always drawn at once. An identical update with
+/// left out, so a plan that adds, moves, changes or lifts anything is always drawn at once. One left out is still
+/// checked against the screen (the presenter's `keepUp`: a canvas the system hid is shown again at once). An identical update with
 /// something on screen is still drawn at least every `refreshEvery` (the canvases are brought to the front of their
 /// level then, so a window that came up at the same level never stays over the covers for longer than before), and one
 /// with a password prompt's hole is always drawn: its hole is checked against the window list at every drawing.

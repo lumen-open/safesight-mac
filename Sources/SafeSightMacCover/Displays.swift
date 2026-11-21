@@ -408,7 +408,8 @@ public final class CoverCoordinator {
             waitingForLockScreen = false
             // An update exactly like the last one drawn is not drawn again (`DrawGate`): the judging hands one over for
             // every frame the capture sends, most of them the same.
-            if gate.shouldDraw(shown, now: clock(), urgent: urgent) { presenter.apply(shown) }
+            // What is on screen is still checked against it at every update (`keepUp`), as before.
+            if gate.shouldDraw(shown, now: clock(), urgent: urgent) { presenter.apply(shown) } else { presenter.keepUp() }
         }
         if urgent { flush() }
         let judged = coverage.list.judged, required = coverage.required

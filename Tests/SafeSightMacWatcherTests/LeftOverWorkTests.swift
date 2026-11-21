@@ -214,6 +214,19 @@ final class TimedScript: Judging {
         #expect(t - 31 >= Register.JUDGING_STALL - 0.31, "and not before: \(t - 31) s")
     }
 
+    /// A part the frame reports as changed is new content: it is blurred until judged even when its pixels turn out the same
+    /// as the last frame's (a redraw of the same pixels), never left waiting shown as judged before. Only the "not fresh"
+    /// condition tells this case apart: the pixels match, nothing is left unjudged and the window list is the same.
+    @Test func aReportedChangeIsNeverLeftWaitingEvenWithTheSamePixels() {
+        let (p, img0, snap) = dueRig([left, right])
+        var img = img0
+        Fixtures.paint(&img, change, channel: nil, seed: 5)
+        let sameRight = PixelRect(x: 400, y: 100, w: 100, h: 100)   // reported, but its pixels are as before
+        let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [change, sameRight], t: 31), snapshot: snap, now: 31)
+        #expect(plan.touches(rightArea), "blurred until judged: \(plan.items.map(\.rect))")
+        #expect(!p.dueAgain.contains { $0.intersects(rightArea) }, "not left waiting")
+    }
+
     // MARK: Covers over exactly the same place are one
 
     func dupRig(_ a: DisplayPipeline.Held, _ b: DisplayPipeline.Held) -> DisplayPipeline {
@@ -234,21 +247,58 @@ final class TimedScript: Judging {
     }
 
     /// The one left keeps the most cautious state: the lower count (it lifts no sooner than the slower of the two would
-    /// have), ever flagged if either was, and plain if either was.
+    /// have) with its own round, ever flagged if either was, plain if either was, and judged again as soon as either was due.
     @Test func theCoverLeftKeepsTheMostCautiousState() {
+        let e1 = DisplayPipeline.EntryKey(pass: .whole, rect: PixelRect(x: 100, y: 100, w: 80, h: 60))
+        let e2 = DisplayPipeline.EntryKey(pass: .region, rect: PixelRect(x: 110, y: 110, w: 20, h: 20))
         var a = DisplayPipeline.Held(target: t10, rel: spot, whole: false, kind: .blur(BlurTile(columns: 1, rows: 1, rgba: [9, 9, 9, 255])), clean: 3)
-        a.fromOverload = true
+        a.fromOverload = true; a.round = [e1, e2]
         var b = DisplayPipeline.Held(target: t10, rel: spot, whole: false, kind: .plain, clean: 1)
-        b.everFlagged = true
+        b.everFlagged = true; b.round = [e1]
+        b.flaggedAt = spot; b.flaggedWhen = 5
         let p = dupRig(a, b)
-        let snap = Fixtures.oneWindow(d.bounds)
-        var plan = p.process(idle(0.1), snapshot: snap, now: 0.1)
-        #expect(p.held.count == 1 && p.held[0].kind == .plain && p.held[0].everFlagged && !p.held[0].countableInside, "\(p.heldLines)")
-        // Judged clean at every look from here: the first cover alone would lift at the next look; the pair lifts after three.
-        var looks = 1
-        while plan.touches(spot) && looks < 10 { looks += 1; plan = p.process(idle(0.1 * Double(looks)), snapshot: snap, now: 0.1 * Double(looks)) }
-        #expect(looks >= 3, "lifts no sooner than the slower of the two: after \(looks) looks")
-        #expect(plan.covers(spot, kind: .plain) || looks >= 3)
+        p.mergeDuplicates()
+        #expect(p.held.count == 1, "\(p.heldLines)")
+        let m = p.held[0]
+        #expect(m.clean == 1, "the lower count: \(m.clean)")
+        #expect(m.round == [e1], "the round of the cover with the lower count: \(m.round)")
+        #expect(m.everFlagged, "ever flagged")
+        #expect(m.kind == .plain, "plain")
+        #expect(m.flaggedAt == spot && m.flaggedWhen == 5, "judged again when the flagged one was due")
+        // Merged the other way round: the same.
+        let q = dupRig(b, a)
+        q.mergeDuplicates()
+        #expect(q.held.count == 1 && q.held[0].clean == 1 && q.held[0].everFlagged && q.held[0].round == [e1] && q.held[0].kind == .plain)
+    }
+
+    /// With the same count, the round keeps only the entries both covers have: an entry judged clean over one only is not
+    /// yet a clean judgement of what the other hides.
+    @Test func withTheSameCountOnlySharedRoundEntriesStay() {
+        let e1 = DisplayPipeline.EntryKey(pass: .whole, rect: PixelRect(x: 100, y: 100, w: 80, h: 60))
+        let e2 = DisplayPipeline.EntryKey(pass: .region, rect: PixelRect(x: 110, y: 110, w: 20, h: 20))
+        let e3 = DisplayPipeline.EntryKey(pass: .region, rect: PixelRect(x: 140, y: 120, w: 20, h: 20))
+        var a = DisplayPipeline.Held(target: t10, rel: spot, whole: false, kind: .plain, clean: 2); a.round = [e1, e2]
+        var b = DisplayPipeline.Held(target: t10, rel: spot, whole: false, kind: .plain, clean: 2); b.round = [e1, e3]
+        let p = dupRig(a, b)
+        p.mergeDuplicates()
+        #expect(p.held.count == 1 && p.held[0].round == [e1], "\(p.held.map(\.round))")
+    }
+
+    /// A cover that may be counted by a larger cover's call stays so only if both could be: one made for unjudged entries
+    /// merged with one that was not (a flag's cover) is judged at its own size from then on.
+    @Test func countedInsideOnlyIfBothCouldBe() {
+        var a = DisplayPipeline.Held(target: t10, rel: spot, whole: false, kind: .plain, clean: 0); a.fromOverload = true
+        let b = DisplayPipeline.Held(target: t10, rel: spot, whole: false, kind: .plain, clean: 0)
+        #expect(a.countableInside && !b.countableInside)
+        for (x, y) in [(a, b), (b, a)] {
+            let p = dupRig(x, y)
+            p.mergeDuplicates()
+            #expect(p.held.count == 1 && !p.held[0].countableInside, "\(p.heldLines)")
+        }
+        var c = DisplayPipeline.Held(target: t10, rel: spot, whole: false, kind: .plain, clean: 0); c.fromOverload = true; c.fromMotion = true
+        let p = dupRig(a, c)
+        p.mergeDuplicates()
+        #expect(p.held.count == 1 && !p.held[0].countableInside, "a copy where content went is never counted inside: \(p.heldLines)")
     }
 
     /// Covers over the same place of different windows, or over places that only overlap, are not merged.
