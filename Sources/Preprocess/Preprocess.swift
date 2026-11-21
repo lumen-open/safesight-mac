@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Vendored from the kestrel lab detector (v3-detector, commit 49ecdd9) under Apache-2.0.
+// Made cheaper for SafeSight Mac (docs/ENERGY.md) with the same output byte for byte: the vendored code is kept in
+// the tests as the reference (FastPreprocessTests).
 // kestrel-preprocess/1 (spec/preprocess.md), Swift implementation. Integer-exact.
 import Accelerate
 import Foundation
@@ -155,11 +157,19 @@ public enum Preprocessor {
         var src = [UInt8](repeating: 0, count: 3 * w * h)
         img.pixels.withUnsafeBufferPointer { px in
             src.withUnsafeMutableBufferPointer { s in
+                let plane = w * h
                 for yy in 0..<h {
+                    var p = ((r.y + yy) * W + r.x) * 4
+                    let o = yy * w
                     for xx in 0..<w {
-                        let p = ((r.y + yy) * W + r.x + xx) * 4
                         let a = Int(px[p + 3])
-                        for c in 0..<3 { s[c * w * h + yy * w + xx] = UInt8((Int(px[p + c]) * a + 127) / 255) }
+                        if a == 255 {
+                            // Opaque (every display capture): (v * 255 + 127) / 255 is v.
+                            s[o + xx] = px[p]; s[plane + o + xx] = px[p + 1]; s[2 * plane + o + xx] = px[p + 2]
+                        } else {
+                            for c in 0..<3 { s[c * plane + o + xx] = UInt8((Int(px[p + c]) * a + 127) / 255) }
+                        }
+                        p += 4
                     }
                 }
             }
@@ -171,18 +181,35 @@ public enum Preprocessor {
                 hw.lo.withUnsafeBufferPointer { lo in
                     hw.k.withUnsafeBufferPointer { k in
                         let T = hw.taps
-                        for c in 0..<3 {
-                            for yy in 0..<h {
-                                let row = c * w * h + yy * w
-                                let orow = c * h * N + yy * N
-                                for i in 0..<N {
-                                    var acc: Int64 = 0
-                                    let l = Int(lo[i])
-                                    let kb = i * T
-                                    for t in 0..<T where l + t < w { acc += Int64(k[kb + t]) * Int64(s[row + l + t]) }
-                                    m[orow + i] = clamp255(acc)
+                        // The taps of each output column that fall inside the row (t with l + t < w): always the first ones.
+                        let valid = (0..<N).map { i in max(0, min(T, w - Int(lo[i]))) }
+                        // Every plane's rows are independent, so they are taken four at a time: four sums run side by side
+                        // instead of one after the other (the same sums, exactly).
+                        let rows = 3 * h
+                        var yy = 0
+                        while yy + 4 <= rows {
+                            let r0 = yy * w, o0 = yy * N
+                            for i in 0..<N {
+                                var a0: Int64 = 0, a1: Int64 = 0, a2: Int64 = 0, a3: Int64 = 0
+                                let l = Int(lo[i]), kb = i * T
+                                for t in 0..<valid[i] {
+                                    let kv = Int64(k[kb + t]), q = r0 + l + t
+                                    a0 += kv * Int64(s[q]); a1 += kv * Int64(s[q + w]); a2 += kv * Int64(s[q + 2 * w]); a3 += kv * Int64(s[q + 3 * w])
                                 }
+                                m[o0 + i] = clamp255(a0); m[o0 + N + i] = clamp255(a1); m[o0 + 2 * N + i] = clamp255(a2); m[o0 + 3 * N + i] = clamp255(a3)
                             }
+                            yy += 4
+                        }
+                        while yy < rows {
+                            let row = yy * w, orow = yy * N
+                            for i in 0..<N {
+                                var acc: Int64 = 0
+                                let l = row + Int(lo[i])
+                                let kb = i * T
+                                for t in 0..<valid[i] { acc += Int64(k[kb + t]) * Int64(s[l + t]) }
+                                m[orow + i] = clamp255(acc)
+                            }
+                            yy += 1
                         }
                     }
                 }
@@ -195,16 +222,22 @@ public enum Preprocessor {
                 vw.lo.withUnsafeBufferPointer { lo in
                     vw.k.withUnsafeBufferPointer { k in
                         let T = vw.taps
-                        for c in 0..<3 {
-                            let plane = c * h * N
-                            for i in 0..<N {
-                                let l = Int(lo[i])
-                                let kb = i * T
-                                let orow = c * N * N + i * N
-                                for xx in 0..<N {
-                                    var acc: Int64 = 0
-                                    for t in 0..<T where l + t < h { acc += Int64(k[kb + t]) * Int64(m[plane + (l + t) * N + xx]) }
-                                    o[orow + xx] = clamp255(acc)
+                        // Row by row over a whole output row at once (the same integer sums, in another order: exact).
+                        var acc = [Int64](repeating: 0, count: N)
+                        acc.withUnsafeMutableBufferPointer { a in
+                            for c in 0..<3 {
+                                let plane = c * h * N
+                                for i in 0..<N {
+                                    let l = Int(lo[i])
+                                    let kb = i * T
+                                    let orow = c * N * N + i * N
+                                    for xx in 0..<N { a[xx] = 0 }
+                                    for t in 0..<max(0, min(T, h - l)) {
+                                        let kv = Int64(k[kb + t])
+                                        let src = plane + (l + t) * N
+                                        for xx in 0..<N { a[xx] += kv * Int64(m[src + xx]) }
+                                    }
+                                    for xx in 0..<N { o[orow + xx] = clamp255(a[xx]) }
                                 }
                             }
                         }

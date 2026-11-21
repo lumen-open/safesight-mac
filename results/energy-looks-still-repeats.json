@@ -1,0 +1,147 @@
+{
+  "machine": "Apple M1 Max, macOS Version 26.3 (Build 25D125)",
+  "runs": {
+    "a1": {
+      "build": "this branch",
+      "footprintMB": 724.63,
+      "peakFootprintMB": 846.93,
+      "settling": {
+        "budgetUnitsPerSecond": 40.48,
+        "budgetUnitsSpent": 11374,
+        "cpuSeconds": 56.33,
+        "cpuSecondsPerMinute": 12.03,
+        "cpuShareOfOneCore": 0.2,
+        "framesJudged": 0,
+        "judgements": 11374,
+        "judgementsPerMinute": 2428.54,
+        "looks": 832,
+        "looksPerMinute": 177.65,
+        "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
+        "secondCheckJudgements": 3230,
+        "settledAtSeconds": 281.01,
+        "simulatedSeconds": 281.01,
+        "stagesWallMs": {
+          "all": 127181.32,
+          "cacheHits": 542347,
+          "cacheMisses": 973326,
+          "decision": 443.33,
+          "detector": 124545.21,
+          "detectorCalls": 109735,
+          "finder": 22792.79,
+          "finderCacheHits": 98371,
+          "hashingAndCache": 1476.48,
+          "inference": 78906.49,
+          "outsideDetector": 2636.11,
+          "preprocess": 20721.86
+        }
+      }
+    },
+    "a2": {
+      "build": "this branch",
+      "footprintMB": 745.77,
+      "peakFootprintMB": 884.75,
+      "settling": {
+        "budgetUnitsPerSecond": 39.47,
+        "budgetUnitsSpent": 10550,
+        "cpuSeconds": 59.05,
+        "cpuSecondsPerMinute": 13.25,
+        "cpuShareOfOneCore": 0.22,
+        "framesJudged": 0,
+        "judgements": 10550,
+        "judgementsPerMinute": 2368.08,
+        "looks": 698,
+        "looksPerMinute": 156.67,
+        "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
+        "secondCheckJudgements": 2542,
+        "settledAtSeconds": 267.3,
+        "simulatedSeconds": 267.3,
+        "stagesWallMs": {
+          "all": 124500.53,
+          "cacheHits": 423523,
+          "cacheMisses": 692917,
+          "decision": 311.05,
+          "detector": 122429.47,
+          "detectorCalls": 79164,
+          "finder": 29314.23,
+          "finderCacheHits": 64646,
+          "hashingAndCache": 1134.54,
+          "inference": 72315.55,
+          "outsideDetector": 2071.07,
+          "preprocess": 19185
+        }
+      }
+    },
+    "b1": {
+      "build": "main at b68388f",
+      "footprintMB": 707,
+      "peakFootprintMB": 863.05,
+      "settling": {
+        "budgetUnitsPerSecond": 41.52,
+        "budgetUnitsSpent": 10410,
+        "cpuSeconds": 88.36,
+        "cpuSecondsPerMinute": 21.14,
+        "cpuShareOfOneCore": 0.35,
+        "framesJudged": 0,
+        "judgements": 10410,
+        "judgementsPerMinute": 2490.93,
+        "looks": 547,
+        "looksPerMinute": 130.89,
+        "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
+        "secondCheckJudgements": 2832,
+        "settledAtSeconds": 250.75,
+        "simulatedSeconds": 250.75,
+        "stagesWallMs": {
+          "all": 155251.41,
+          "cacheHits": 82938,
+          "cacheMisses": 142455,
+          "decision": 85.99,
+          "detector": 154482.42,
+          "detectorCalls": 11827,
+          "finder": 35379.44,
+          "finderCacheHits": 603,
+          "hashingAndCache": 18770.67,
+          "inference": 72517.33,
+          "outsideDetector": 769,
+          "preprocess": 27600.36
+        }
+      }
+    },
+    "b2": {
+      "build": "main at b68388f",
+      "footprintMB": 704.94,
+      "peakFootprintMB": 857.16,
+      "settling": {
+        "budgetUnitsPerSecond": 40.05,
+        "budgetUnitsSpent": 10572,
+        "cpuSeconds": 85.69,
+        "cpuSecondsPerMinute": 19.48,
+        "cpuShareOfOneCore": 0.32,
+        "framesJudged": 0,
+        "judgements": 10572,
+        "judgementsPerMinute": 2402.78,
+        "looks": 495,
+        "looksPerMinute": 112.5,
+        "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget",
+        "secondCheckJudgements": 2696,
+        "settledAtSeconds": 263.99,
+        "simulatedSeconds": 263.99,
+        "stagesWallMs": {
+          "all": 152019.83,
+          "cacheHits": 66513,
+          "cacheMisses": 136026,
+          "decision": 76.16,
+          "detector": 151213.49,
+          "detectorCalls": 11477,
+          "finder": 34583.76,
+          "finderCacheHits": 616,
+          "hashingAndCache": 16594.39,
+          "inference": 71814.7,
+          "outsideDetector": 806.34,
+          "preprocess": 28012.63
+        }
+      }
+    }
+  },
+  "sharedMac": "run four at a time on the shared developer Mac (load not recorded, higher than for the single runs): settling times read higher than in the single runs",
+  "what": "safesightmac-harness energy --cases still, two runs of each build at once (four processes side by side)"
+}

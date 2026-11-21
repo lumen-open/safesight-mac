@@ -290,8 +290,10 @@ final class VerdictCache {
 
     static func passCode(_ pass: String) -> UInt64 { pass == "region" ? 1 : pass == "whole" ? 2 : pass == "slice" ? 3 : 4 }
 
-    static func key(_ img: RGBAImage, _ r: PixelRect, pass: String, version: String) -> ExactKey {
-        ExactKey.of(img, r, header: [passCode(pass), UInt64(r.w), UInt64(r.h)], tag: version)
+    static func key(_ img: RGBAImage, _ r: PixelRect, pass: String, version: String, memo: FrameKeys? = nil) -> ExactKey {
+        let header = [passCode(pass), UInt64(r.w), UInt64(r.h)]
+        if let memo { return memo.key(img, r, header: header, tag: version) }
+        return ExactKey.of(img, r, header: header, tag: version)
     }
 
     private func mark(_ k: ExactKey) -> UInt8 { rule.sticky ? (marks.peek(k) ?? 0) : 0 }

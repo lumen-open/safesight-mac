@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Vendored from the kestrel lab detector (v3-detector, commit 49ecdd9) under Apache-2.0.
 // Scoring models. Internal to the module: scores never leave DetectorCore.
+import Accelerate
 import CoreML
 import Foundation
 import Preprocess
@@ -84,7 +85,8 @@ final class CoreMLScoringModel: ScoringModel {
             guard t.count == n else { throw OutputFault() }
             let arr = try MLMultiArray(shape: [1, 3, NSNumber(value: side), NSNumber(value: side)], dataType: .float32)
             let p = arr.dataPointer.bindMemory(to: Float.self, capacity: n)
-            for i in 0..<n { p[i] = Float(t[i]) }
+            // Each byte as a float (exact: every UInt8 is a Float), in one vector pass.
+            t.withUnsafeBufferPointer { vDSP_vfltu8($0.baseAddress!, 1, p, 1, vDSP_Length(n)) }
             providers.append(try MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(multiArray: arr)]))
         }
         let out = try model.predictions(from: MLArrayBatchProvider(array: providers), options: MLPredictionOptions())

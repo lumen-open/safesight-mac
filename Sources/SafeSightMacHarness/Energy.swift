@@ -16,6 +16,9 @@
 // - `copy`: the capture callback's frame copy (BGRA to RGBA) at 2880 x 1800 and 5120 x 2880, and what it costs at 60
 //   and 120 frames a second.
 // - `tick`: the main thread's quarter-second check (the OS's display lists and session state), per tick.
+// - `finder`: the picture finder alone (no models) on a video frame's area, the busy page and FILE.
+//
+// ENERGY_DEBUG_CALLS=1 prints each judge call's area (frame pixels), budget and counts, nothing else.
 //
 // CPU time is the process's own (user and system, every thread, `getrusage`), counted around the watcher's work only.
 // It includes Core ML's CPU side, not the Neural Engine's or the GPU's own work, and says nothing about battery drain:
@@ -27,6 +30,7 @@ import Darwin
 import DetectorCore
 import Foundation
 import Preprocess
+import RegionFinder
 import SafeSightMacCover
 import SafeSightMacWatcher
 
@@ -45,7 +49,9 @@ final class BudgetWatch: Judging {
     init(_ d: Detector) { inner = d }
     func judgeArea(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int,
                    progress: ((JudgeProgress) -> Void)?) -> FrameVerdict {
+        let t0 = DispatchTime.now().uptimeNanoseconds
         let v = inner.judgeArea(frame, context: context, within: area, budget: budget, progress: progress)
+        if Energy.debugCalls { print("call \(area) budget \(budget) judged \(v.judgements) over \(v.overloaded) \((DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000) ms") }
         calls += 1; units += v.judgements
         if v.judgements > budget { overCalls += 1; overJudgements += v.judgements - budget }
         return v
@@ -64,6 +70,7 @@ final class BudgetWatch: Judging {
 
 enum Energy {
     static var watch: BudgetWatch?
+    static let debugCalls = ProcessInfo.processInfo.environment["ENERGY_DEBUG_CALLS"] != nil
     // MARK: Process figures
 
     /// CPU seconds used by this process so far (user and system, every thread).
@@ -102,16 +109,32 @@ enum Energy {
     /// A simulated clock and the CPU time spent inside the watcher's work.
     struct Meter {
         var cpu = 0.0, judgements = 0, frames = 0, looks = 0, secondChecks = 0, budgetUnits = 0
+        /// The detector's own stage timings (wall milliseconds), added up over every measured call.
+        var stages = JudgeTimings()
+        /// Wall time of the watcher's work, in all (milliseconds).
+        var wallMs = 0.0
         mutating func measure<T>(_ d: Detector, _ body: () -> T) -> T {
             d.resetTimings()
             let u0 = Energy.watch?.units ?? 0
             let c0 = Energy.cpuSeconds()
+            let w0 = DispatchTime.now().uptimeNanoseconds
             let out = body()
             cpu += Energy.cpuSeconds() - c0
+            wallMs += Double(DispatchTime.now().uptimeNanoseconds - w0) / 1e6
+            stages.add(d.timings)
             judgements += Energy.judgements(d)
             secondChecks += d.timings.secondCheckJudgements
             budgetUnits += Energy.watch.map { $0.units - u0 } ?? 0
             return out
+        }
+        /// Where the wall time went: the detector's stages, and the watcher's own work around them.
+        var stageSummary: [String: Any] {
+            let pre = stages.preprocessMs.values.reduce(0, +), inf = stages.inferenceMs.values.reduce(0, +)
+            return ["all": Energy.r2(wallMs), "detector": Energy.r2(stages.totalMs), "finder": Energy.r2(stages.finderMs),
+                    "hashingAndCache": Energy.r2(stages.cacheMs), "preprocess": Energy.r2(pre), "inference": Energy.r2(inf),
+                    "decision": Energy.r2(stages.decisionMs), "outsideDetector": Energy.r2(wallMs - stages.totalMs),
+                    "detectorCalls": stages.calls, "finderCacheHits": stages.finderCacheHits,
+                    "cacheHits": stages.cacheHits, "cacheMisses": stages.cacheMisses]
         }
         func perMinute(_ seconds: Double) -> [String: Any] {
             let m = max(seconds, 1e-9) / 60
@@ -120,6 +143,7 @@ enum Energy {
                     "judgementsPerMinute": Energy.r2(Double(judgements) / m), "framesJudged": frames, "looks": looks,
                     "looksPerMinute": Energy.r2(Double(looks) / m), "secondCheckJudgements": secondChecks,
                     "budgetUnitsSpent": budgetUnits, "budgetUnitsPerSecond": Energy.r2(Double(budgetUnits) / max(seconds, 1e-9)),
+                    "stagesWallMs": stageSummary,
                     "note": "judgements: the detector's own count, second clean checks included; budgetUnits: what the judge calls charged to the budget"]
         }
     }
@@ -287,10 +311,42 @@ enum Energy {
         var o = meter.perMinute(seconds)
         o["framesCapturedPerMinute"] = Int(fps * 60)
         o["videoCoveredOrBlurredShareAtEnd"] = r2(coveredFraction(plan, m.toGlobal(area)))
+        o["displayCoveredOrBlurredShareAtEnd"] = r2(coveredFraction(plan, display.bounds))
+        o["cpuMsPerFrameJudged"] = r2(meter.cpu * 1000 / Double(max(1, meter.frames)))
         out["video"] = ["area": "1280x720 px at 30 fps over a 2880x1800 page", "power": s.power.rawValue, "judged": o, "footprintMB": r2(footprintMB())]
         print(String(format: "video: %d of %d frames judged, %d judgements a minute, %.2f CPU-s a simulated minute (%.0f%% of a core)",
                      meter.frames, Int(fps * seconds), meter.judgements, meter.cpu, meter.cpu / seconds * 100))
         if meter.cpu / seconds > EnergyBudget.VIDEO_CPU_SHARE { over.append("video: \(r2(meter.cpu / seconds * 100))% of a core, budget \(EnergyBudget.VIDEO_CPU_SHARE * 100)%") }
+    }
+
+    /// The picture finder alone (no models): a frame of the video case (its area, new noise over a busy page), the whole
+    /// busy page, and the still desktop, each timed over a fresh call (nothing cached).
+    static func finder(file: String?, pages: String?, out: inout [String: Any]) {
+        let f = RegionFinder()
+        var page = pages.flatMap(busiestPage) ?? Synthetic.page(2880, 1800, seed: 21)
+        var cases: [(String, RGBAImage, PixelRect)] = []
+        let videoArea = PixelRect(x: 800, y: 500, w: 1280, h: 720)
+        cases.append(("busyPage", page, PixelRect(x: 0, y: 0, w: page.width, h: page.height)))
+        Synthetic.texture(&page, videoArea, seed: 77)
+        cases.append(("videoFrame", page, videoArea))
+        if let file, let img = ImageLoading.load(URL(fileURLWithPath: file)) {
+            cases.append(("stillDesktop", img, PixelRect(x: 0, y: 0, w: img.width, h: img.height)))
+        }
+        var o: [String: Any] = [:]
+        for (name, img, area) in cases {
+            var times: [Double] = []
+            var regions = 0
+            let c0 = cpuSeconds()
+            for _ in 0..<10 {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                regions = f.find(img, within: area).regions.count
+                times.append(Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6)
+            }
+            let cpuMs = (cpuSeconds() - c0) * 1000 / 10
+            o[name] = ["area": "\(area.w)x\(area.h)", "ms": r2(median(times)), "cpuMs": r2(cpuMs), "regions": regions]
+            print(String(format: "finder %@ (%dx%d): %.1f ms (%.1f CPU-ms), %d regions", name, area.w, area.h, median(times), cpuMs, regions))
+        }
+        out["finder"] = o
     }
 
     static func copy(out: inout [String: Any], over: inout [String]) {
@@ -348,8 +404,9 @@ enum Energy {
             case "reuse": reuse(d, pages: pages, s: s, out: &out, over: &over)
             case "video": video(d, pages: pages, s: s, out: &out, over: &over)
             case "copy": copy(out: &out, over: &over)
+            case "finder": finder(file: files.first, pages: pages, out: &out)
             case "tick": tick(out: &out)
-            default: fail("unknown energy case \(c): still, reuse, video, copy, tick")
+            default: fail("unknown energy case \(c): still, reuse, video, copy, tick, finder")
             }
         }
         out["peakFootprintMB"] = r2(peakFootprintMB())
