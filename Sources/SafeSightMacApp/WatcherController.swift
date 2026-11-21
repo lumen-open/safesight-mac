@@ -80,6 +80,10 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// How often the watcher looks at a still screen while only covers wait to lift (main thread): once a second, and less
     /// often in Low Power Mode or when the Mac is hot. Covers stay up a little longer; nothing is shown sooner.
     @MainActor private(set) var energy = EnergyMode.full
+    /// The same mode's look interval, for the judging queue (under `seenLock`): each pipeline looks at a still screen at
+    /// the pace `LookPace` asks for, however often the capture sends "nothing changed" frames
+    /// (`DisplayPipeline.stillLookPace`).
+    private var lookEvery = EnergyMode.full.lookEvery
     /// Displays with new pictures left over to judge: looked at every tick, whatever the mode (main thread only).
     private var leftOver: Set<UInt32> = []
     /// What every display shows now: one plan per display the OS lists.
@@ -214,7 +218,10 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     /// The Mac or its displays woke, or the session came back: as a display change, for that reason.
     @MainActor func resume(_ reason: HoldReason) { coordinator.didChange(reason) }
 
-    @MainActor func setEnergy(_ mode: EnergyMode) { energy = mode }
+    @MainActor func setEnergy(_ mode: EnergyMode) {
+        energy = mode
+        seenLock.withLock { lookEvery = mode.lookEvery }
+    }
 
     func setRule(_ rule: DetectorRule) { judgeQueue.async { [weak self] in self?.detector?.setRule(rule) } }
 
@@ -346,6 +353,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
             p.cover(because: .notYetJudged, until: need)
             pipelines[id] = p
         }
+        p.stillLookPace = (Register.TICK, seenLock.withLock { lookEvery })
         let start = ProcessInfo.processInfo.systemUptime
         let unjudged = FrameQueue.unjudgedAreas(f)
         DispatchQueue.main.async { self.busySince[id] = start; self.busyAreas[id] = unjudged }

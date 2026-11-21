@@ -155,10 +155,12 @@ import Testing
         let g = CGRect(x: 1540, y: 50, width: 80, height: 80)
         let first = p.process(Fixtures.frame(img, display: display, scale: 2, dirty: [picture], t: 0.1), snapshot: window, now: 0.1)
         #expect(first.covers(g), "an unjudged picture is blurred or covered, never shown sharp")
-        // Still unjudged after TIME_TO_COVER: the whole window is covered.
+        // Still unjudged after TIME_TO_COVER: what is unjudged is covered plainly, not only blurred. The rest of the window,
+        // judged and unchanged, stays in sight.
         var later = img; later.pixels[0] = 1
         let second = p.process(Fixtures.frame(later, display: display, scale: 2, dirty: [picture], t: 0.7), snapshot: window, now: 0.7)
-        #expect(second.covers(CGRect(x: 1440, y: 0, width: 400, height: 300), kind: .plain))
+        #expect(second.covers(g, kind: .plain))
+        #expect(!second.touches(CGRect(x: 1700, y: 160, width: 120, height: 120)))
     }
 
     @Test func aCoverMovesWithItsWindowAndCoversTheOldPlaceOnce() {
