@@ -5,8 +5,14 @@
 // Every way to quit (the menu, the repair card, ⌃⌥⌘Q) is handled on the main thread. If that thread were ever stuck,
 // a cover could stay up with nothing on the Mac able to lower it except Activity Monitor, and an app with no Dock
 // icon is not listed in the Force Quit window. So a timer on another thread watches the main thread's heartbeat, and
-// after `limit` seconds of silence with a cover up, it ends the app. If the watching timer itself ran late, the
-// whole process was held up (the Mac slept, App Nap, a debugger), not just the main thread, and it waits instead.
+// after `limit` seconds of silence with a cover up, it ends the app. Nothing starts the Testing edition again: its
+// owner opens it when they want it.
+//
+// Silence is counted only while the watcher itself was running. A check that ran late means the whole process was
+// held up (the Mac or the virtual Mac slept, App Nap, a debugger, a long pause), not just the main thread: that gap
+// counts as one check interval at most, never as its length. So a sleep, a pause of any length or a clock that
+// jumps never ends the app, and a main thread that stays silent for `limit` seconds of the watcher's own running
+// time, before or after one, still does.
 import Foundation
 
 public final class StallWatchdog: @unchecked Sendable {
@@ -16,18 +22,54 @@ public final class StallWatchdog: @unchecked Sendable {
     public static let beatInterval: TimeInterval = 0.5
     public static let checkInterval: TimeInterval = 1
 
-    /// The rule, apart from the clocks: quit only when a cover is up, the main thread has been silent longer than
-    /// `limit`, and this check itself ran on time.
-    public static func shouldQuit(now: TimeInterval, lastBeat: TimeInterval, lastCheck: TimeInterval?, coverShown: Bool,
-                                  limit: TimeInterval = limit, checkInterval: TimeInterval = checkInterval) -> Bool {
-        guard coverShown, let lastCheck else { return false }
-        let checkWasLate = now - lastCheck > checkInterval * 2.5
-        return !checkWasLate && now - lastBeat > limit
+    /// A check later than this after the one before (`checkInterval` x 2.5) means the process itself was held up.
+    public static let lateAfter: TimeInterval = checkInterval * 2.5
+
+    /// The rule, apart from the clocks: quit only when a cover is up and the main thread has been silent for longer
+    /// than `limit` of the watcher's own running time (`Silence`).
+    public static func shouldQuit(silence: TimeInterval, coverShown: Bool, limit: TimeInterval = limit) -> Bool {
+        coverShown && silence > limit
+    }
+
+    /// How long the main thread has been silent, counted only while the watcher was running.
+    public struct Silence: Sendable, Equatable {
+        /// Seconds of silence counted so far.
+        public private(set) var seconds: TimeInterval = 0
+        private var lastCheck: TimeInterval?
+        private var lastBeat: TimeInterval
+        private var beats: UInt64 = 0
+        private var beatsAtLastCheck: UInt64 = 0
+
+        public init(now: TimeInterval) { lastBeat = now }
+
+        /// The main thread beat at `now`.
+        public mutating func beat(at now: TimeInterval) {
+            lastBeat = now
+            beats &+= 1
+        }
+
+        /// One check at `now`; returns the silence counted. The time since the last check counts in full when the
+        /// check ran on time; a late one counts as one `checkInterval`, and a clock that went back counts nothing. A
+        /// beat since the last check starts the count again from that beat, within the same bound. The first check
+        /// only notes the time.
+        @discardableResult
+        public mutating func check(at now: TimeInterval, checkInterval: TimeInterval = StallWatchdog.checkInterval,
+                                   lateAfter: TimeInterval = StallWatchdog.lateAfter) -> TimeInterval {
+            defer { lastCheck = now; beatsAtLastCheck = beats }
+            guard let last = lastCheck else { seconds = 0; return seconds }
+            let elapsed = now - last
+            let counted = elapsed < 0 ? 0 : (elapsed > lateAfter ? min(elapsed, checkInterval) : elapsed)
+            if beats != beatsAtLastCheck {
+                seconds = min(max(0, now - lastBeat), counted)
+            } else {
+                seconds += counted
+            }
+            return seconds
+        }
     }
 
     private let lock = NSLock()
-    private var lastBeat: TimeInterval
-    private var lastCheck: TimeInterval?
+    private var silence: Silence
     private var coverShown = false
     private let clock: @Sendable () -> TimeInterval
     private let action: @Sendable () -> Void
@@ -40,7 +82,7 @@ public final class StallWatchdog: @unchecked Sendable {
                 action: @escaping @Sendable () -> Void) {
         self.clock = clock
         self.action = action
-        self.lastBeat = clock()
+        self.silence = Silence(now: clock())
     }
 
     /// Starts the heartbeat (on the main run loop, in every mode, so menus and alerts do not stop it) and the
@@ -65,7 +107,7 @@ public final class StallWatchdog: @unchecked Sendable {
     /// The main thread is alive.
     public func beat() {
         let now = clock()
-        lock.withLock { lastBeat = now }
+        lock.withLock { silence.beat(at: now) }
     }
 
     /// Whether any cover is on screen now. Main thread, whenever covers change.
@@ -78,8 +120,7 @@ public final class StallWatchdog: @unchecked Sendable {
     func check() -> Bool {
         let now = clock()
         let quit: Bool = lock.withLock {
-            defer { lastCheck = now }
-            return Self.shouldQuit(now: now, lastBeat: lastBeat, lastCheck: lastCheck, coverShown: coverShown)
+            Self.shouldQuit(silence: silence.check(at: now), coverShown: coverShown)
         }
         if quit { action() }
         return quit
