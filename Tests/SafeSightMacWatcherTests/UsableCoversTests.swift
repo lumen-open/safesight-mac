@@ -85,8 +85,42 @@ final class RuleJudge: Judging {
     }
 
     /// A call's own cost besides its judgements: `msPerCall`, plus finding pictures and hashing them over its area (a
-    /// millisecond per 10,000 points, about what the virtual Mac paid at 2x).
-    func callCost(_ area: PixelRect) { clockNs += UInt64((msPerCall + Double(area.w * area.h) / 10_000) * 1_000_000) }
+    /// millisecond per 10,000 points, as these tests were written). With `vmCosts` (`RuleJudge.vm`) it is what the
+    /// virtual Mac's fifth live run paid instead: working out the exact keys over the area costs `hashMsPer10k` the first
+    /// time in a frame (the detector keeps a frame's keys), and the picture finder `finderMsPer10k` more when its result for
+    /// that area and those pixels is not among the last 32 (`FinderCache`). A call over the whole display on a new frame
+    /// then costs about 280 ms whatever it judges, as there (374 ms for one with 10 judgements of about 9 ms).
+    func callCost(_ area: PixelRect) {
+        let a = Double(area.w * area.h) / 10_000
+        var ms = msPerCall
+        if let vm = vmCosts {
+            if !hashedThisFrame.contains(area) { ms += a * vm.hashMsPer10k; hashedThisFrame.insert(area) }
+            let fk = FinderKey(area: area, tag: tag(area))
+            if let i = finderSeen.firstIndex(of: fk) { finderSeen.remove(at: i) } else { ms += a * vm.finderMsPer10k }
+            finderSeen.append(fk)
+            if finderSeen.count > 32 { finderSeen.removeFirst() }
+        } else {
+            ms += a
+        }
+        lastOverheadMs = ms
+        clockNs += UInt64(ms * 1_000_000)
+    }
+    struct VMCosts { var hashMsPer10k = 0.75; var finderMsPer10k = 3.0 }
+    var vmCosts: VMCosts?
+    struct FinderKey: Equatable { var area: PixelRect; var tag: Int }
+    var finderSeen: [FinderKey] = []
+    var hashedThisFrame: Set<PixelRect> = []
+    var lastOverheadMs = 0.0
+    /// A new frame reached the judge (its keys are worked out again).
+    func newFrame() { hashedThisFrame = [] }
+
+    /// The costs the virtual Mac showed in its fifth live run, before the host was loaded: about 9 ms a judgement, about
+    /// 2 ms a call, and the key and finder costs of `callCost`.
+    static func vm(pictures: [Picture], blindCalls: Int = 0) -> RuleJudge {
+        let j = RuleJudge(pictures: pictures, blindCalls: blindCalls, msPerJudgement: 9, msPerCall: 2)
+        j.vmCosts = VMCosts()
+        return j
+    }
 
     func run(_ all: [Task], budget: Int, only: ((Task) -> Bool)? = nil) -> FrameVerdict {
         serial += 1; calls += 1
@@ -143,7 +177,8 @@ final class RuleJudge: Judging {
             let out = all.map { RegionVerdict(rect: $0.rect, display: $0.key.pass == .region ? .contain : .cover, reason: .overload, pass: $0.key.pass) }
             return FrameVerdict(regions: out, coverWindow: false, strike: false, hot: false, judgements: 0, overloaded: out.count)
         }
-        let v = run(all, budget: budget)
+        var v = run(all, budget: budget)
+        v.overheadMs = lastOverheadMs
         onCall?(area, budget, v)
         return v
     }
@@ -152,11 +187,15 @@ final class RuleJudge: Judging {
 
     func checkAgainInBackground(_ frame: RGBAImage, context: JudgeContext, within area: PixelRect, budget: Int) -> FrameVerdict? {
         callCost(area)
-        return run(tasks(area, context), budget: budget, only: { self.waiting($0.key) })
+        var v = run(tasks(area, context), budget: budget, only: { self.waiting($0.key) })
+        v.overheadMs = lastOverheadMs
+        return v
     }
 
     func pictureRegions(_ frame: RGBAImage, within area: PixelRect) -> [PixelRect]? {
-        pictures.filter { $0.rect.intersects(area) }.map(\.rect)
+        // The finder runs here too (through its cache), so the judge call after it finds it there.
+        if vmCosts != nil { callCost(area) }
+        return pictures.filter { $0.rect.intersects(area) }.map(\.rect)
     }
     func setRule(_ rule: DetectorRule) {}
 }
@@ -198,6 +237,7 @@ struct ScreenSim {
         } else {
             f = CapturedFrame(display: d, status: .idle, image: nil, map: nil, dirty: [], time: t)
         }
+        if changed != nil { judge.newFrame() }
         var early: [CoverPlan] = []
         let plan = p.process(f, snapshot: snap, now: t, provisional: { early.append($0) })
         if judge.clockNs != before { looks += 1 }
@@ -219,6 +259,7 @@ struct ScreenSim {
 
     /// The first frame: complete, the whole frame new.
     mutating func full() {
+        judge.newFrame()
         let before = judge.clockNs
         plans.append((t, p.process(Fixtures.frame(img, display: d, scale: 1, dirty: nil, t: t), snapshot: snap, now: t)))
         t += max(1 / fps, Double(judge.clockNs - before) / 1e9)

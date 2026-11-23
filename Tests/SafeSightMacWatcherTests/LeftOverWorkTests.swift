@@ -223,8 +223,11 @@ final class TimedScript: Judging {
         Fixtures.paint(&img, change, channel: nil, seed: 5)
         let sameRight = PixelRect(x: 400, y: 100, w: 100, h: 100)   // reported, but its pixels are as before
         let plan = p.process(Fixtures.frame(img, display: d, scale: 1, dirty: [change, sameRight], t: 31), snapshot: snap, now: 31)
-        #expect(plan.touches(rightArea), "blurred until judged: \(plan.items.map(\.rect))")
-        #expect(!p.dueAgain.contains { $0.intersects(rightArea) }, "not left waiting")
+        #expect(plan.covers(g(sameRight)), "blurred until judged: \(plan.items.map(\.rect))")
+        #expect(p.pending.contains { $0.contains(g(sameRight)) }, "it is work left over")
+        #expect(!p.dueAgain.contains { $0.intersects(g(sameRight).insetBy(dx: 1, dy: 1)) }, "not left waiting: \(p.dueAgain)")
+        // The rest of the window, unreported and as it was, is shown as judged before and waits for a later look.
+        #expect(!plan.touches(CGRect(x: 520, y: 260, width: 60, height: 120)), "the rest stays as it was: \(plan.items.map(\.rect))")
     }
 
     // MARK: Covers over exactly the same place are one
