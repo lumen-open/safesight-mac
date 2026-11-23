@@ -75,6 +75,10 @@ public struct FrameVerdict: Sendable {
     /// Entries of this call still waiting for clean checks (`VerdictCache.CLEAN_CHECKS`), for their remaining clean
     /// checks. A count only; the cover layer may give them those checks in the background (`Detector.secondChecks`).
     public var secondChecksLeft = 0
+    /// How long this call spent on anything but the models (milliseconds): finding pictures, working out the exact keys,
+    /// the caches, the rules. It grows with the call's area, not with its judgements, so the caller can tell what one
+    /// more judgement costs from what the call costs anyway. A duration only.
+    public var overheadMs = 0.0
 }
 
 /// Size bands in detail pixels (short side), as in the small-picture policy.
