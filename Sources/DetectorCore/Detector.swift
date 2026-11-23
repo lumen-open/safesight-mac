@@ -268,6 +268,7 @@ public final class Detector {
                progress: ((JudgeProgress) -> Void)?, secondChecksOnly: Bool) -> FrameVerdict {
         let tCall = nowNs()
         let faultsBefore = faultTotal
+        let modelsMsBefore = timings.modelsMs
         timings.calls += 1
         defer { timings.totalMs += msSince(tCall) }
         let A = area?.clamped(width: frame.width, height: frame.height) ?? PixelRect(x: 0, y: 0, w: frame.width, h: frame.height)
@@ -511,8 +512,10 @@ public final class Detector {
         // Pictures of this call still waiting for clean checks (counted once per key; a marked one never is).
         var waiting = Set<ExactKey>()
         for t in tasks where cache.seenCleanOnce(t.key) { waiting.insert(t.key) }
+        // Everything but the models: what this call costs whatever it judges (`FrameVerdict.overheadMs`).
+        let overheadMs = max(0, msSince(tCall) - (timings.modelsMs - modelsMsBefore))
         return FrameVerdict(regions: out, coverWindow: coverWindow, strike: strike, hot: wasHot, judgements: judgements, overloaded: overloaded,
-                            modelFaults: faultTotal - faultsBefore, nextCost: nextCost, secondChecksLeft: waiting.count)
+                            modelFaults: faultTotal - faultsBefore, nextCost: nextCost, secondChecksLeft: waiting.count, overheadMs: overheadMs)
     }
 
     #if KESTREL_LAB
