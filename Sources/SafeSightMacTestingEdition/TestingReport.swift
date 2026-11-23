@@ -4,8 +4,8 @@
 // a file, put on the clipboard by the app, or sent anywhere.
 //
 // It holds only: the Mac's model and macOS version, the displays' sizes and how they are arranged, the edition, build
-// and models, timings, counts of covers and faults, the CPU the app used, the Mac's heat and Low Power Mode, whether ⌃⌥⌘Q is the app's, and the note the
-// helper types. Never a picture, a window title, an app's name, an address, or anything about what was covered.
+// and models, timings, counts of covers and faults, the CPU the app used, the Mac's heat and Low Power Mode, whether ⌃⌥⌘Q is the app's, when the last run ended
+// itself (StallNote), and the note the helper types. Never a picture, a window title, an app's name, an address, or anything about what was covered.
 import Foundation
 import SafeSightMacCore
 
@@ -158,6 +158,8 @@ public struct TestingFacts: Sendable {
     /// Read when the report is made, not when the facts were first read: it can change (a retry that succeeds).
     public var shortcut: ShortcutStatus
     public var shortcutRegistered: Bool { shortcut.works }
+    /// When the last run ended itself because its main thread stopped answering (`StallNote`), if it did.
+    public var endedItselfAt: Date?
     public init(macModel: String, macOS: String, edition: String, version: String, executableSHA: String, modelsStamp: String,
                 displays: [Display], shortcut: ShortcutStatus) {
         self.macModel = macModel; self.macOS = macOS; self.edition = edition; self.version = version
@@ -212,6 +214,7 @@ public enum TestingReport {
         lines.append("Displays: \(f.displays.count)" + (shown.isEmpty ? "" : " (" + shown.joined(separator: "; ") + ")"))
         lines.append("Build: \(f.edition) \(f.version), app \(String(f.executableSHA.prefix(12))), models \(String(f.modelsStamp.prefix(12)))")
         lines.append("⌃⌥⌘Q: " + f.shortcut.reportText)
+        if let at = f.endedItselfAt { lines.append("Last run: ended itself at \(ISO8601DateFormatter().string(from: at)) after it stopped responding") }
         lines.append("")
         let minutes = running / 60
         lines.append(String(format: "Covering for %.1f min; frames judged %d (%.1f a second)", minutes, s.judged,

@@ -6,7 +6,8 @@
 //   line says to quit from the menu bar icon instead, the menu says whether another copy of the edition holds it,
 //   and the app asks for it again every two seconds until it has it.
 // - It checks and covers only inside the App Sandbox (Sandbox).
-// - If its main thread stops answering while a cover is up, it quits (StallWatchdog).
+// - If its main thread stops answering while a cover is up, it quits (StallWatchdog), and leaves the time in a note the
+//   next launch shows in the menu and the report (StallNote).
 // - Its line is on the menu bar item, the menu, the repair card, whole-window and whole-display covers, any cover
 //   that hides half a display, and the "How it works" window.
 // - "Remove SafeSight Mac Testing" clears its own settings and data (Removal) and says what macOS keeps.
@@ -30,6 +31,8 @@ final class TestingEditionApp {
     private let startedAt = ProcessInfo.processInfo.systemUptime
     private let cpuAtStart = TestingFacts.cpuSeconds()
     private var report: TestingReportWindow?
+    /// When the last run ended itself (its stall watchdog), read once at launch from the note it left.
+    private var endedItselfAt: Date?
 
     var shortcutWorks: Bool { emergency?.state.works ?? false }
     /// What macOS said about ⌃⌥⌘Q, read now (it changes when a retry succeeds), with whether another copy of the
@@ -68,7 +71,13 @@ final class TestingEditionApp {
         let t = Timer(timeInterval: 2, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.followLayout() } }
         RunLoop.main.add(t, forMode: .common)
         layoutTimer = t
-        let dog = StallWatchdog { _exit(0) }
+        // The last run's note, if its watchdog ended it: said in the menu and the report, then gone.
+        endedItselfAt = StallNote.take()
+        let dog = StallWatchdog {
+            // A line for the next launch (the time only), then the end. Covers go with the app.
+            StallNote.write(Date())
+            _exit(0)
+        }
         dog.start()
         stallWatchdog = dog
         watcher.onCoversShown = { [weak dog] shown in dog?.setCoverShown(shown) }
@@ -92,6 +101,7 @@ final class TestingEditionApp {
         var f = factsOnce ?? TestingReportWindow.facts(shortcut: shortcutStatus)
         factsOnce = f
         f.shortcut = shortcutStatus
+        f.endedItselfAt = endedItselfAt
         return f
     }
 
@@ -139,6 +149,9 @@ final class TestingEditionApp {
             items.append(d.note(AppText.testingDetail))
             if !shortcutWorks {
                 items.append(d.note(shortcutStatus == .takenByAnotherCopy ? AppText.testingShortcutOtherCopy : AppText.testingShortcutTaken))
+            }
+            if let at = endedItselfAt {
+                items.append(d.note(AppText.testingEndedItself(at: DateFormatter.localizedString(from: at, dateStyle: .medium, timeStyle: .short))))
             }
         }
         return items

@@ -97,4 +97,16 @@ import Testing
         #expect(s.now.isEmpty)
         #expect(TestingReport.text(facts: facts, stats: s, running: 60, cpu: 1, note: "").contains("On screen now: nothing drawn"))
     }
+
+    /// After the stall watchdog ended the last run, the report says when, and the menu's words say the covers came down.
+    @Test func itSaysWhenTheLastRunEndedItself() {
+        var f = facts
+        #expect(!TestingReport.text(facts: f, stats: TestingStats(), running: 1, cpu: 0, note: "").contains("Last run"))
+        f.endedItselfAt = Date(timeIntervalSince1970: 1_795_000_000)
+        let t = TestingReport.text(facts: f, stats: TestingStats(), running: 1, cpu: 0, note: "")
+        #expect(t.contains("Last run: ended itself at " + ISO8601DateFormatter().string(from: f.endedItselfAt!) + " after it stopped responding"))
+        let line = AppText.testingEndedItself(at: "14:02")
+        #expect(line == "Last time, SafeSight Mac Testing stopped responding and ended itself at 14:02. Its covers came down then.")
+        #expect(AppText.testingAll.contains(AppText.testingEndedItself(at: "12:00")))
+    }
 }

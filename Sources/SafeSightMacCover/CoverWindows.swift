@@ -208,6 +208,11 @@ final class BehindPrompt {
     private var redraw: (([CoverPlan]) -> Void)?
     /// The holes cut in covers by the last drawing (holes that cut no cover are not counted).
     private(set) var cut: Set<HoleGate.Hole> = []
+    #if SAFESIGHTMAC_LAB
+    /// Lab only: told after every drawing, the presenter's own redraws included, which holes that cut a cover it opened
+    /// and which it kept covered. Changes nothing that is drawn.
+    var onDrew: ((HolesDrawn) -> Void)?
+    #endif
     /// How often a cut hole's prompt and backing are looked at again between drawings: 20 times a second, only while
     /// a hole actually cuts a cover (a prompt on a screen with nothing covered around it is not watched).
     static let watchEvery: TimeInterval = 0.05
@@ -259,6 +264,12 @@ final class BehindPrompt {
         let (plansNow, _) = gate.gate(plans)
         draw(plansNow)
         cut = open.intersection(cutting)
+        #if SAFESIGHTMAC_LAB
+        if let onDrew {
+            // Asked for by the plans as they came, the holes the window list closed included.
+            onDrew(HolesDrawn(cut: cut, shut: cutting.union(HoleGate.cuttingHoles(incoming)).subtracting(cut)))
+        }
+        #endif
         gate.drew(up)
         if !cut.isEmpty { watch() }
         // Drawn again only for a cutting hole held back whose backing is up now (it opens then); one whose backing could
@@ -320,6 +331,9 @@ final class BehindPrompt {
         serial += 1
         latest = []
         cut = []
+        #if SAFESIGHTMAC_LAB
+        onDrew?(HolesDrawn())
+        #endif
         takeDown(keeping: [])
         gate.drew([])
     }
@@ -345,6 +359,25 @@ public enum CoverNotice: Equatable, Sendable {
     public static let bigShare: CGFloat = 0.5
 }
 
+#if SAFESIGHTMAC_LAB
+/// Lab only: the password-prompt holes one drawing asked to cut in covers: those it cut (the prompt in sight) and those it kept
+/// covered (waiting for their backing, or closed because the window list no longer held the prompt). For lab logging.
+public struct HolesDrawn: Equatable, Sendable {
+    public var cut: Set<HoleGate.Hole> = []
+    public var shut: Set<HoleGate.Hole> = []
+    public init(cut: Set<HoleGate.Hole> = [], shut: Set<HoleGate.Hole> = []) { self.cut = cut; self.shut = shut }
+
+    /// One display's field: `-` when it asked for no hole, else each hole as `cut@x,y,w,h` or `shut@x,y,w,h`.
+    public func field(display: UInt32) -> String {
+        func rect(_ r: CGRect) -> String { String(format: "%.0f,%.0f,%.0f,%.0f", r.minX, r.minY, r.width, r.height) }
+        let order: (HoleGate.Hole, HoleGate.Hole) -> Bool = { ($0.rect.minX, $0.rect.minY) < ($1.rect.minX, $1.rect.minY) }
+        let c = cut.filter { $0.display == display }.sorted(by: order).map { "cut@" + rect($0.rect) }
+        let s = shut.filter { $0.display == display }.sorted(by: order).map { "shut@" + rect($0.rect) }
+        return c.isEmpty && s.isEmpty ? "-" : (c + s).joined(separator: ";")
+    }
+}
+#endif
+
 @MainActor
 public protocol CoverPresenter: AnyObject {
     /// Applies one plan per display. Displays without a plan lose their covers.
@@ -357,10 +390,17 @@ public protocol CoverPresenter: AnyObject {
     func removeAll()
     /// What the covers carry besides the way out (the Testing edition's line), or nil.
     var notice: CoverNotice? { get set }
+    #if SAFESIGHTMAC_LAB
+    /// Lab only: told after every drawing, its own redraws included, which password-prompt holes it cut.
+    var onHolesDrawn: ((HolesDrawn) -> Void)? { get set }
+    #endif
 }
 
 extension CoverPresenter {
     public func keepUp() {}
+    #if SAFESIGHTMAC_LAB
+    public var onHolesDrawn: ((HolesDrawn) -> Void)? { get { nil } set {} }
+    #endif
 }
 
 /// A panel that can never take focus.
@@ -519,6 +559,13 @@ public final class CoverCanvas: CoverPresenter {
         behind = BehindPrompt(windows: windows ?? { nil })
     }
 
+    #if SAFESIGHTMAC_LAB
+    public var onHolesDrawn: ((HolesDrawn) -> Void)? {
+        get { behind.onDrew }
+        set { behind.onDrew = newValue }
+    }
+    #endif
+
     static var primaryHeight: CGFloat { CGDisplayBounds(CGMainDisplayID()).height }
 
     /// The screen showing a display, by its identifier.
@@ -591,6 +638,13 @@ public final class OverlayCovers: CoverPresenter {
         self.notice = notice
         behind = BehindPrompt(windows: windows ?? { nil })
     }
+
+    #if SAFESIGHTMAC_LAB
+    public var onHolesDrawn: ((HolesDrawn) -> Void)? {
+        get { behind.onDrew }
+        set { behind.onDrew = newValue }
+    }
+    #endif
 
     /// The last plans applied, for `keepUp`.
     private var applied: [CoverPlan] = []
@@ -677,8 +731,26 @@ public final class WatchedPresenter: CoverPresenter {
     private var showing = false
     public var onCoversShown: ((Bool) -> Void)?
     public var onDrawn: (([CoverPlan]) -> Void)?
+    #if SAFESIGHTMAC_LAB
+    /// Lab only: the password-prompt holes of the inner presenter's last drawing.
+    public private(set) var lastHoles = HolesDrawn()
+    /// Lab only: told when a drawing the inner presenter made outside `apply` (a hole opening on the next turn, a retry,
+    /// the watch of a cut hole, `keepUp`) left the holes other than the last drawing did.
+    public var onHolesRedrawn: ((HolesDrawn) -> Void)?
+    private var applying = false
+    #endif
 
-    public init(_ inner: CoverPresenter) { self.inner = inner }
+    public init(_ inner: CoverPresenter) {
+        self.inner = inner
+        #if SAFESIGHTMAC_LAB
+        inner.onHolesDrawn = { [weak self] h in
+            guard let self else { return }
+            let changed = h != self.lastHoles
+            self.lastHoles = h
+            if changed, !self.applying { self.onHolesRedrawn?(h) }
+        }
+        #endif
+    }
 
     public var notice: CoverNotice? {
         get { inner.notice }
@@ -688,7 +760,13 @@ public final class WatchedPresenter: CoverPresenter {
     public func apply(_ plans: [CoverPlan]) {
         let now = plans.contains { $0.wholeDisplay != nil || !$0.items.isEmpty || !$0.promptHoles.isEmpty }
         if now || showing { onCoversShown?(true) }
+        #if SAFESIGHTMAC_LAB
+        applying = true
+        #endif
         inner.apply(plans)
+        #if SAFESIGHTMAC_LAB
+        applying = false
+        #endif
         showing = now
         onCoversShown?(now)
         onDrawn?(plans)

@@ -61,7 +61,7 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
     @MainActor private func drawn(_ plans: [CoverPlan]) {
         #if SAFESIGHTMAC_LAB
         LabEventLog.shared.log(plans.isEmpty ? "draw removed" : "draw " + plans.map { p in
-            "d=\(p.display.id) items=\(p.items.count) plain=\(p.plainCount) whole=\(p.wholeDisplay?.rawValue ?? "-") covered=\(String(format: "%.3f", LabEventLog.coveredShare(p))) rects=\(p.items.prefix(12).map { LabEventLog.rect($0.rect) }.joined(separator: ";"))"
+            "d=\(p.display.id) items=\(p.items.count) plain=\(p.plainCount) whole=\(p.wholeDisplay?.rawValue ?? "-") covered=\(String(format: "%.3f", LabEventLog.coveredShare(p))) hole=\(presenter.lastHoles.field(display: p.display.id)) rects=\(p.items.prefix(12).map { LabEventLog.rect($0.rect) }.joined(separator: ";"))"
         }.joined(separator: " | "))
         #endif
         onDrawn?(plans)
@@ -104,6 +104,14 @@ final class WatcherController: CaptureSink, @unchecked Sendable {
         }
         coordinator.onShown = { [weak self] _ in self?.shownChanged() }
         watched.onDrawn = { [weak self] plans in self?.drawn(plans) }
+        #if SAFESIGHTMAC_LAB
+        // A hole opens on the drawing after its backing is up, which the presenter makes by itself: logged here, so the
+        // log says whether a prompt's opening was ever cut (`coveredShare` does not count holes).
+        watched.onHolesRedrawn = { h in
+            let ids = Set((h.cut.union(h.shut)).map(\.display)).sorted()
+            LabEventLog.shared.log("redraw " + (ids.isEmpty ? "hole=-" : ids.map { "d=\($0) hole=\(h.field(display: $0))" }.joined(separator: " | ")))
+        }
+        #endif
         coordinator.wake = { [weak self] delay in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.01) { MainActor.assumeIsolated { self?.tick() } }
         }
