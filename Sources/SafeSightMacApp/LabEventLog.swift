@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // LAB ONLY (compiled only with SAFESIGHTMAC_LAB, never in a release or Testing build): an event log for diagnosing the
-// cover on a real screen. It writes, inside the app's own sandbox container (Library/Application Support/lab-events.log),
-// counts, timings, frame statuses, window layers and rectangles in points. Never a pixel, a window title, an app's name
-// or an address. Not in Library/Caches: macOS empties a container's caches when the disk runs low (cache_delete), and
+// cover on a real screen. It writes, inside the app's own sandbox container (Library/Application Support/SafeSight
+// Mac/lab-events.log; outside the sandbox, the same folder in the home folder), counts, timings, frame statuses,
+// window layers and rectangles in points. Never a pixel, a window title, an app's name or an address. Not in Library/Caches: macOS empties a container's caches when the disk runs low (cache_delete), and
 // did so in the middle of a run. Lines reach the file within about a quarter of a second, so `tail -f` keeps up.
 #if SAFESIGHTMAC_LAB
 import Foundation
+import SafeSightMacCore
 import SafeSightMacWatcher
 
 final class LabEventLog: @unchecked Sendable {
@@ -23,8 +24,8 @@ final class LabEventLog: @unchecked Sendable {
 
     private init() {
         let fm = FileManager.default
-        let folder = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let folder = (fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())).appendingPathComponent(AppText.productName, isDirectory: true)
         try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appendingPathComponent("lab-events.log")
         fm.createFile(atPath: url.path, contents: nil)

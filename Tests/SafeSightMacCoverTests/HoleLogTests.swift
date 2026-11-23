@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // What the lab log is told about password-prompt holes: every drawing says which holes it cut and which it kept
-// covered, the presenter's own redraws included (a hole opens on the drawing after its backing is up). Logging only:
-// nothing here changes what is drawn.
+// covered, the presenter's own redraws included (a hole opens on the drawing after its backing is up). Lab builds
+// only, and logging only: nothing here changes what is drawn.
+#if SAFESIGHTMAC_LAB
 import CoreGraphics
 import Foundation
 import Testing
@@ -72,3 +73,4 @@ import Testing
         #expect(watched.lastHoles == HolesDrawn(cut: [hole]))
     }
 }
+#endif
